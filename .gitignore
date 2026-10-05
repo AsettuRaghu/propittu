@@ -25,6 +25,7 @@ web-build/
 
 # ---- Build output ----
 build/
+.vercel/
 *.tsbuildinfo
 
 # ---- Supabase CLI ----

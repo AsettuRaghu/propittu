@@ -4,6 +4,7 @@ import { pinoHttp } from 'pino-http';
 import { requireAuth } from './auth.js';
 import { errorHandler, notFoundHandler } from './errors.js';
 import { logger } from './logger.js';
+import { cronRouter } from './routes/cron.js';
 import { documentsRouter } from './routes/documents.js';
 import { healthRouter } from './routes/health.js';
 import { meRouter } from './routes/me.js';
@@ -15,7 +16,7 @@ export function createApp(): express.Express {
   const app = express();
 
   app.disable('x-powered-by');
-  // Render terminates TLS at its proxy; trust exactly one hop for client IPs.
+  // The host (Vercel) terminates TLS at its proxy; trust one hop for client IPs.
   app.set('trust proxy', 1);
 
   app.use(
@@ -28,15 +29,16 @@ export function createApp(): express.Express {
       },
       customLogLevel: (_req, res, err) =>
         err || res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info',
-      autoLogging: { ignore: (req) => req.url === '/health' },
+      autoLogging: { ignore: (req) => req.url === '/health' || req.url === '/cron/keepalive' },
     }),
   );
 
   // JSON bodies are small: files never pass through the API (signed URLs).
   app.use(express.json({ limit: '100kb' }));
 
-  // Public
+  // Public (cron checks its own secret)
   app.use(healthRouter);
+  app.use(cronRouter);
 
   // Everything below requires a valid Supabase session.
   app.use(requireAuth);

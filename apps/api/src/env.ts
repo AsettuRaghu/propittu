@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { z } from 'zod';
 
-// Local development reads apps/api/.env; on Render the platform injects variables.
+// Local development reads apps/api/.env; on Vercel the platform injects variables.
 if (existsSync('.env')) process.loadEnvFile('.env');
 
 const envSchema = z.object({
@@ -13,6 +13,9 @@ const envSchema = z.object({
   SUPABASE_PUBLISHABLE_KEY: z.string().min(20),
 
   SIGNED_DOWNLOAD_TTL_SECONDS: z.coerce.number().int().min(60).max(86_400).default(3600),
+
+  // Set on Vercel; Vercel Cron sends it as a Bearer token to /cron/keepalive.
+  CRON_SECRET: z.string().min(16).optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

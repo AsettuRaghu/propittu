@@ -39,6 +39,10 @@ const fake = http.createServer((req, res) => {
       seen.push({ method: req.method, url: req.url, auth: req.headers.authorization, apikey: req.headers.apikey, body: body ? JSON.parse(body) : null });
       const single = (req.headers.accept || '').includes('vnd.pgrst.object');
       if (req.method === 'HEAD') { res.writeHead(200, { 'content-range': '*/3' }); return res.end(); }
+      if (req.url.startsWith('/rest/v1/rpc/keepalive')) {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        return res.end(JSON.stringify('2026-01-01T00:00:00+00:00'));
+      }
       if (req.method === 'POST' && req.url.startsWith('/rest/v1/properties')) {
         const row = { id: '11111111-1111-1111-1111-111111111111', created_at: 'now', updated_at: 'now', ...JSON.parse(body) };
         res.writeHead(201, { 'content-type': 'application/json' });
@@ -52,9 +56,16 @@ const fake = http.createServer((req, res) => {
 });
 await new Promise((r) => fake.listen(SB_PORT, '127.0.0.1', r));
 
-const api = spawn('npx', ['tsx', 'src/index.ts'], {
+// SMOKE_TARGET=bundle tests the built Vercel bundle (what actually ships)
+// instead of the TypeScript source. `npm run test:bundle` builds it first.
+const CRON_SECRET = 'smoke-test-cron-secret-0123456789';
+const target = process.env.SMOKE_TARGET === 'bundle'
+  ? ['node', ['test/serve-bundle.mjs']]
+  : ['npx', ['tsx', 'src/index.ts']];
+console.log(`Target: ${process.env.SMOKE_TARGET === 'bundle' ? 'Vercel bundle (.vercel/output)' : 'TypeScript source'}\n`);
+const api = spawn(target[0], target[1], {
   cwd: fileURLToPath(new URL('..', import.meta.url)),
-  env: { ...process.env, SUPABASE_URL: SB_URL, SUPABASE_PUBLISHABLE_KEY: PUBLISHABLE, PORT: String(API_PORT), NODE_ENV: 'production', LOG_LEVEL: 'silent' },
+  env: { ...process.env, SUPABASE_URL: SB_URL, SUPABASE_PUBLISHABLE_KEY: PUBLISHABLE, PORT: String(API_PORT), NODE_ENV: 'production', LOG_LEVEL: 'silent', CRON_SECRET },
   stdio: ['ignore', 'inherit', 'inherit'],
 });
 for (let i = 0; i < 100; i++) {
@@ -163,6 +174,12 @@ try {
 
   r = await call('/service-requests', { token: valid, method: 'POST', body: { property_id: 'x', service_id: 'y', description: '' } });
   check(r.status === 400 && r.json.error.details?.description, 'empty service request → 400', r.json);
+
+  r = await call('/cron/keepalive');
+  check(r.status === 401, 'keep-alive cron without the cron secret → 401', r);
+  const cron = await fetch(`${API}/cron/keepalive`, { headers: { authorization: `Bearer ${CRON_SECRET}` } });
+  const cronBody = await cron.json();
+  check(cron.status === 200 && cronBody.data.database_time, 'keep-alive cron with the secret → touches the database', cronBody);
 } finally {
   api.kill('SIGTERM');
   fake.close();
