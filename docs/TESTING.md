@@ -32,7 +32,7 @@ checks as the real `authenticated` and `anon` roles. It covers:
 Needs Postgres 15+ server binaries (`brew install postgresql@15`); no
 Docker and no Supabase project.
 
-### `npm run test:api`: API security (27 checks)
+### `npm run test:api`: API security (29 checks)
 
 Starts the real API against a fake Supabase that publishes signing keys and
 records every database request. It covers:
@@ -44,6 +44,10 @@ records every database request. It covers:
 - A client-supplied `user_id` is ignored, and the identity comes from the
   token (§31).
 - Request validation, unsupported file types, and the 10 MB size limit.
+- The keep-alive cron endpoint refuses callers without `CRON_SECRET`.
+
+`npm run test:bundle -w @propittu/api` runs the same checks against the
+**built Vercel bundle** under plain Node, which is the code that actually ships.
 
 ## Not yet tested
 

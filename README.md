@@ -12,7 +12,7 @@ Expo app (iOS + Android)
    │  phone OTP ──────────────► Supabase Auth
    │  Bearer <access token>
    ▼
-Propittu API (Node + Express)  ──► Supabase Postgres (RLS on every table)
+Propittu API (Express on Vercel, Mumbai) ──► Supabase Postgres (RLS on every table)
                                ──► Supabase Storage (private buckets)
 ```
 
@@ -30,7 +30,6 @@ apps/mobile/       Expo SDK 57 app (expo-router)
 packages/shared/   Types, zod schemas and constants used by both apps
 supabase/          Migrations, CLI config, RLS test suite
 docs/              Setup, deployment, decisions, testing
-render.yaml        Render deploy blueprint for the API
 ```
 
 ## Prerequisites
@@ -74,16 +73,17 @@ render.yaml        Render deploy blueprint for the API
 
 ## Environment variables
 
-**API** (`apps/api/.env`; on Render, set in the dashboard):
+**API** (`apps/api/.env`; on Vercel, project environment variables):
 
 | Variable | Required | Description |
 |---|---|---|
 | `SUPABASE_URL` | yes | `https://<project-ref>.supabase.co` |
 | `SUPABASE_PUBLISHABLE_KEY` | yes | Publishable key (`sb_publishable_…`) |
-| `PORT` | no | Default `4000`. Render injects its own. |
+| `PORT` | no | Default `4000` (local only) |
 | `NODE_ENV` | no | `development` (pretty logs) or `production` (JSON logs) |
 | `LOG_LEVEL` | no | Default `info` |
 | `SIGNED_DOWNLOAD_TTL_SECONDS` | no | Lifetime of photo/document view links. Default `3600` |
+| `CRON_SECRET` | on Vercel | Protects the daily `/cron/keepalive` endpoint |
 
 The API does **not** use the Supabase secret / service-role key. It never
 needs to bypass RLS. The API exits at startup if a required variable is
@@ -112,13 +112,15 @@ Run from the repository root.
 | `npm test` | Both automated test suites below |
 | `npm run test:rls` | Applies every migration to a throwaway Postgres and runs the RLS / cross-tenant suite |
 | `npm run test:api` | Boots the API against a fake Supabase and checks token handling, user scoping and validation |
+| `npm run test:bundle -w @propittu/api` | Same API checks against the built Vercel bundle |
 | `npm run typecheck` | `tsc --noEmit` in every workspace |
 | `npm run lint` | ESLint in every workspace |
 | `npm run db:push` | Apply migrations to the linked Supabase project |
+| `git push` to `main` | Deploys the API to Vercel when API code changed |
 
 ## Documentation
 
 - [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md): manual Supabase configuration
-- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): Render (API) and EAS (app builds)
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): Vercel (API) and EAS (app builds)
 - [docs/TESTING.md](docs/TESTING.md): what is automated, and the manual device checklist
 - [docs/DECISIONS.md](docs/DECISIONS.md): implementation decisions and known tradeoffs

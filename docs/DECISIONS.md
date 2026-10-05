@@ -11,11 +11,14 @@ of each section.
 |---|---|
 | **The API queries Supabase as the signed-in user**, forwarding the user's JWT, rather than with the service-role key. | It's the only setup where RLS actually protects the API's own data path (§35, "defense-in-depth"). With a service-role key, one missing `user_id` filter would leak data across users. Handlers still filter by `user_id` as well. |
 | **The API has no secret / service-role key at all.** | Nothing on a request path needs to bypass RLS. Seeding happens in migrations, and status changes happen in the SQL editor. |
-| **JWTs are verified locally against Supabase's JWKS**, falling back to `auth.getUser()` for legacy HS256 projects. | Render's nearest region is Singapore and Supabase is in Mumbai. Local verification saves a cross-region round trip on every request. |
+| **JWTs are verified locally against Supabase's JWKS**, falling back to `auth.getUser()` for legacy HS256 projects. | Saves a network round trip to Supabase Auth on every request. |
 | **Uploads use signed URLs** (intent → direct upload → confirm), not multipart uploads through the API. | Gives real upload progress (§21), avoids buffering files in the API or hitting request timeouts, and the API still chooses every storage path (§37). |
 | **Express 5**, not Fastify or NestJS. | §27 asks for the simpler option. Express 5 now handles async errors natively. |
 | **npm workspaces** monorepo with `packages/shared` as TypeScript source and no build step. | Validation schemas are shared by the API and the app forms. Metro (SDK 57) detects the workspace automatically. |
-| **The API runs TypeScript with `tsx` in production**, with no compile step. | Avoids monorepo `rootDir`/output problems. `tsc --noEmit` still typechecks. |
+| **The API is hosted on Vercel (Hobby, free) in Mumbai (`bom1`)**, instead of the originally planned Render. | Requirement: $0 and always on. Render's free plan sleeps (30–60 s wake-ups), Railway and Fly have no free plan, and Cloud Run/Lambda have cold starts or need billing set up. Vercel runs Express with almost no changes, in the same region as Supabase. Hobby is non-commercial, so the team moves to **Pro before commercial launch** (product decision). Cloudflare Workers was the $0 alternative that is also commercially allowed; it would need an Express → Hono rewrite. |
+| **We bundle the API ourselves with esbuild** into Vercel's Build Output API format. | Vercel compiles TypeScript file by file and can't resolve our shared workspace package's extension-less imports without an *experimental* flag. A single bundle means production runs exactly the code the tests ran against, and starts faster. |
+| **A daily Vercel Cron calls `/cron/keepalive`**, which runs `select now()` through a dedicated database function. | Supabase's free plan pauses a project after about 7 days without activity. The function reads no tables and is the only thing anonymous callers may run. |
+| **Locally the API runs TypeScript directly with `tsx`**, with no build step. | Fast development loop. `tsc --noEmit` typechecks, and `npm run test:bundle` checks the bundle that actually ships. |
 | **No `cors` or `helmet`.** | Native apps aren't subject to CORS, and there's no web client (§9). |
 | **TypeScript ~6.0.3**, not npm's latest 7.x. | It's the version the Expo SDK 57 template pins. |
 | **Root `overrides` pin `react`/`react-dom` to 19.2.3.** | Without them npm installed React 19.3.0 at the root as a peer dependency while the app used 19.2.3. Two copies of React in one bundle crash at runtime. |
@@ -55,5 +58,6 @@ of each section.
 |---|---|---|
 | Session tokens are stored in `AsyncStorage`, which is not encrypted. | Someone with access to the unlocked app sandbox (for example a jailbroken phone) could read the refresh token. | Switch to `expo-secure-store` with a chunking adapter, since sessions can exceed SecureStore's 2 KB limit per item on iOS. |
 | Abandoned `pending` upload rows are never deleted. | Clutters the database; users never see them. | A scheduled cleanup of `pending` rows older than a day, plus their storage objects. |
-| Real SMS isn't set up yet (DLT). | Only test numbers can sign in. | See SUPABASE_SETUP.md §8. |
+| Real SMS isn't set up yet (DLT). | Only test numbers can sign in. | See SUPABASE_SETUP.md §9. |
+| Vercel Hobby plan is non-commercial. | Not allowed for a commercial launch. | Upgrade the team to Pro (about $20/month) before launch. |
 | No admin interface. | Service-request status is changed by hand in SQL. | Deliberately out of scope for V1 (§9). |

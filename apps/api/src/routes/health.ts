@@ -2,10 +2,11 @@ import { Router } from 'express';
 import { ok } from '../errors.js';
 
 /**
- * GET /health — liveness only (§30). Used by Render's health check.
+ * GET /health — liveness only (§30).
  *
- * Deliberately does not call Supabase: a Supabase blip should not make
- * Render restart a perfectly healthy API process.
+ * Deliberately does not call Supabase, so it answers "is the API up?"
+ * independently of the database. /cron/keepalive is the one that
+ * touches the database.
  */
 export const healthRouter = Router();
 

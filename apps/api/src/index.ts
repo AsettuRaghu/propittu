@@ -10,7 +10,8 @@ const server = createApp().listen(env.PORT, (error?: Error) => {
   logger.info(`Propittu API listening on :${env.PORT} (${env.NODE_ENV})`);
 });
 
-// Render sends SIGTERM on every deploy; finish in-flight requests first.
+// Local development server (Vercel uses src/vercel.ts instead).
+// On Ctrl+C / SIGTERM, finish in-flight requests before exiting.
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, () => {
     logger.info(`${signal} received, shutting down`);

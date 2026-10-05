@@ -96,9 +96,9 @@ required, not working ones:
 Twilio trial accounts can't create a Messaging Service without
 upgrading, and you don't need to. With this setup the test numbers sign
 in, and any other number gets "couldn't send the OTP". That's expected
-until a real provider is configured in step 8.
+until a real provider is configured in step 9.
 
-**For production** in India, see [step 8](#8-production-sms-india).
+**For production** in India, see [step 9](#9-production-sms-india).
 
 ### Phone settings
 
@@ -133,7 +133,15 @@ Set **SMS messages sent per hour** to about **15**. Every real SMS costs
 money, and this limit is the only thing stopping a bug or abuse from
 turning into a bill.
 
-## 7. Managing service requests
+## 7. Keeping the free project awake
+
+Supabase's free plan pauses a project after about 7 days without
+activity. Propittu prevents this automatically: a daily Vercel Cron calls
+the API's `/cron/keepalive`, which runs a trivial database query (migration
+`20261005000005_keepalive.sql`). There's nothing to configure here. If the
+project ever shows as **Paused** in the dashboard, click **Restore**.
+
+## 8. Managing service requests
 
 There is no admin app in V1 (§24). To change a request's status, go to
 **SQL Editor** and run:
@@ -159,7 +167,7 @@ join public.profiles pr on pr.id = r.user_id
 order by r.created_at desc;
 ```
 
-## 8. Production SMS (India)
+## 9. Production SMS (India)
 
 Real OTP delivery to Indian numbers requires **TRAI DLT** registration:
 

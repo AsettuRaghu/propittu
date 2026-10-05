@@ -1,37 +1,67 @@
 # Deployment
 
-The API is hosted on **Render** and the mobile app is built with **Expo EAS**.
+The API is hosted on **Vercel** and the mobile app is built with **Expo EAS**.
 Finish [SUPABASE_SETUP.md](SUPABASE_SETUP.md) first.
 
-## API on Render
+## API on Vercel
 
-The repository includes a Render Blueprint, [render.yaml](../render.yaml).
+**Live at https://propittu-api.vercel.app**: Vercel project `propittu-api`,
+team *Moka Projects*.
 
-1. Push the repository to GitHub.
-2. In Render, go to **New → Blueprint** and select the repository.
-3. When prompted, enter `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY`.
-   Everything else is preset in `render.yaml`.
-4. Deploy. Check `https://<service>.onrender.com/health`, which should return
-   `{"data":{"status":"ok",…}}`.
+### How it deploys
 
-What the blueprint does:
+Every push to `main` that changes `apps/api`, `packages/shared` or the
+lockfile deploys to production automatically, usually in under a minute.
+Commits that only touch the mobile app or docs are skipped.
 
-| Setting | Value | Notes |
+| Piece | Setting | Why |
 |---|---|---|
-| Region | Singapore | Render's only Asia-Pacific region. Supabase stays in Mumbai. |
-| Build | `npm ci` for the `api` and `shared` workspaces only | Skips the Expo toolchain. Rehearsed in a fresh clone with production-only dependencies. |
-| Start | `npm run start --workspace @propittu/api` | Runs the TypeScript directly with `tsx`, so there's no build step. |
-| Health check | `/health` | Doesn't call Supabase, so a Supabase blip won't restart the API. |
-| Auto-deploy | on pushes to `main` that touch `apps/api`, `packages/shared` or the lockfile | Mobile-only changes don't redeploy the API. |
+| Build | `npm run build` in `apps/api` (esbuild → `.vercel/output`) | The whole API ships as **one self-contained file**, so production runs exactly the code the tests ran against. Uses Vercel's [Build Output API](https://vercel.com/docs/build-output-api). |
+| Region | **`bom1` (Mumbai)** | Same region as the Supabase database. |
+| Project settings | Root Directory `apps/api`, Framework "Other", Node 22 | Configured once; the rest lives in [apps/api/vercel.json](../apps/api/vercel.json). |
+| Daily cron | `GET /cron/keepalive` at 03:00 UTC | Touches the database so the Supabase free plan never pauses the project for inactivity. Requires `CRON_SECRET`. |
 
-**Plan.** The blueprint uses the **free** plan, which sleeps after about
-15 minutes idle; the next request then takes 30–60 seconds. The app's
-60-second request timeout tolerates this, but it feels broken during
-testing. Switch to **Starter** in the Render dashboard before device
-testing or launch.
+### Environment variables (Production)
 
-If the service fails to start, the deploy log names any missing environment
-variable.
+Set with `npx vercel@latest env add <NAME> production` from `apps/api`, or in
+the dashboard under **Settings → Environment Variables**:
+
+| Variable | Value |
+|---|---|
+| `SUPABASE_URL` | Supabase project URL |
+| `SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_…` |
+| `NODE_ENV` | `production` |
+| `LOG_LEVEL` | `info` |
+| `SIGNED_DOWNLOAD_TTL_SECONDS` | `3600` |
+| `CRON_SECRET` | random string (`openssl rand -hex 32`); Vercel sends it to the cron endpoint |
+
+After changing a variable, redeploy (push a commit, or use **Redeploy** in the
+dashboard) for it to take effect.
+
+### Checking a deployment
+
+```bash
+curl https://propittu-api.vercel.app/health      # {"data":{"status":"ok",…}}
+```
+
+The `x-vercel-id` response header should start with `bom1::`. Logs are under
+**Project → Logs** in the Vercel dashboard. To roll back a bad deploy, open
+**Deployments**, pick the previous one and choose **Promote to Production**.
+
+### Testing the build locally
+
+```bash
+npm run test:bundle --workspace @propittu/api
+```
+
+This builds the bundle and runs the 29-check API security suite against it
+under plain Node, the same way Vercel invokes it.
+
+### Plan
+
+The project is on Vercel's **Hobby (free)** plan, which is for non-commercial
+use, while Propittu is pre-launch. **Upgrade the team to Pro before launching
+commercially** (see the launch checklist below). Nothing in the code changes.
 
 ## Mobile builds with EAS
 
@@ -55,7 +85,7 @@ EAS environment variables once per environment:
 ```bash
 for ENVIRONMENT in preview production; do
   npx eas-cli@latest env:create --environment $ENVIRONMENT --visibility plaintext \
-    --name EXPO_PUBLIC_API_URL --value https://<service>.onrender.com
+    --name EXPO_PUBLIC_API_URL --value https://propittu-api.vercel.app
   npx eas-cli@latest env:create --environment $ENVIRONMENT --visibility plaintext \
     --name EXPO_PUBLIC_SUPABASE_URL --value https://<ref>.supabase.co
   npx eas-cli@latest env:create --environment $ENVIRONMENT --visibility plaintext \
@@ -102,9 +132,10 @@ App Store and Play Store review times are outside our control (§44).
 
 ## Launch checklist
 
-- [ ] Render service on **Starter** plan; `/health` returns ok
+- [ ] Vercel team upgraded from Hobby to **Pro** (Hobby is non-commercial only); `/health` returns ok
+- [ ] Supabase project on **Pro** (daily backups, more storage, no pausing)
 - [ ] Migrations applied to the production Supabase project
-- [ ] Phone auth configured with a **DLT-registered** SMS provider ([SUPABASE_SETUP.md §8](SUPABASE_SETUP.md#8-production-sms-india))
+- [ ] Phone auth configured with a **DLT-registered** SMS provider ([SUPABASE_SETUP.md §9](SUPABASE_SETUP.md#9-production-sms-india))
 - [ ] Test phone numbers removed, or kept only for review accounts
 - [ ] SMS rate limit set
 - [ ] EAS `production` environment variables point to production URLs

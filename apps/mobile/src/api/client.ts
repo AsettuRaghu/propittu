@@ -39,10 +39,11 @@ async function accessToken(forceRefresh: boolean): Promise<string | null> {
 }
 
 /*
- * Generous, because a free-tier Render instance can take 30–60 s to wake.
- * Without any timeout a request on a dead mobile connection hangs forever.
+ * Without a timeout, a request on a dead mobile connection hangs forever.
+ * 30 s leaves ample room for slow networks; the API itself answers in
+ * well under a second.
  */
-const REQUEST_TIMEOUT_MS = 60_000;
+const REQUEST_TIMEOUT_MS = 30_000;
 
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';

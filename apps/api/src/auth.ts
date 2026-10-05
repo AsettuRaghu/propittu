@@ -27,8 +27,8 @@ declare global {
  * Token verification
  *
  * Tokens are verified LOCALLY against Supabase's published signing keys
- * (JWKS). The API runs on Render in Singapore and Supabase in Mumbai;
- * local verification saves a cross-region round trip on every request.
+ * (JWKS), so authenticating a request costs no network round trip to
+ * Supabase Auth — only the data queries themselves leave the function.
  *
  * Projects still signing with the legacy shared secret (HS256) publish
  * no matching key, so those tokens fall back to asking Supabase Auth.
