@@ -82,9 +82,21 @@ Supabase doesn't send SMS itself. The Phone provider needs an SMS provider
 dashboard may refuse to enable Phone until one is configured.
 
 **For development** you don't need working SMS. Use test numbers (next
-section), which never send a message. If the dashboard insists on
-provider credentials, a **free Twilio trial account** is enough to
-satisfy the form.
+section): Supabase answers them with their fixed code and **never
+contacts the SMS provider**. The provider form still has to be filled in
+before the dashboard lets you enable Phone, but only non-empty values are
+required, not working ones:
+
+| Field | Development value |
+|---|---|
+| SMS provider | Twilio |
+| Account SID / Auth Token | from a free Twilio trial account |
+| Message Service SID | placeholder `MG00000000000000000000000000000000` |
+
+Twilio trial accounts can't create a Messaging Service without
+upgrading, and you don't need to. With this setup the test numbers sign
+in, and any other number gets "couldn't send the OTP". That's expected
+until a real provider is configured in step 8.
 
 **For production** in India, see [step 8](#8-production-sms-india).
 
@@ -101,7 +113,8 @@ In the Phone provider settings:
 ### Test phone numbers
 
 Still in the Phone provider settings, find **Test phone numbers and OTPs**
-and add (no `+`):
+and add your numbers **with the `91` country code and no `+`** (the
+examples below are placeholders):
 
 ```
 919876543210=123456
