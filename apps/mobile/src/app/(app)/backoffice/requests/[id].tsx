@@ -1,13 +1,12 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
-import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   formatIndianMobile,
   formatPrice,
-  SERVICE_REQUEST_ACTION_LABELS,
   SERVICE_REQUEST_STATUS_LABELS,
-  SERVICE_REQUEST_TRANSITIONS,
   staffCan,
   VISIT_CONDITION_LABELS,
   VISIT_CONDITIONS,
@@ -29,24 +28,23 @@ import { playVideo, preparePhoto, prepareVideo, uploadVisitMedia } from '@/api/u
 import { DateField, fromIsoDate, toIsoDate } from '@/components/DateField';
 import { TextField } from '@/components/Field';
 import { ErrorState, LoadingState } from '@/components/States';
-import {
-  Badge,
-  Banner,
-  Button,
-  Card,
-  Chips,
-  KeyValue,
-  ProgressBar,
-  SectionTitle,
-} from '@/components/ui';
+import { Badge, Banner, Button, Card, Chips, KeyValue, ProgressBar } from '@/components/ui';
 import { VisitReportView } from '@/components/VisitReportView';
 import { errorMessage, fieldErrors } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
 import { STATUS_TONES } from '@/lib/icons';
 import { pickPhotos, pickVideo } from '@/lib/pickPhotos';
-import { colors, space, typography } from '@/theme';
+import { colors, radius, space, typography } from '@/theme';
 
-/** Backoffice: one service request — lifecycle, schedule, visit report (M4/M9). */
+/**
+ * Backoffice: one service request (M4/M9), as a guided flow — one next step
+ * at a time:
+ *
+ *   1 Confirm  →  2 Schedule  →  3 Start visit  →  4 Report + Complete
+ *
+ * The report is written only after the visit has started, and completing
+ * publishes it to the customer and locks it.
+ */
 export default function BackofficeRequestScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, isPending, error, refetch, isRefetching } = useBoRequest(id);
@@ -56,6 +54,7 @@ export default function BackofficeRequestScreen() {
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
 
   const canManage = staffCan(me.data?.staff_role, 'requests.manage');
+  const open = !['completed', 'cancelled'].includes(data.status);
 
   return (
     <ScrollView
@@ -71,47 +70,54 @@ export default function BackofficeRequestScreen() {
       }
     >
       <Summary request={data} />
-      {canManage ? <Actions request={data} /> : null}
-      {canManage && ['confirmed', 'scheduled', 'in_progress'].includes(data.status) ? (
-        <ReportEditor key={data.report?.updated_at ?? 'new'} request={data} />
-      ) : data.report ? (
-        <View style={styles.section}>
-          <Banner
-            tone="info"
-            message={
-              data.status === 'completed'
-                ? 'Published to the customer when the request was completed. The report is now locked.'
-                : 'Draft report — not visible to the customer.'
-            }
-          />
-          <VisitReportView report={data.report} />
-        </View>
+      <Steps status={data.status} />
+
+      {canManage && data.status === 'in_progress' ? (
+        <>
+          <ReportEditor key={data.report?.updated_at ?? 'new'} request={data} />
+          <CompleteStep request={data} />
+        </>
+      ) : canManage && open ? (
+        <NextStep key={data.status} request={data} />
       ) : null}
+
+      {data.status === 'completed' ? (
+        <Banner
+          tone="success"
+          message={
+            data.report
+              ? 'Completed. The visit report has been published to the customer and is locked.'
+              : 'Completed.'
+          }
+        />
+      ) : null}
+      {data.status === 'cancelled' ? (
+        <Banner tone="neutral" message="This request was cancelled." />
+      ) : null}
+      {data.status !== 'in_progress' && data.report ? (
+        <VisitReportView report={data.report} />
+      ) : null}
+
+      {canManage && open ? <CancelRequest request={data} /> : null}
     </ScrollView>
   );
 }
+
+/* ------------------------------------------------------------------ */
 
 function Summary({ request }: { request: BackofficeRequestDetail }) {
   return (
     <Card style={styles.card}>
       <View style={styles.row}>
-        <KeyValue label="Request ID" value={request.reference} />
+        <View style={styles.flex}>
+          <Text style={typography.heading}>{request.service.name}</Text>
+          <Text style={typography.caption}>{request.reference}</Text>
+        </View>
         <Badge
           label={SERVICE_REQUEST_STATUS_LABELS[request.status]}
           tone={STATUS_TONES[request.status]}
         />
       </View>
-      <KeyValue label="Service" value={request.service.name} />
-      <KeyValue
-        label="Cost"
-        value={
-          request.coverage === 'included'
-            ? 'Included in plan (usage counted on confirm)'
-            : request.price_paise !== null
-              ? `Extra · ${formatPrice(request.price_paise)}`
-              : 'Extra · price to be quoted'
-        }
-      />
       <View style={styles.links}>
         <Button
           title={request.customer_phone ? formatIndianMobile(request.customer_phone) : 'Customer'}
@@ -131,119 +137,227 @@ function Summary({ request }: { request: BackofficeRequestDetail }) {
       <KeyValue label="Address" value={request.property_address} />
       <KeyValue label="Customer's request" value={request.description} />
       <KeyValue
+        label="Cost"
+        value={
+          request.coverage === 'included'
+            ? 'Included in the customer’s plan'
+            : request.price_paise !== null
+              ? `Extra · ${formatPrice(request.price_paise)}${
+                  request.order?.status === 'paid' ? ' · Paid' : ' · not paid yet'
+                }`
+              : 'Extra · price to be quoted'
+        }
+      />
+      <KeyValue
         label="Preferred date"
         value={request.preferred_date ? formatDate(request.preferred_date) : null}
       />
       <KeyValue
-        label="Scheduled for"
+        label="Visit date"
         value={request.scheduled_for ? formatDate(request.scheduled_for) : null}
       />
-      <KeyValue label="Note to customer" value={request.status_note} />
-      <KeyValue label="Opened" value={formatDate(request.created_at)} />
-      <KeyValue
-        label="Payment"
-        value={
-          request.order
-            ? `${request.order.status === 'paid' ? 'Paid' : 'Awaiting payment'} · ${formatPrice(request.order.amount_paise)} · ${request.order.reference}`
-            : request.coverage === 'extra' && request.price_paise !== null
-              ? 'Not paid yet'
-              : null
-        }
-      />
+      <KeyValue label="Last message to customer" value={request.status_note} />
     </Card>
   );
 }
 
-function Actions({ request }: { request: BackofficeRequestDetail }) {
+/* ---- Progress strip ---------------------------------------------- */
+
+const FLOW: { status: ServiceRequestStatus; label: string }[] = [
+  { status: 'requested', label: 'Requested' },
+  { status: 'confirmed', label: 'Confirmed' },
+  { status: 'scheduled', label: 'Scheduled' },
+  { status: 'in_progress', label: 'Visit' },
+  { status: 'completed', label: 'Done' },
+];
+
+function Steps({ status }: { status: ServiceRequestStatus }) {
+  if (status === 'cancelled') return null;
+  const current = FLOW.findIndex((s) => s.status === status);
+  return (
+    <View style={styles.steps}>
+      {FLOW.map((s, i) => {
+        const done = i < current || status === 'completed';
+        const active = i === current && status !== 'completed';
+        return (
+          <View key={s.status} style={styles.step}>
+            <View style={[styles.dot, done && styles.dotDone, active && styles.dotActive]}>
+              {done ? <Ionicons name="checkmark" size={14} color={colors.onPrimary} /> : null}
+            </View>
+            <Text style={[styles.stepLabel, (done || active) && styles.stepLabelOn]}>
+              {s.label}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+/* ---- One next step at a time -------------------------------------- */
+
+function NextStep({ request }: { request: BackofficeRequestDetail }) {
   const update = useBoUpdateRequest(request.id);
   const [note, setNote] = useState('');
   const [date, setDate] = useState<Date | null>(
-    request.scheduled_for ? new Date(request.scheduled_for) : null,
+    request.scheduled_for
+      ? new Date(request.scheduled_for)
+      : request.preferred_date
+        ? fromIsoDate(request.preferred_date)
+        : null,
   );
+  const [rescheduling, setRescheduling] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  const next = SERVICE_REQUEST_TRANSITIONS[request.status];
-  if (next.length === 0) return null;
 
-  const run = (status: ServiceRequestStatus) => {
+  const move = (status: ServiceRequestStatus) => {
     setProblem(null);
     if (status === 'scheduled' && !date) {
       setProblem('Choose the visit date first.');
       return;
     }
-    const scheduledFor =
-      status === 'scheduled' && date
-        ? new Date(date.getFullYear(), date.getMonth(), date.getDate(), 10).toISOString()
-        : null;
-    const go = () =>
-      update.mutate(
-        { status, scheduled_for: scheduledFor, note: note.trim() || null },
-        {
-          onSuccess: () => setNote(''),
-          onError: (err) => setProblem(errorMessage(err)),
-        },
-      );
-    if (status === 'completed') {
-      Alert.alert(
-        'Complete this request?',
-        request.report
-          ? 'The visit report will be published to the customer and locked — check it before completing.'
-          : 'There is no visit report. Complete anyway?',
-        [
-          { text: 'Not yet', style: 'cancel' },
-          { text: 'Complete', onPress: go },
-        ],
-      );
-    } else if (status === 'cancelled') {
-      Alert.alert(
-        'Cancel this request?',
-        request.coverage === 'included' && request.status !== 'requested'
-          ? 'The included visit will be returned to the customer’s allowance.'
-          : undefined,
-        [
-          { text: 'Keep', style: 'cancel' },
-          { text: 'Cancel request', style: 'destructive', onPress: go },
-        ],
-      );
-    } else go();
+    update.mutate(
+      {
+        status,
+        scheduled_for:
+          status === 'scheduled' && date
+            ? new Date(date.getFullYear(), date.getMonth(), date.getDate(), 10).toISOString()
+            : null,
+        note: note.trim() || null,
+      },
+      { onError: (err) => setProblem(errorMessage(err)) },
+    );
   };
 
+  const step =
+    request.status === 'requested'
+      ? {
+          title: 'Step 1 of 4 · Confirm the request',
+          help:
+            request.coverage === 'included'
+              ? 'Confirming uses one of the customer’s included visits.'
+              : 'Confirm once you can take this request on.',
+          action: 'Confirm request',
+          target: 'confirmed' as const,
+        }
+      : request.status === 'confirmed' || rescheduling
+        ? {
+            title: rescheduling ? 'Change the visit date' : 'Step 2 of 4 · Schedule the visit',
+            help: 'Pick the visit date. The customer sees it on their request.',
+            action: rescheduling ? 'Save new date' : 'Schedule visit',
+            target: 'scheduled' as const,
+          }
+        : {
+            title: 'Step 3 of 4 · Start the visit',
+            help: 'Tap this when the visit begins. You then write the report and add photos.',
+            action: 'Start visit',
+            target: 'in_progress' as const,
+          };
+
   return (
-    <View style={styles.section}>
-      <SectionTitle title="Update status" />
-      <Card style={styles.card}>
-        {problem ? <Banner message={problem} /> : null}
-        {next.includes('scheduled') ? (
-          <DateField label="Visit date" value={date} onChange={setDate} minimumDate={new Date()} />
-        ) : null}
-        <TextField
-          label="Note to customer"
-          optional
-          placeholder="e.g. Our team will visit between 10 am and 1 pm"
-          value={note}
-          onChangeText={setNote}
-          maxLength={1000}
-          multiline
+    <Card style={[styles.card, styles.stepCard]}>
+      <Text style={typography.heading}>{step.title}</Text>
+      <Text style={typography.small}>{step.help}</Text>
+      {problem ? <Banner message={problem} /> : null}
+      {step.target === 'scheduled' ? (
+        <DateField label="Visit date" value={date} onChange={setDate} minimumDate={new Date()} />
+      ) : null}
+      <TextField
+        label="Message to customer"
+        optional
+        placeholder={
+          step.target === 'scheduled'
+            ? 'e.g. Our team will visit between 10 am and 1 pm'
+            : 'e.g. We have received your request'
+        }
+        value={note}
+        onChangeText={setNote}
+        maxLength={1000}
+        multiline
+      />
+      <Button title={step.action} onPress={() => move(step.target)} loading={update.isPending} />
+      {request.status === 'scheduled' ? (
+        <Button
+          title={rescheduling ? 'Keep the current date' : 'Change the visit date'}
+          variant="ghost"
+          onPress={() => setRescheduling((v) => !v)}
         />
-        {next.map((status) => (
-          <Button
-            key={status}
-            title={
-              status === 'scheduled' && request.status === 'scheduled'
-                ? 'Reschedule'
-                : SERVICE_REQUEST_ACTION_LABELS[status]
-            }
-            variant={
-              status === 'cancelled' ? 'danger' : status === next[0] ? 'primary' : 'secondary'
-            }
-            onPress={() => run(status)}
-            loading={update.isPending && update.variables?.status === status}
-            disabled={update.isPending}
-          />
-        ))}
-      </Card>
-    </View>
+      ) : null}
+    </Card>
   );
 }
+
+function CompleteStep({ request }: { request: BackofficeRequestDetail }) {
+  const update = useBoUpdateRequest(request.id);
+  const [problem, setProblem] = useState<string | null>(null);
+  const hasReport = !!request.report;
+
+  const complete = () =>
+    Alert.alert(
+      hasReport ? 'Complete and publish the report?' : 'Complete without a report?',
+      hasReport
+        ? 'The customer will see the report and photos. After this the report can no longer be changed.'
+        : 'The customer will not get a visit report.',
+      [
+        { text: 'Not yet', style: 'cancel' },
+        {
+          text: 'Complete',
+          onPress: () =>
+            update.mutate(
+              { status: 'completed', note: null },
+              { onError: (err) => setProblem(errorMessage(err)) },
+            ),
+        },
+      ],
+    );
+
+  return (
+    <Card style={[styles.card, styles.stepCard]}>
+      <Text style={typography.heading}>Finish · Complete the request</Text>
+      <Text style={typography.small}>
+        {hasReport
+          ? 'When the report and photos are ready, complete the request to publish them to the customer.'
+          : 'Save the visit report above first. The customer sees it once you complete.'}
+      </Text>
+      {problem ? <Banner message={problem} /> : null}
+      <Button
+        title={hasReport ? 'Complete & publish report' : 'Complete without a report'}
+        variant={hasReport ? 'primary' : 'secondary'}
+        onPress={complete}
+        loading={update.isPending}
+      />
+    </Card>
+  );
+}
+
+function CancelRequest({ request }: { request: BackofficeRequestDetail }) {
+  const update = useBoUpdateRequest(request.id);
+  const cancel = () =>
+    Alert.alert(
+      'Cancel this request?',
+      request.coverage === 'included' && request.status !== 'requested'
+        ? 'The included visit is returned to the customer’s allowance.'
+        : undefined,
+      [
+        { text: 'Keep', style: 'cancel' },
+        {
+          text: 'Cancel request',
+          style: 'destructive',
+          onPress: () =>
+            update.mutate(
+              { status: 'cancelled', note: null },
+              { onError: (err) => Alert.alert("Couldn't cancel", errorMessage(err)) },
+            ),
+        },
+      ],
+    );
+  return (
+    <Pressable onPress={cancel} style={styles.cancel} accessibilityRole="button">
+      <Text style={styles.cancelText}>Cancel this request</Text>
+    </Pressable>
+  );
+}
+
+/* ---- Step 4: the visit report (draft until completed) ------------- */
 
 function ReportEditor({ request }: { request: BackofficeRequestDetail }) {
   const save = useBoSaveReport(request.id);
@@ -275,7 +389,11 @@ function ReportEditor({ request }: { request: BackofficeRequestDetail }) {
     save.mutate(
       { visited_at: toIsoDate(visitedAt), condition, observations, issues, recommendations },
       {
-        onSuccess: () => Alert.alert('Report saved', 'The customer can now see it.'),
+        onSuccess: () =>
+          Alert.alert(
+            'Draft saved',
+            'Only staff can see it for now. Add photos, then complete the request to publish it.',
+          ),
         onError: (err) => {
           setErrors(fieldErrors(err));
           setProblem(errorMessage(err));
@@ -345,99 +463,123 @@ function ReportEditor({ request }: { request: BackofficeRequestDetail }) {
     ]);
 
   return (
-    <View style={styles.section}>
-      <SectionTitle title={report ? 'Visit report (draft)' : 'Write the visit report'} />
-      <Text style={typography.caption}>
-        Only staff can see the report until you mark the request Completed. Then it is published to
-        the customer and locked. Every save keeps the previous version.
+    <Card style={[styles.card, styles.stepCard]}>
+      <Text style={typography.heading}>Step 4 of 4 · Visit report</Text>
+      <Text style={typography.small}>
+        {report
+          ? 'Draft saved — only staff can see it. You can keep editing until you complete the request.'
+          : 'Fill this in during or after the visit and save it. The customer sees it only after you complete the request.'}
       </Text>
-      <Card style={styles.card}>
-        {problem ? <Banner message={problem} /> : null}
-        <DateField
-          label="Visit date"
-          value={visitedAt}
-          onChange={setVisitedAt}
-          maximumDate={new Date()}
-        />
-        {errors.visited_at ? <Text style={styles.error}>{errors.visited_at}</Text> : null}
-        <Text style={typography.overline}>Condition</Text>
-        <Chips
-          options={VISIT_CONDITIONS.map((c) => ({ value: c, label: VISIT_CONDITION_LABELS[c] }))}
-          value={condition}
-          onChange={setCondition}
-        />
-        {errors.condition ? <Text style={styles.error}>{errors.condition}</Text> : null}
-        <TextField
-          label="Observations"
-          multiline
-          maxLength={4000}
-          value={observations}
-          onChangeText={setObservations}
-          placeholder="What did you see at the property?"
-        />
-        <TextField
-          label="Issues found"
-          optional
-          multiline
-          maxLength={4000}
-          value={issues}
-          onChangeText={setIssues}
-          placeholder="Cracks, leaks, encroachment, overgrowth…"
-        />
-        <TextField
-          label="Recommendations"
-          optional
-          multiline
-          maxLength={4000}
-          value={recommendations}
-          onChangeText={setRecommendations}
-        />
-        <Button
-          title={report ? 'Update report' : 'Save report'}
-          onPress={submit}
-          loading={save.isPending}
-        />
-      </Card>
+      {problem ? <Banner message={problem} /> : null}
+      <DateField
+        label="Visit date"
+        value={visitedAt}
+        onChange={setVisitedAt}
+        maximumDate={new Date()}
+      />
+      {errors.visited_at ? <Text style={styles.error}>{errors.visited_at}</Text> : null}
+      <Text style={typography.overline}>Condition</Text>
+      <Chips
+        options={VISIT_CONDITIONS.map((c) => ({ value: c, label: VISIT_CONDITION_LABELS[c] }))}
+        value={condition}
+        onChange={setCondition}
+      />
+      {errors.condition ? <Text style={styles.error}>{errors.condition}</Text> : null}
+      <TextField
+        label="Observations"
+        multiline
+        maxLength={4000}
+        value={observations}
+        onChangeText={setObservations}
+        placeholder="What did you see at the property?"
+      />
+      <TextField
+        label="Issues found"
+        optional
+        multiline
+        maxLength={4000}
+        value={issues}
+        onChangeText={setIssues}
+        placeholder="Cracks, leaks, encroachment, overgrowth…"
+      />
+      <TextField
+        label="Recommendations"
+        optional
+        multiline
+        maxLength={4000}
+        value={recommendations}
+        onChangeText={setRecommendations}
+      />
+      <Button
+        title={report ? 'Save changes' : 'Save report'}
+        onPress={submit}
+        loading={save.isPending}
+      />
 
-      {report ? (
+      <Text style={typography.overline}>Photos and videos</Text>
+      {!report ? (
+        <Text style={typography.caption}>Save the report first, then add photos and videos.</Text>
+      ) : progress !== null ? (
+        <View style={styles.uploading}>
+          <Text style={typography.small}>Uploading {Math.round(progress * 100)}%</Text>
+          <ProgressBar progress={progress} />
+        </View>
+      ) : (
+        <View style={styles.links}>
+          <Button
+            title="Add photos"
+            variant="secondary"
+            icon="images-outline"
+            onPress={addPhotos}
+          />
+          <Button
+            title="Add video"
+            variant="secondary"
+            icon="videocam-outline"
+            onPress={addVideo}
+          />
+        </View>
+      )}
+      {report && report.media.length > 0 ? (
         <>
-          <SectionTitle title="Photos and videos" />
-          {progress !== null ? (
-            <Card style={styles.card}>
-              <Text style={typography.small}>Uploading {Math.round(progress * 100)}%</Text>
-              <ProgressBar progress={progress} />
-            </Card>
-          ) : (
-            <View style={styles.links}>
-              <Button
-                title="Add photos"
-                variant="secondary"
-                icon="images-outline"
-                onPress={addPhotos}
-              />
-              <Button
-                title="Add video"
-                variant="secondary"
-                icon="videocam-outline"
-                onPress={addVideo}
-              />
-            </View>
-          )}
-          <Text style={typography.caption}>Customer preview:</Text>
+          <Text style={typography.caption}>What the customer will see:</Text>
           <VisitReportView report={report} onMediaPress={mediaActions} />
         </>
-      ) : (
-        <Text style={typography.caption}>Save the report first, then add photos and videos.</Text>
-      )}
-    </View>
+      ) : null}
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { padding: space.lg, gap: space.xl, paddingBottom: space.xxl },
-  card: { gap: space.lg },
-  section: { gap: space.md },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  content: { padding: space.lg, gap: space.lg, paddingBottom: space.xxl },
+  card: { gap: space.md },
+  stepCard: { borderColor: colors.primary, borderWidth: 1.5 },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: space.md,
+  },
+  flex: { flex: 1 },
   links: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  uploading: { gap: space.sm },
   error: { fontSize: 13, color: colors.danger },
+  steps: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: space.xs },
+  step: { alignItems: 'center', gap: space.xs, flex: 1 },
+  dot: {
+    width: 22,
+    height: 22,
+    borderRadius: radius.pill,
+    borderWidth: 2,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dotDone: { backgroundColor: colors.primary, borderColor: colors.primary },
+  dotActive: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
+  stepLabel: { fontSize: 11, color: colors.textSubtle },
+  stepLabelOn: { color: colors.text, fontWeight: '600' },
+  cancel: { alignSelf: 'center', padding: space.md },
+  cancelText: { color: colors.danger, fontSize: 14, fontWeight: '600' },
 });
