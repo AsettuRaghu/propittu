@@ -7,6 +7,7 @@ import { useMe } from '@/api/queries';
 import { useSession } from '@/auth/SessionProvider';
 import { ErrorState, LoadingState } from '@/components/States';
 import { Button, Card, KeyValue } from '@/components/ui';
+import { BUILD_LABEL } from '@/lib/buildInfo';
 import { colors, space, typography } from '@/theme';
 
 /** Profile (PRODUCT_SPEC.md §25). Name is optional and not edited in V1. */
@@ -87,7 +88,7 @@ export default function ProfileScreen() {
       />
 
       <Text style={[typography.caption, styles.version]}>
-        Propittu {Constants.expoConfig?.version ?? ''}
+        Propittu {Constants.expoConfig?.version ?? ''} · {BUILD_LABEL}
       </Text>
     </ScrollView>
   );
