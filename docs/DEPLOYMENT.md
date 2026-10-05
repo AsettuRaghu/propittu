@@ -119,6 +119,26 @@ The project is on Vercel's **Hobby (free)** plan, which is for non-commercial
 use, while Propittu is pre-launch. **Upgrade the team to Pro before launching
 commercially** (see the launch checklist below). Nothing in the code changes.
 
+## Testing the app without the laptop (EAS Update in Expo Go)
+
+The app's JavaScript is published to Expo's servers, and Expo Go on the
+phone loads it from anywhere, without needing the Mac or the same Wi-Fi.
+Project: `@propittu/propittu`. Branch and channel: `preview`. Runtime:
+`exposdk:57.0.0` (`runtimeVersion.policy = sdkVersion`, which is what Expo Go
+requires). The public `EXPO_PUBLIC_*` values live in the EAS `preview` and
+`production` environments.
+
+- **Open on the phone:** Expo Go must be signed in as `propittu` (Expo only
+  lets you load your own projects). Then open
+  `exp://u.expo.dev/49c7914f-4765-49a4-a5cc-0c545a5a6900?channel-name=preview&runtime-version=exposdk:57.0.0`
+  (tap it in Notes or Messages). After the first open it is under **Recently
+  opened** in Expo Go.
+- **Publish a new version** (from `apps/mobile`):
+  `npx eas-cli@latest update --branch preview --environment preview --message "what changed"`.
+  Close and reopen the app in Expo Go to get it (it may take two launches).
+- When real builds are made (TestFlight / Play), switch `runtimeVersion` to
+  `{ "policy": "appVersion" }` or `fingerprint`.
+
 ## Mobile builds with EAS
 
 Use `npx eas-cli@latest` (no global install needed). Run commands from
