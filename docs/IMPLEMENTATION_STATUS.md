@@ -18,8 +18,8 @@ Updated at every checkpoint. **Read this first when resuming work.**
 | # | Modules | Status |
 |---|---|---|
 | 1 | **M1 Account + M10 security foundation + M11 audit events** | ✅ Done |
-| 2 | M2 Property (location pin, profile completion) + M3 Documents & Media (new categories, videos) | ⏳ Next |
-| 3 | M5 Plans & Benefits + M6 Trial / Usage / Limited Access | Planned |
+| 2 | **M2 Property (location pin, profile completion) + M3 Documents & Media (new categories, videos)** | ✅ Done |
+| 3 | M5 Plans & Benefits + M6 Trial / Usage / Limited Access | ⏳ Next |
 | 4 | M4 Services (new catalogue, visit reports, usage on confirm) + M9 Backoffice (staff mode) | Planned |
 | 5 | M7 Payments (Razorpay), full Day-3 and security journeys, final report | Planned |
 | — | M8 Notifications | Deferred by design (a central extension point only) |
@@ -46,6 +46,28 @@ Updated at every checkpoint. **Read this first when resuming work.**
 - API suite: **34 checks**. New: account resolved server-side, forged `account_id` ignored, no-account login → 403, audit event recorded.
 
 **Live:** migration applied to Supabase; both test users verified as owning their own account, with data backfilled.
+
+## Checkpoint 2: M2 Property + M3 Documents & Media (done)
+
+**Database:** migration `20261006000002_property_media.sql`
+- `properties`: `location_source` (user / sale_deed / ai / external / system), `location_confirmed_at` and `field_sources` (a per-field provenance map). Coordinates **require** a source, so future AI or external data can never silently overwrite a user-confirmed value.
+- Document categories are now **Sale Deed / Registration / Property Tax / Other**. Old test rows were remapped (tax receipt → Property Tax, everything else → Other) and nothing was deleted. New `description` field, and `status` (uploaded / under review / verified / rejected), which **only staff** can change.
+- `property_videos` table and private `property-videos` bucket (MP4/MOV, ≤ 50 MB, which is the Supabase free-plan file limit), with RLS and storage policies matching photos.
+- The summary view gains `photo_count` and `video_count`.
+
+**API**
+- Property create and update record provenance: user-supplied fields → `user`; a confirmed map pin → `location_source = user`. Any client-sent source is ignored.
+- `GET /properties/:id` returns `videos` and `completion` (percent, items, next actions). The rules live in `packages/shared/src/completion.ts`.
+- Videos: `GET /properties/:id/videos`, `POST …/videos/intent`, `POST …/videos/:videoId/confirm`, `DELETE /videos/:id`.
+- Documents: `description` on upload; new `PATCH /documents/:id` (category and description only).
+
+**Mobile**
+- **Location screen:** the address is geocoded on the phone (free, no API key) to an approximate pin; the owner drags or taps to adjust, or uses their current location, then confirms. The details screen shows a map preview.
+- **Completion card** ("62% complete") with tappable next steps: confirm location, upload sale deed, add a photo, and so on.
+- **Videos section:** pick (trimmed to 60 s on iOS), upload with progress, play, delete.
+- Add Document: the 4 categories, a description field, and the category preselected when opened from "next steps".
+
+**Tests:** RLS **98** checks (videos isolation, retired categories rejected, customers can't self-verify, provenance required) · API **42** checks (video limits, half-pin rejected, provenance merge, no client status) · mobile typecheck, lint, expo-doctor 21/21, iOS and Android bundles.
 
 ## How to resume
 1. Read this file and [ARCHITECTURE.md](ARCHITECTURE.md).

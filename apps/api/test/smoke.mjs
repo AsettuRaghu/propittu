@@ -60,6 +60,17 @@ const fake = http.createServer((req, res) => {
         res.writeHead(200, { 'content-type': 'application/json' });
         return res.end(JSON.stringify('2026-01-01T00:00:00+00:00'));
       }
+      // Existing property 1111… (for PATCH provenance checks).
+      if (req.method === 'GET' && req.url.startsWith('/rest/v1/properties') && req.url.includes('id=eq.11111111')) {
+        const row = { id: '11111111-1111-1111-1111-111111111111', field_sources: { city: 'user' } };
+        res.writeHead(200, { 'content-type': 'application/json' });
+        return res.end(JSON.stringify(single ? row : [row]));
+      }
+      if (req.method === 'PATCH' && req.url.startsWith('/rest/v1/properties')) {
+        const row = { id: '11111111-1111-1111-1111-111111111111', created_at: 'now', updated_at: 'now', ...JSON.parse(body) };
+        res.writeHead(200, { 'content-type': 'application/json' });
+        return res.end(JSON.stringify(single ? row : [row]));
+      }
       if (req.method === 'POST' && req.url.startsWith('/rest/v1/properties')) {
         const row = { id: '11111111-1111-1111-1111-111111111111', created_at: 'now', updated_at: 'now', ...JSON.parse(body) };
         res.writeHead(201, { 'content-type': 'application/json' });
@@ -196,6 +207,29 @@ try {
   r = await call('/properties/11111111-1111-1111-1111-111111111111/documents/intent', {
     token: valid, method: 'POST', body: { document_type: 'sale_deed', file_name: 'big.pdf', mime_type: 'application/pdf', file_size: 11 * 1024 * 1024 } });
   check(r.status === 400 && r.json.error.details?.file_size, 'document over 10 MB → 400 (§21)', r.json);
+
+  // ---- M2 / M3 ----
+  const P = '/properties/11111111-1111-1111-1111-111111111111';
+  r = await call(`${P}/documents/intent`, { token: valid, method: 'POST',
+    body: { document_type: 'tax_receipt', file_name: 't.pdf', mime_type: 'application/pdf', file_size: 10 } });
+  check(r.status === 400 && r.json.error.details?.document_type, 'retired document category rejected (M3: Sale Deed/Registration/Property Tax/Other)', r.json);
+  r = await call(`${P}/videos/intent`, { token: valid, method: 'POST', body: { mime_type: 'video/x-msvideo', file_size: 10 } });
+  check(r.status === 400 && r.json.error.details?.mime_type, 'unsupported video type → 400', r.json);
+  r = await call(`${P}/videos/intent`, { token: valid, method: 'POST', body: { mime_type: 'video/mp4', file_size: 51 * 1024 * 1024 } });
+  check(r.status === 400 && r.json.error.details?.file_size, 'video over 50 MB → 400', r.json);
+  r = await call(`${P}/videos/intent`, { token: valid, method: 'POST', body: { mime_type: 'video/mp4', file_size: 1000, duration_seconds: 300 } });
+  check(r.status === 400 && r.json.error.details?.duration_seconds, 'video longer than 60 s → 400', r.json);
+  r = await call(P, { token: valid, method: 'PATCH', body: { latitude: 17.385 } });
+  check(r.status === 400 && r.json.error.details?.latitude, 'half a map pin (latitude only) → 400', r.json);
+  seen.length = 0;
+  r = await call(P, { token: valid, method: 'PATCH', body: { latitude: 17.385, longitude: 78.4867, area_value: 1200, area_unit: 'sqft', location_source: 'ai' } });
+  const patch = seen.find((s) => s.method === 'PATCH');
+  check(r.status === 200 && patch?.body?.location_source === 'user' && patch.body.location_confirmed_at,
+    'confirmed pin stored as a USER-provided location; client-sent source ignored (M2 provenance)', patch?.body);
+  check(patch?.body?.field_sources?.city === 'user' && patch.body.field_sources.area_value === 'user',
+    'field provenance merged: earlier sources kept, new fields marked user', patch?.body?.field_sources);
+  r = await call('/documents/11111111-1111-1111-1111-111111111111', { token: valid, method: 'PATCH', body: { status: 'verified' } });
+  check(r.status === 400, 'customer cannot set document review status (only staff)', r.json);
 
   r = await call('/service-requests', { token: valid, method: 'POST', body: { property_id: 'x', service_id: 'y', description: '' } });
   check(r.status === 400 && r.json.error.details?.description, 'empty service request → 400', r.json);

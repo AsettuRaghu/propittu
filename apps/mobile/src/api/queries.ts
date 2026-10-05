@@ -9,6 +9,7 @@ import type {
   PropertySummary,
   Service,
   ServiceRequest,
+  UpdateDocumentInput,
   UpdatePropertyInput,
 } from '@propittu/shared';
 import { api } from './client';
@@ -120,6 +121,29 @@ export function useDeleteDocument(propertyId: string) {
     mutationFn: (documentId: string) => api<void>(`/documents/${documentId}`, { method: 'DELETE' }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.documents(propertyId) });
+      void qc.invalidateQueries({ queryKey: keys.property(propertyId), exact: true });
+      void qc.invalidateQueries({ queryKey: keys.properties, exact: true });
+    },
+  });
+}
+
+export function useUpdateDocument(propertyId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateDocumentInput }) =>
+      api<PropertyDocument>(`/documents/${id}`, { method: 'PATCH', body: input }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.documents(propertyId) });
+      void qc.invalidateQueries({ queryKey: keys.property(propertyId), exact: true });
+    },
+  });
+}
+
+export function useDeleteVideo(propertyId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (videoId: string) => api<void>(`/videos/${videoId}`, { method: 'DELETE' }),
+    onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.property(propertyId), exact: true });
       void qc.invalidateQueries({ queryKey: keys.properties, exact: true });
     },

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   documentIntentSchema,
+  updateDocumentSchema,
   STORAGE_BUCKETS,
   type PropertyDocument,
   type SignedDownload,
@@ -35,7 +36,8 @@ interface DocumentRow extends PropertyDocument {
 }
 
 const DOCUMENT_COLUMNS =
-  'id, property_id, document_type, file_name, mime_type, file_size, storage_path, upload_status, created_at';
+  'id, property_id, document_type, file_name, description, status, mime_type, file_size, ' +
+  'storage_path, upload_status, created_at';
 
 function toDocument(row: DocumentRow): PropertyDocument {
   return {
@@ -43,6 +45,8 @@ function toDocument(row: DocumentRow): PropertyDocument {
     property_id: row.property_id,
     document_type: row.document_type,
     file_name: row.file_name,
+    description: row.description,
+    status: row.status,
     mime_type: row.mime_type,
     file_size: row.file_size,
     created_at: row.created_at,
@@ -92,6 +96,7 @@ documentsRouter.post('/properties/:id/documents/intent', async (req, res) => {
         user_id: userId,
         document_type: input.document_type,
         file_name: cleanFileName(input.file_name),
+        description: input.description,
         storage_path: storagePath,
         mime_type: input.mime_type,
         file_size: input.file_size,
@@ -178,6 +183,28 @@ documentsRouter.get('/documents/:id/download', async (req, res) => {
     expires_in: env.SIGNED_DOWNLOAD_TTL_SECONDS,
   };
   ok(res, data);
+});
+
+/* PATCH /documents/:id — recategorise or describe (review status is staff-only) */
+documentsRouter.patch('/documents/:id', async (req, res) => {
+  const { db, accountId } = auth(req);
+  const id = uuidParam(req.params.id, 'Document');
+  const input = updateDocumentSchema.parse(req.body);
+
+  const row = must<DocumentRow | null>(
+    await db
+      .from('property_documents')
+      .update(input)
+      .eq('id', id)
+      .eq('account_id', accountId)
+      .eq('upload_status', 'ready')
+      .select(DOCUMENT_COLUMNS)
+      .maybeSingle(),
+  );
+  if (!row) throw notFound('Document');
+
+  await audit(auth(req), 'document.updated', { type: 'document', id: row.id }, input);
+  ok(res, toDocument(row));
 });
 
 /* DELETE /documents/:id */

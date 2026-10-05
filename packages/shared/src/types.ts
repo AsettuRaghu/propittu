@@ -1,8 +1,11 @@
+import type { PropertyCompletion } from './completion';
 import type {
   AccountRole,
   AccountStatus,
   ApiErrorCode,
   AreaUnit,
+  DocumentStatus,
+  ValueSource,
   StaffRole,
   DocumentType,
   PropertyType,
@@ -71,6 +74,11 @@ export interface Property {
   property_number: string | null;
   khata_number: string | null;
   notes: string | null;
+  /** Who set the coordinates (M2 provenance); null until a pin is confirmed. */
+  location_source: ValueSource | null;
+  location_confirmed_at: string | null;
+  /** Per-field provenance, e.g. { area_value: 'user' } (future AI must not overwrite). */
+  field_sources: Partial<Record<string, ValueSource>>;
   created_at: string;
   updated_at: string;
 }
@@ -85,14 +93,19 @@ export interface PropertySummary {
   document_count: number;
   service_request_count: number;
   cover_photo_url: string | null;
+  photo_count: number;
+  video_count: number;
   created_at: string;
 }
 
 /** Property details screen (§18). */
 export interface PropertyDetail extends Property {
   photos: PropertyPhoto[];
+  videos: PropertyVideo[];
   document_count: number;
   service_request_count: number;
+  /** Profile completion and next actions (M2). */
+  completion: PropertyCompletion;
 }
 
 /* ------------------------------------------------------------------ *
@@ -108,11 +121,25 @@ export interface PropertyPhoto {
   created_at: string;
 }
 
+export interface PropertyVideo {
+  id: string;
+  property_id: string;
+  caption: string | null;
+  duration_seconds: number | null;
+  file_size: number;
+  /** Short-lived signed URL; never persist it. */
+  url: string | null;
+  created_at: string;
+}
+
 export interface PropertyDocument {
   id: string;
   property_id: string;
   document_type: DocumentType;
   file_name: string;
+  description: string | null;
+  /** Review status (staff-controlled). */
+  status: DocumentStatus;
   mime_type: string;
   file_size: number;
   created_at: string;

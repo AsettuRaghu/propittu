@@ -1,14 +1,17 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { PROPERTY_TYPE_LABELS } from '@propittu/shared';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import MapView, { Marker } from 'react-native-maps';
+import { PROPERTY_TYPE_LABELS, type CompletionItem } from '@propittu/shared';
 import { useProperty } from '@/api/queries';
+import { CompletionCard } from '@/components/CompletionCard';
 import { PhotoSection } from '@/components/PhotoSection';
 import { ErrorState, LoadingState } from '@/components/States';
+import { VideoSection } from '@/components/VideoSection';
 import { Button, Card, KeyValue, SectionTitle } from '@/components/ui';
 import { formatArea, formatLocation, plural } from '@/lib/format';
-import { colors, space, typography } from '@/theme';
+import { colors, radius, space, typography } from '@/theme';
 
-/** Property details (PRODUCT_SPEC.md §18) — kept deliberately uncluttered. */
+/** Property details (§18, M2/M3) — kept deliberately uncluttered. */
 export default function PropertyDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: property, isPending, error, refetch, isRefetching } = useProperty(id);
@@ -25,6 +28,26 @@ export default function PropertyDetailsScreen() {
 
   const location = formatLocation(property);
   const address = [property.address_line, property.pincode].filter(Boolean).join(' – ');
+  const hasPin = property.latitude !== null && property.longitude !== null;
+  const openLocation = () => router.push(`/properties/${property.id}/location`);
+
+  // Next actions from the completion card.
+  const onAction = (item: CompletionItem) => {
+    switch (item.key) {
+      case 'location':
+        return openLocation();
+      case 'sale_deed':
+      case 'property_tax':
+        return router.push({
+          pathname: '/properties/[id]/add-document',
+          params: { id: property.id, type: item.key },
+        });
+      case 'photo':
+        return; // The Photos section below has the Add button.
+      default:
+        return router.push(`/properties/${property.id}/edit`);
+    }
+  };
 
   return (
     <ScrollView
@@ -44,6 +67,8 @@ export default function PropertyDetailsScreen() {
         {location ? <Text style={typography.small}>{location}</Text> : null}
       </View>
 
+      <CompletionCard completion={property.completion} onAction={onAction} />
+
       <Card style={styles.facts}>
         <KeyValue label="Property" value={PROPERTY_TYPE_LABELS[property.property_type]} />
         <KeyValue label="Area" value={formatArea(property.area_value, property.area_unit)} />
@@ -55,8 +80,57 @@ export default function PropertyDetailsScreen() {
       </Card>
 
       <View style={styles.section}>
+        <SectionTitle title="Location" />
+        {hasPin ? (
+          <Pressable
+            onPress={openLocation}
+            accessibilityRole="button"
+            accessibilityLabel="Change location"
+          >
+            <MapView
+              style={styles.map}
+              pointerEvents="none"
+              scrollEnabled={false}
+              zoomEnabled={false}
+              pitchEnabled={false}
+              rotateEnabled={false}
+              initialRegion={{
+                latitude: property.latitude as number,
+                longitude: property.longitude as number,
+                latitudeDelta: 0.01,
+                longitudeDelta: 0.01,
+              }}
+            >
+              <Marker
+                coordinate={{
+                  latitude: property.latitude as number,
+                  longitude: property.longitude as number,
+                }}
+                pinColor={colors.primary}
+              />
+            </MapView>
+            <Text style={[typography.caption, styles.mapCaption]}>
+              Confirmed by you · tap to change
+            </Text>
+          </Pressable>
+        ) : (
+          <Card style={styles.linkCard}>
+            <Text style={typography.small}>
+              Mark exactly where the property is. It helps with visits and inspections.
+            </Text>
+            <Button title="Set location on map" icon="map-outline" onPress={openLocation} />
+          </Card>
+        )}
+      </View>
+
+      <View style={styles.section}>
         <SectionTitle title="Photos" />
         <PhotoSection propertyId={property.id} photos={property.photos} />
+      </View>
+
+      <View style={styles.section}>
+        <SectionTitle title="Videos" />
+        <VideoSection propertyId={property.id} videos={property.videos} />
       </View>
 
       <View style={styles.section}>
@@ -115,4 +189,6 @@ const styles = StyleSheet.create({
   facts: { gap: space.lg },
   section: { gap: 0 },
   linkCard: { gap: space.md },
+  map: { height: 160, borderRadius: radius.lg, overflow: 'hidden' },
+  mapCaption: { marginTop: space.xs },
 });

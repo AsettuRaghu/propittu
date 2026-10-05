@@ -89,31 +89,35 @@ export const AREA_UNIT_LABELS: Record<AreaUnit, string> = {
  * Document types (§20) — "The list should remain extensible."
  * ------------------------------------------------------------------ */
 
-export const DOCUMENT_TYPES = [
-  'sale_deed',
-  'registration',
-  'tax_receipt',
-  'khata_certificate',
-  'encumbrance_certificate',
-  'building_approval',
-  'electricity',
-  'rental_agreement',
-  'other',
-] as const;
+/** M3 V1 categories. Sale Deed is first-class (future M12 extraction source). */
+export const DOCUMENT_TYPES = ['sale_deed', 'registration', 'property_tax', 'other'] as const;
 
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 
 export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   sale_deed: 'Sale Deed',
-  registration: 'Registration Document',
-  tax_receipt: 'Property Tax Receipt',
-  khata_certificate: 'Khata Certificate',
-  encumbrance_certificate: 'Encumbrance Certificate',
-  building_approval: 'Building Approval',
-  electricity: 'Electricity Document',
-  rental_agreement: 'Rental Agreement',
+  registration: 'Registration',
+  property_tax: 'Property Tax',
   other: 'Other',
 };
+
+/** Review status — only staff (later, AI under staff oversight) move it past "uploaded". */
+export const DOCUMENT_STATUSES = ['uploaded', 'under_review', 'verified', 'rejected'] as const;
+export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
+export const DOCUMENT_STATUS_LABELS: Record<DocumentStatus, string> = {
+  uploaded: 'Uploaded',
+  under_review: 'Under review',
+  verified: 'Verified',
+  rejected: 'Rejected',
+};
+
+/* ------------------------------------------------------------------ *
+ * Provenance (M2/M11): who supplied a value. AI-derived or external
+ * values must never silently overwrite user-confirmed ones.
+ * ------------------------------------------------------------------ */
+
+export const VALUE_SOURCES = ['user', 'sale_deed', 'ai', 'external', 'system'] as const;
+export type ValueSource = (typeof VALUE_SOURCES)[number];
 
 /* ------------------------------------------------------------------ *
  * Service catalogue (§22) — categories only; the services themselves
@@ -175,6 +179,13 @@ export const ALLOWED_DOCUMENT_MIME_TYPES = ['application/pdf', 'image/jpeg', 'im
 
 export const ALLOWED_PHOTO_MIME_TYPES = ['image/jpeg', 'image/png'] as const;
 
+/** Videos: the Supabase free plan caps a single file at 50 MB. */
+export const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+export const MAX_VIDEO_SECONDS = 60;
+export const MAX_VIDEOS_PER_PROPERTY = 10;
+export const ALLOWED_VIDEO_MIME_TYPES = ['video/mp4', 'video/quicktime'] as const;
+export type VideoMimeType = (typeof ALLOWED_VIDEO_MIME_TYPES)[number];
+
 export type DocumentMimeType = (typeof ALLOWED_DOCUMENT_MIME_TYPES)[number];
 export type PhotoMimeType = (typeof ALLOWED_PHOTO_MIME_TYPES)[number];
 
@@ -190,6 +201,7 @@ export const MAX_PHOTOS_PER_PROPERTY = 20;
 export const STORAGE_BUCKETS = {
   photos: 'property-photos',
   documents: 'property-documents',
+  videos: 'property-videos',
 } as const;
 
 export function formatFileSize(bytes: number): string {

@@ -14,7 +14,12 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { DOCUMENT_TYPE_LABELS, formatFileSize, type PropertyDocument } from '@propittu/shared';
+import {
+  DOCUMENT_STATUS_LABELS,
+  DOCUMENT_TYPE_LABELS,
+  formatFileSize,
+  type PropertyDocument,
+} from '@propittu/shared';
 import { useDeleteDocument, useDocuments } from '@/api/queries';
 import { openDocument } from '@/api/uploads';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
@@ -106,8 +111,14 @@ export default function DocumentsScreen() {
                 <Text style={typography.small} numberOfLines={1}>
                   {item.file_name}
                 </Text>
+                {item.description ? (
+                  <Text style={typography.small} numberOfLines={2}>
+                    {item.description}
+                  </Text>
+                ) : null}
                 <Text style={typography.caption}>
-                  {formatFileSize(item.file_size)} · {formatDate(item.created_at)}
+                  {formatFileSize(item.file_size)} · {formatDate(item.created_at)} ·{' '}
+                  {DOCUMENT_STATUS_LABELS[item.status]}
                 </Text>
               </View>
               {opening === item.id ? (

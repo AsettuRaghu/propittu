@@ -2,12 +2,15 @@ import { z } from 'zod';
 import {
   ALLOWED_DOCUMENT_MIME_TYPES,
   ALLOWED_PHOTO_MIME_TYPES,
+  ALLOWED_VIDEO_MIME_TYPES,
   AREA_UNITS,
   DOCUMENT_TYPES,
   INDIAN_MOBILE_REGEX,
   INDIAN_PINCODE_REGEX,
   MAX_DOCUMENT_BYTES,
   MAX_PHOTO_BYTES,
+  MAX_VIDEO_BYTES,
+  MAX_VIDEO_SECONDS,
   OTP_LENGTH,
   PROPERTY_TYPES,
 } from './constants';
@@ -98,18 +101,27 @@ const propertyFields = {
   notes: optionalText(2000),
 };
 
+/** A map pin is both coordinates or neither (M2: location is first-class). */
+const bothOrNeither = (p: { latitude?: number | null; longitude?: number | null }) =>
+  (p.latitude ?? null) === null ? (p.longitude ?? null) === null : (p.longitude ?? null) !== null;
+
 export const createPropertySchema = z
   .object(propertyFields)
   .refine((p) => p.area_value === null || p.area_unit !== null, {
     message: 'Choose a unit for the area',
     path: ['area_unit'],
-  });
+  })
+  .refine(bothOrNeither, { message: 'Set the location on the map', path: ['latitude'] });
 
 /** PATCH semantics: every field optional; an omitted field is left untouched. */
 export const updatePropertySchema = z
   .object(propertyFields)
   .partial()
-  .refine((p) => Object.keys(p).length > 0, { message: 'Nothing to update' });
+  .refine((p) => Object.keys(p).length > 0, { message: 'Nothing to update' })
+  .refine((p) => 'latitude' in p === 'longitude' in p && bothOrNeither(p), {
+    message: 'Set both latitude and longitude',
+    path: ['latitude'],
+  });
 
 export type CreatePropertyInput = z.input<typeof createPropertySchema>;
 export type CreatePropertyData = z.output<typeof createPropertySchema>;
@@ -146,7 +158,38 @@ export const documentIntentSchema = z.object({
     .int()
     .positive()
     .max(MAX_DOCUMENT_BYTES, `Documents must be under ${MAX_DOCUMENT_BYTES / (1024 * 1024)} MB`),
+  description: optionalText(500),
 });
+
+/** PATCH /documents/:id — recategorise or describe. Review status is staff-only. */
+export const updateDocumentSchema = z
+  .object({
+    document_type: z.enum(DOCUMENT_TYPES, { message: 'Choose a document type' }),
+    description: optionalText(500),
+  })
+  .partial()
+  .refine((d) => Object.keys(d).length > 0, { message: 'Nothing to update' });
+
+export const videoIntentSchema = z.object({
+  mime_type: z.enum(ALLOWED_VIDEO_MIME_TYPES, { message: 'Videos must be MP4 or MOV' }),
+  file_size: z
+    .number()
+    .int()
+    .positive()
+    .max(MAX_VIDEO_BYTES, `Videos must be under ${MAX_VIDEO_BYTES / (1024 * 1024)} MB`),
+  duration_seconds: z.preprocess(
+    (v) => (v === undefined ? null : v),
+    z
+      .number()
+      .positive()
+      .max(MAX_VIDEO_SECONDS + 1, `Videos must be ${MAX_VIDEO_SECONDS} seconds or shorter`)
+      .nullable(),
+  ),
+  caption: optionalText(200),
+});
+
+export type VideoIntentInput = z.input<typeof videoIntentSchema>;
+export type UpdateDocumentInput = z.input<typeof updateDocumentSchema>;
 
 export type PhotoIntentInput = z.input<typeof photoIntentSchema>;
 export type DocumentIntentInput = z.input<typeof documentIntentSchema>;

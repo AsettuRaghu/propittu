@@ -21,6 +21,7 @@ export default function AppLayout() {
       />
       <Stack.Screen name="properties/[id]/index" options={{ title: '' }} />
       <Stack.Screen name="properties/[id]/edit" options={{ title: 'Edit property' }} />
+      <Stack.Screen name="properties/[id]/location" options={{ title: 'Property location' }} />
       <Stack.Screen name="properties/[id]/documents" options={{ title: 'Documents' }} />
       <Stack.Screen name="properties/[id]/add-document" options={{ title: 'Add document' }} />
       <Stack.Screen name="services/request" options={{ title: 'Request a service' }} />

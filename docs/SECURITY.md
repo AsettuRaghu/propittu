@@ -46,7 +46,7 @@ with the date when finished.
 
 | ID | Item | Risk | Fix |
 |---|---|---|---|
-| S5 | **Remove the test phone numbers** from Supabase Auth | Test numbers accept a fixed OTP, so anyone who knows one can log in as that account. | Delete them under Authentication → Phone (keep one only if a store-review account is needed). |
+| S5 | **Remove the test phone numbers** from Supabase Auth — **especially the Backoffice Super Admin number** | Test numbers accept a fixed OTP, so anyone who knows one can log in as that account. For the Super Admin, that means **every customer's data**. | Delete them under Authentication → Phone (keep one only if a store-review account is needed). |
 | S6 | **Real SMS provider with DLT registration** | Without it only test numbers can sign in (functional, not security, but a launch blocker). | See SUPABASE_SETUP.md §9; revisit rate limits with real traffic. |
 | S7 | **Backups for customer data** | The Supabase free plan has **no automatic backups**; losing sale deeds would be serious. | Supabase Pro (daily backups) at launch. Interim: periodic `supabase db dump`. Storage files need their own backup plan. |
 | S8 | **Renew `VERCEL_TOKEN` before it expires** (~Oct 2027) | Deploys stop when it expires (availability, not exposure). | Steps in DEPLOYMENT.md. Rotate immediately if it ever leaks. |

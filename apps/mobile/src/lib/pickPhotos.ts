@@ -1,5 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import { Alert, Linking } from 'react-native';
+import { MAX_VIDEO_SECONDS } from '@propittu/shared';
 
 /**
  * Asks "Take photo" or "Choose from library", then returns the picked
@@ -48,4 +49,20 @@ async function fromCamera(): Promise<ImagePicker.ImagePickerAsset[]> {
     exif: false,
   });
   return result.canceled ? [] : result.assets;
+}
+
+/**
+ * Picks one video from the library (M3). On iOS, longer clips open the
+ * system trimmer at MAX_VIDEO_SECONDS, and Medium quality keeps files
+ * well under the 50 MB limit.
+ */
+export async function pickVideo(): Promise<ImagePicker.ImagePickerAsset | null> {
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['videos'],
+    allowsMultipleSelection: false,
+    allowsEditing: true,
+    videoMaxDuration: MAX_VIDEO_SECONDS,
+    videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium,
+  });
+  return result.canceled ? null : (result.assets[0] ?? null);
 }

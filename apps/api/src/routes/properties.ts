@@ -1,11 +1,13 @@
 import { Router } from 'express';
 import {
+  computePropertyCompletion,
   createPropertySchema,
   STORAGE_BUCKETS,
   updatePropertySchema,
   type Property,
   type PropertyDetail,
   type PropertySummary,
+  type ValueSource,
 } from '@propittu/shared';
 import { auth } from '../auth.js';
 import { audit } from '../audit.js';
@@ -13,17 +15,20 @@ import { must, notFound, ok, uuidParam } from '../errors.js';
 import { assertOwnsProperty } from '../ownership.js';
 import { removeObjects, signDownloads } from '../storage.js';
 import { listReadyPhotos } from './photos.js';
+import { listReadyVideos } from './videos.js';
 
-/** Properties CRUD (§8.2, §17, §30). */
+/** Properties CRUD (§8.2, §17, M2). */
 export const propertiesRouter = Router();
 
 /** Every column the client sees. user_id is never returned — it is implied. */
 const PROPERTY_COLUMNS =
   'id, property_type, name, address_line, city, state, pincode, latitude, longitude, ' +
-  'area_value, area_unit, survey_number, property_number, khata_number, notes, created_at, updated_at';
+  'area_value, area_unit, survey_number, property_number, khata_number, notes, ' +
+  'location_source, location_confirmed_at, field_sources, created_at, updated_at';
 
 const SUMMARY_COLUMNS =
-  'id, property_type, name, city, state, created_at, document_count, service_request_count, cover_photo_path';
+  'id, property_type, name, city, state, created_at, document_count, service_request_count, ' +
+  'cover_photo_path, photo_count, video_count';
 
 type PropertyRow = Property;
 
@@ -39,7 +44,35 @@ function toProperty(row: PropertyRow): Property {
     latitude: num(row.latitude),
     longitude: num(row.longitude),
     area_value: num(row.area_value),
+    field_sources: row.field_sources ?? {},
   };
+}
+
+/**
+ * Provenance (M2/M11): every value the customer supplies is marked as
+ * user-provided, so future AI/sale-deed extraction can tell confirmed
+ * values apart and never silently overwrite them. A map pin set by the
+ * customer is a user-confirmed location.
+ */
+function withProvenance(
+  input: Record<string, unknown>,
+  existing: Partial<Record<string, ValueSource>> = {},
+): Record<string, unknown> {
+  const fieldSources: Partial<Record<string, ValueSource>> = { ...existing };
+  for (const [field, value] of Object.entries(input)) {
+    if (field === 'latitude' || field === 'longitude') continue;
+    if (value === null) delete fieldSources[field];
+    else fieldSources[field] = 'user';
+  }
+
+  const location =
+    'latitude' in input
+      ? input.latitude === null
+        ? { location_source: null, location_confirmed_at: null }
+        : { location_source: 'user', location_confirmed_at: new Date().toISOString() }
+      : {};
+
+  return { ...input, ...location, field_sources: fieldSources };
 }
 
 /* ------------------------------------------------------------------ *
@@ -79,7 +112,7 @@ propertiesRouter.post('/properties', async (req, res) => {
   const row = must<PropertyRow>(
     await db
       .from('properties')
-      .insert({ ...input, account_id: accountId, user_id: userId })
+      .insert({ ...withProvenance(input), account_id: accountId, user_id: userId })
       .select(PROPERTY_COLUMNS)
       .single(),
   );
@@ -89,14 +122,14 @@ propertiesRouter.post('/properties', async (req, res) => {
 });
 
 /* ------------------------------------------------------------------ *
- * GET /properties/:id — Property details (§18)
+ * GET /properties/:id — Property details (§18) + completion (M2)
  * ------------------------------------------------------------------ */
 
 propertiesRouter.get('/properties/:id', async (req, res) => {
   const { db, accountId } = auth(req);
   const id = uuidParam(req.params.id, 'Property');
 
-  const [propertyResult, summaryResult] = await Promise.all([
+  const [propertyResult, summaryResult, documentsResult] = await Promise.all([
     db
       .from('properties')
       .select(PROPERTY_COLUMNS)
@@ -109,19 +142,36 @@ propertiesRouter.get('/properties/:id', async (req, res) => {
       .eq('id', id)
       .eq('account_id', accountId)
       .maybeSingle(),
+    db
+      .from('property_documents')
+      .select('document_type')
+      .eq('property_id', id)
+      .eq('account_id', accountId)
+      .eq('upload_status', 'ready'),
   ]);
 
-  const property = must<PropertyRow | null>(propertyResult);
-  if (!property) throw notFound('Property');
+  const row = must<PropertyRow | null>(propertyResult);
+  if (!row) throw notFound('Property');
   const counts = must<Pick<PropertySummary, 'document_count' | 'service_request_count'> | null>(
     summaryResult,
   );
+  const documentTypes = must<{ document_type: string }[]>(documentsResult).map(
+    (d) => d.document_type,
+  );
+
+  const property = toProperty(row);
+  const [photos, videos] = await Promise.all([
+    listReadyPhotos(db, accountId, id),
+    listReadyVideos(db, accountId, id),
+  ]);
 
   const data: PropertyDetail = {
-    ...toProperty(property),
-    photos: await listReadyPhotos(db, accountId, id),
+    ...property,
+    photos,
+    videos,
     document_count: counts?.document_count ?? 0,
     service_request_count: counts?.service_request_count ?? 0,
+    completion: computePropertyCompletion({ property, photoCount: photos.length, documentTypes }),
   };
 
   ok(res, data);
@@ -136,10 +186,20 @@ propertiesRouter.patch('/properties/:id', async (req, res) => {
   const id = uuidParam(req.params.id, 'Property');
   const input = updatePropertySchema.parse(req.body);
 
+  const existing = must<{ field_sources: Partial<Record<string, ValueSource>> } | null>(
+    await db
+      .from('properties')
+      .select('field_sources')
+      .eq('id', id)
+      .eq('account_id', accountId)
+      .maybeSingle(),
+  );
+  if (!existing) throw notFound('Property');
+
   const row = must<PropertyRow | null>(
     await db
       .from('properties')
-      .update(input)
+      .update(withProvenance(input, existing.field_sources ?? {}))
       .eq('id', id)
       .eq('account_id', accountId)
       .select(PROPERTY_COLUMNS)
@@ -147,6 +207,9 @@ propertiesRouter.patch('/properties/:id', async (req, res) => {
   );
   if (!row) throw notFound('Property');
 
+  if ('latitude' in input) {
+    await audit(auth(req), 'property.location_confirmed', { type: 'property', id });
+  }
   ok(res, toProperty(row));
 });
 
@@ -154,7 +217,7 @@ propertiesRouter.patch('/properties/:id', async (req, res) => {
  * DELETE /properties/:id
  *
  * Storage objects first, then the row. The reverse order risks orphaned
- * files nobody can see or delete. Photo/document rows cascade with the
+ * files nobody can see or delete. Media/document rows cascade with the
  * property; service requests survive with property_id nulled (§8.4).
  * ------------------------------------------------------------------ */
 
@@ -163,7 +226,7 @@ propertiesRouter.delete('/properties/:id', async (req, res) => {
   const id = uuidParam(req.params.id, 'Property');
   await assertOwnsProperty(db, accountId, id);
 
-  const [photos, documents] = await Promise.all([
+  const [photos, documents, videos] = await Promise.all([
     db
       .from('property_photos')
       .select('storage_path')
@@ -174,11 +237,17 @@ propertiesRouter.delete('/properties/:id', async (req, res) => {
       .select('storage_path')
       .eq('property_id', id)
       .eq('account_id', accountId),
+    db
+      .from('property_videos')
+      .select('storage_path')
+      .eq('property_id', id)
+      .eq('account_id', accountId),
   ]);
 
   const paths = (r: { storage_path: string }[]) => r.map((x) => x.storage_path);
   await removeObjects(db, STORAGE_BUCKETS.photos, paths(must(photos)));
   await removeObjects(db, STORAGE_BUCKETS.documents, paths(must(documents)));
+  await removeObjects(db, STORAGE_BUCKETS.videos, paths(must(videos)));
 
   must(await db.from('properties').delete().eq('id', id).eq('account_id', accountId));
   await audit(auth(req), 'property.deleted', { type: 'property', id });

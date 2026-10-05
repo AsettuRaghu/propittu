@@ -29,6 +29,15 @@ export default function PropertyAddedScreen() {
       </View>
       <View style={styles.actions}>
         <Button title="View Property" onPress={() => router.replace(`/properties/${id}`)} />
+        <Button
+          title="Set location on map"
+          variant="secondary"
+          icon="map-outline"
+          onPress={() => {
+            router.replace(`/properties/${id}`);
+            router.push(`/properties/${id}/location`);
+          }}
+        />
         <Button title="Back to Home" variant="ghost" onPress={() => router.replace('/')} />
       </View>
     </SafeAreaView>

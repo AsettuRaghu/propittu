@@ -9,12 +9,16 @@ import {
   ALLOWED_DOCUMENT_MIME_TYPES,
   MAX_DOCUMENT_BYTES,
   MAX_PHOTO_BYTES,
+  MAX_VIDEO_BYTES,
+  MAX_VIDEO_SECONDS,
   PHOTO_MAX_DIMENSION,
   formatFileSize,
   type DocumentMimeType,
   type DocumentType,
   type PropertyDocument,
   type PropertyPhoto,
+  type PropertyVideo,
+  type VideoMimeType,
   type SignedDownload,
   type UploadIntent,
 } from '@propittu/shared';
@@ -34,7 +38,7 @@ import { ApiError, api } from './client';
 export interface LocalFile {
   uri: string;
   name: string;
-  mimeType: DocumentMimeType;
+  mimeType: DocumentMimeType | VideoMimeType;
   size: number;
 }
 
@@ -176,12 +180,14 @@ export async function uploadDocument(
   documentType: DocumentType,
   file: LocalFile,
   onProgress?: ProgressFn,
+  description?: string | null,
 ): Promise<PropertyDocument> {
   const intent = await api<UploadIntent>(`/properties/${propertyId}/documents/intent`, {
     method: 'POST',
     body: {
       document_type: documentType,
       file_name: file.name,
+      description: description?.trim() || null,
       mime_type: file.mimeType,
       file_size: file.size,
     },
@@ -190,6 +196,78 @@ export async function uploadDocument(
   return api<PropertyDocument>(`/properties/${propertyId}/documents/${intent.id}/confirm`, {
     method: 'POST',
   });
+}
+
+/* ------------------------------------------------------------------ *
+ * Videos (M3)
+ * ------------------------------------------------------------------ */
+
+export interface LocalVideo extends LocalFile {
+  durationSeconds: number | null;
+}
+
+/** Validates a picked video BEFORE any network call (type, size, length). */
+export function prepareVideo(asset: ImagePickerAsset): LocalVideo {
+  const reported = asset.mimeType?.toLowerCase() ?? '';
+  const ext = (asset.fileName ?? asset.uri).split('.').pop()?.toLowerCase() ?? '';
+  const mimeType: VideoMimeType | null =
+    reported === 'video/mp4' || ext === 'mp4'
+      ? 'video/mp4'
+      : reported === 'video/quicktime' || ext === 'mov'
+        ? 'video/quicktime'
+        : null;
+  if (!mimeType) {
+    throw new ApiError(415, 'UNSUPPORTED_FILE_TYPE', 'Only MP4 and MOV videos are supported.');
+  }
+  const size = asset.fileSize ?? new File(asset.uri).size;
+  if (size > MAX_VIDEO_BYTES) {
+    throw new ApiError(
+      413,
+      'FILE_TOO_LARGE',
+      `This video is ${formatFileSize(size)}. The limit is ${formatFileSize(MAX_VIDEO_BYTES)} — try a shorter clip.`,
+    );
+  }
+  // The picker reports duration in milliseconds.
+  const durationSeconds = asset.duration ? Math.round(asset.duration / 100) / 10 : null;
+  if (durationSeconds !== null && durationSeconds > MAX_VIDEO_SECONDS + 1) {
+    throw new ApiError(
+      400,
+      'VALIDATION_FAILED',
+      `Videos can be up to ${MAX_VIDEO_SECONDS} seconds long.`,
+    );
+  }
+  return {
+    uri: asset.uri,
+    name: `video.${mimeType === 'video/mp4' ? 'mp4' : 'mov'}`,
+    mimeType,
+    size,
+    durationSeconds,
+  };
+}
+
+export async function uploadVideo(
+  propertyId: string,
+  file: LocalVideo,
+  onProgress?: ProgressFn,
+): Promise<PropertyVideo> {
+  const intent = await api<UploadIntent>(`/properties/${propertyId}/videos/intent`, {
+    method: 'POST',
+    body: {
+      mime_type: file.mimeType,
+      file_size: file.size,
+      duration_seconds: file.durationSeconds,
+    },
+  });
+  await putToSignedUrl(intent.upload_url, file, onProgress);
+  return api<PropertyVideo>(`/properties/${propertyId}/videos/${intent.id}/confirm`, {
+    method: 'POST',
+  });
+}
+
+/** Plays a video in the in-app browser (Safari/Chrome play MP4/MOV natively). */
+export async function playVideo(video: PropertyVideo): Promise<void> {
+  if (!video.url) throw new ApiError(0, 'NETWORK', 'This video is not available right now.');
+  await WebBrowser.openBrowserAsync(video.url);
 }
 
 /**

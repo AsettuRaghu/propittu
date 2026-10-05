@@ -11,6 +11,7 @@ import { meRouter } from './routes/me.js';
 import { photosRouter } from './routes/photos.js';
 import { propertiesRouter } from './routes/properties.js';
 import { servicesRouter } from './routes/services.js';
+import { videosRouter } from './routes/videos.js';
 
 export function createApp(): express.Express {
   const app = express();
@@ -45,6 +46,7 @@ export function createApp(): express.Express {
   app.use(meRouter);
   app.use(propertiesRouter);
   app.use(photosRouter);
+  app.use(videosRouter);
   app.use(documentsRouter);
   app.use(servicesRouter);
 

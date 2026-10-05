@@ -131,7 +131,7 @@ values ('a1a1a1a1-0000-0000-0000-000000000001', 'acc0000a-0000-0000-0000-0000000
         'acc0000a-0000-0000-0000-00000000000a/a1a1a1a1-0000-0000-0000-000000000001/d1.pdf',
         'application/pdf', 2000, 'ready'),
        ('a1a1a1a1-0000-0000-0000-000000000001', 'acc0000a-0000-0000-0000-00000000000a',
-        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'tax_receipt', 'pending.pdf',
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'property_tax', 'pending.pdf',
         'acc0000a-0000-0000-0000-00000000000a/a1a1a1a1-0000-0000-0000-000000000001/d2.pdf',
         'application/pdf', 2000, 'pending');
 
@@ -319,6 +319,69 @@ update public.staff_members set is_active = true where user_id = '55555555-5555-
 
 -- =====================================================================
 \echo
+\echo '== M2/M3: location provenance, document rules, videos =='
+-- =====================================================================
+
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+
+select tst.rejects($$update public.properties set latitude = 17.4, longitude = 78.4
+                     where id = 'a1a1a1a1-0000-0000-0000-000000000001'$$,
+  'coordinates without a location_source are rejected (provenance required)');
+select tst.rows($$update public.properties set latitude = 17.385, longitude = 78.4867, location_source = 'user',
+                  location_confirmed_at = now() where id = 'a1a1a1a1-0000-0000-0000-000000000001'$$, 1,
+  'A can confirm a location pin with source user');
+select tst.rejects($$update public.properties set location_source = 'oracle'
+                     where id = 'a1a1a1a1-0000-0000-0000-000000000001'$$,
+  'unknown location_source rejected');
+
+select tst.rejects($$insert into public.property_documents (property_id, account_id, user_id, document_type, file_name, storage_path, mime_type, file_size)
+                     values ('a1a1a1a1-0000-0000-0000-000000000001', 'acc0000a-0000-0000-0000-00000000000a', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+                             'electricity', 'bill.pdf', 'acc0000a-0000-0000-0000-00000000000a/a1a1a1a1-0000-0000-0000-000000000001/bill.pdf',
+                             'application/pdf', 10)$$,
+  'retired document category (electricity/utility) rejected');
+select tst.rows($$update public.property_documents set description = 'Original registered deed'
+                  where document_type = 'sale_deed'$$, 1, 'A can describe its document');
+select tst.rejects($$update public.property_documents set status = 'verified'$$,
+  'A cannot mark its own document verified (staff-controlled)');
+select tst.ok((select status from public.property_documents where document_type = 'sale_deed') = 'uploaded',
+  'new documents start as uploaded');
+
+insert into public.property_videos (property_id, account_id, user_id, storage_path, mime_type, file_size, upload_status)
+values ('a1a1a1a1-0000-0000-0000-000000000001', 'acc0000a-0000-0000-0000-00000000000a', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        'acc0000a-0000-0000-0000-00000000000a/a1a1a1a1-0000-0000-0000-000000000001/v1.mp4', 'video/mp4', 5000000, 'ready');
+insert into storage.objects (bucket_id, name)
+values ('property-videos', 'acc0000a-0000-0000-0000-00000000000a/a1a1a1a1-0000-0000-0000-000000000001/v1.mp4');
+select tst.rows('select * from public.property_videos', 1, 'A sees its own video');
+select tst.ok((select video_count from public.property_summaries where id = 'a1a1a1a1-0000-0000-0000-000000000001') = 1,
+  'summary counts ready videos');
+select tst.rejects($$insert into public.property_videos (property_id, account_id, user_id, storage_path, mime_type, file_size)
+                     values ('a1a1a1a1-0000-0000-0000-000000000001', 'acc0000a-0000-0000-0000-00000000000a', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+                             'acc0000a-0000-0000-0000-00000000000a/a1a1a1a1-0000-0000-0000-000000000001/big.mp4', 'video/mp4', 52428801)$$,
+  'video over 50 MB rejected');
+select tst.rejects($$insert into public.property_videos (property_id, account_id, user_id, storage_path, mime_type, file_size)
+                     values ('a1a1a1a1-0000-0000-0000-000000000001', 'acc0000a-0000-0000-0000-00000000000a', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+                             'acc0000a-0000-0000-0000-00000000000a/a1a1a1a1-0000-0000-0000-000000000001/x.avi', 'video/x-msvideo', 10)$$,
+  'unsupported video type rejected');
+
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.rows('select * from public.property_videos', 0, 'B sees none of A''s videos');
+select tst.rows($$select * from storage.objects where bucket_id = 'property-videos'$$, 0, 'B cannot see A''s video files');
+select tst.rejects($$insert into public.property_videos (property_id, account_id, user_id, storage_path, mime_type, file_size)
+                     values ('a1a1a1a1-0000-0000-0000-000000000001', 'acc0000b-0000-0000-0000-00000000000b', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+                             'acc0000b-0000-0000-0000-00000000000b/a1a1a1a1-0000-0000-0000-000000000001/x.mp4', 'video/mp4', 10)$$,
+  'B cannot attach a video to A''s property');
+select tst.rejects($$insert into storage.objects (bucket_id, name)
+                     values ('property-videos', 'acc0000a-0000-0000-0000-00000000000a/x/evil.mp4')$$,
+  'B cannot upload into A''s video folder');
+select tst.rows($$delete from public.property_videos$$, 0, 'B delete of A''s videos touches 0 rows');
+
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+select tst.rows('select * from public.property_videos', 1, 'staff can see A''s video');
+reset role;
+
+-- =====================================================================
+\echo
 \echo '== Data integrity constraints =='
 -- =====================================================================
 
@@ -385,6 +448,7 @@ select tst.rows($$delete from public.properties where id = 'a1a1a1a1-0000-0000-0
   'A deletes own property');
 select tst.rows('select * from public.property_photos',    0, 'photos cascade-deleted');
 select tst.rows('select * from public.property_documents', 0, 'documents cascade-deleted');
+select tst.rows('select * from public.property_videos', 0, 'videos cascade-deleted');
 select tst.rows('select * from public.service_requests',   1, 'service request history survives');
 select tst.ok((select property_id from public.service_requests limit 1) is null,
   'surviving request has property_id nulled');

@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { DocumentMimeType, STORAGE_BUCKETS } from '@propittu/shared';
+import type { DocumentMimeType, STORAGE_BUCKETS, VideoMimeType } from '@propittu/shared';
+
+type MediaMimeType = DocumentMimeType | VideoMimeType;
 import { env } from './env.js';
 import { HttpError } from './errors.js';
 
@@ -15,7 +17,9 @@ type Bucket = (typeof STORAGE_BUCKETS)[keyof typeof STORAGE_BUCKETS];
 /** Supabase signed upload URLs are valid for a fixed two hours. */
 export const SIGNED_UPLOAD_TTL_SECONDS = 2 * 60 * 60;
 
-const EXTENSION_BY_MIME: Record<DocumentMimeType, string> = {
+const EXTENSION_BY_MIME: Record<MediaMimeType, string> = {
+  'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
   'application/pdf': 'pdf',
   'image/jpeg': 'jpg',
   'image/png': 'png',
@@ -23,11 +27,11 @@ const EXTENSION_BY_MIME: Record<DocumentMimeType, string> = {
 
 /**
  * Generates the object path SERVER-SIDE. Clients never choose paths (§37).
- * Shape: <user_id>/<property_id>/<uuid>.<ext> — the first segment is what
+ * Shape: <account_id>/<property_id>/<uuid>.<ext> — the first segment is what
  * storage policies and the DB CHECK constraint verify ownership against.
  */
-export function objectPath(userId: string, propertyId: string, mime: DocumentMimeType): string {
-  return `${userId}/${propertyId}/${randomUUID()}.${EXTENSION_BY_MIME[mime]}`;
+export function objectPath(accountId: string, propertyId: string, mime: MediaMimeType): string {
+  return `${accountId}/${propertyId}/${randomUUID()}.${EXTENSION_BY_MIME[mime]}`;
 }
 
 export async function signUpload(

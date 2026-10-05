@@ -43,6 +43,12 @@
           "microphonePermission": false
         }
       ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Propittu uses your location to help you place your property on the map."
+        }
+      ],
       "expo-web-browser",
       "expo-sharing",
       "expo-image"

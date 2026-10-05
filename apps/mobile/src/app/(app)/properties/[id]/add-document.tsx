@@ -14,6 +14,7 @@ import {
 import { useInvalidateProperty } from '@/api/queries';
 import { prepareDocument, uploadDocument, type LocalFile } from '@/api/uploads';
 import { Footer } from '@/components/Footer';
+import { TextField } from '@/components/Field';
 import { Banner, Button, Card, OptionList, ProgressBar, SectionTitle } from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
 import { colors, radius, space, typography } from '@/theme';
@@ -30,9 +31,12 @@ type Status =
  * Unsupported types and oversized files are rejected before upload.
  */
 export default function AddDocumentScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, type } = useLocalSearchParams<{ id: string; type?: string }>();
   const invalidate = useInvalidateProperty();
-  const [documentType, setDocumentType] = useState<DocumentType | null>(null);
+  const [documentType, setDocumentType] = useState<DocumentType | null>(
+    (DOCUMENT_TYPES as readonly string[]).includes(type ?? '') ? (type as DocumentType) : null,
+  );
+  const [description, setDescription] = useState('');
   const [file, setFile] = useState<LocalFile | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
@@ -60,8 +64,12 @@ export default function AddDocumentScreen() {
     if (!documentType || !file || uploading) return;
     setStatus({ kind: 'uploading', progress: 0 });
     try {
-      await uploadDocument(id, documentType, file, (progress) =>
-        setStatus({ kind: 'uploading', progress }),
+      await uploadDocument(
+        id,
+        documentType,
+        file,
+        (progress) => setStatus({ kind: 'uploading', progress }),
+        description,
       );
       invalidate(id);
       setStatus({ kind: 'done' });
@@ -92,6 +100,7 @@ export default function AddDocumentScreen() {
             onPress={() => {
               setDocumentType(null);
               setFile(null);
+              setDescription('');
               setStatus({ kind: 'idle' });
             }}
           />
@@ -144,6 +153,20 @@ export default function AddDocumentScreen() {
             />
           )}
           {fileError ? <Banner message={fileError} /> : null}
+        </View>
+
+        <View style={styles.section}>
+          <SectionTitle title="3. Description" />
+          <TextField
+            label="Description"
+            optional
+            multiline
+            maxLength={500}
+            placeholder="e.g. Original registered sale deed, 2018"
+            value={description}
+            onChangeText={setDescription}
+            editable={!uploading}
+          />
         </View>
       </ScrollView>
 

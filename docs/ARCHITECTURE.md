@@ -46,8 +46,13 @@ Staff (staff_members) ──► Backoffice: reads across Accounts; staff-only ac
 
 Staff are a **separate boundary**: `staff_members`, plus `is_staff()` in RLS. Customers can never reach staff-only functions.
 
+### Property profile (M2)
+- Location is first-class: address → approximate position (phone geocoder) → the owner confirms or moves the pin → saved with `location_source = user`.
+- **Provenance:** `field_sources` records who supplied each value (user / sale_deed / ai / external / system). Future M12 extraction writes its own source and must never overwrite a `user` value.
+- **Completion:** one shared function (`packages/shared/src/completion.ts`) produces the percent and next actions; the API computes it and the app renders it.
+
 ### Storage (M3/M10)
-- Private buckets `property-photos` and `property-documents`; a videos bucket arrives in checkpoint 2.
+- Private buckets `property-photos`, `property-documents` and `property-videos` (≤ 50 MB per file).
 - Object paths are chosen by the API: `<account_id>/<property_id>/<uuid>.<ext>`. Uploads made before accounts existed use `<user_id>/…` and remain readable.
 - Uploads and downloads use short-lived signed URLs, issued only after the ownership checks above.
 
