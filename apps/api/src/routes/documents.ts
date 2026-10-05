@@ -90,7 +90,10 @@ documentsRouter.post('/properties/:id/documents/intent', async (req, res) => {
   const plan = planOf(req);
   requireFeature(plan, 'document_upload', 'Document upload');
   const used = await countForProperty(db, 'property_documents', accountId, propertyId);
-  enforceLimit(plan, 'max_documents_per_property', used, 1, 'documents per property');
+  enforceLimit(plan, 'max_documents_per_property', used, 1, [
+    'document per property',
+    'documents per property',
+  ]);
   await enforceStorage(db, plan, accountId, input.file_size);
 
   const storagePath = objectPath(accountId, propertyId, input.mime_type);

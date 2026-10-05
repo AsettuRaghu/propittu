@@ -97,7 +97,10 @@ videosRouter.post('/properties/:id/videos/intent', async (req, res) => {
   const plan = planOf(req);
   requireFeature(plan, 'video_upload', 'Video upload');
   const used = await countForProperty(db, 'property_videos', accountId, propertyId);
-  enforceLimit(plan, 'max_videos_per_property', used, 1, 'videos per property');
+  enforceLimit(plan, 'max_videos_per_property', used, 1, [
+    'video per property',
+    'videos per property',
+  ]);
   await enforceStorage(db, plan, accountId, input.file_size);
 
   const storagePath = objectPath(accountId, propertyId, input.mime_type);

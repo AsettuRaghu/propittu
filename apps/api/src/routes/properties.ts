@@ -118,7 +118,7 @@ propertiesRouter.post('/properties', async (req, res) => {
     .select('id', { count: 'exact', head: true })
     .eq('account_id', accountId);
   must(existing);
-  enforceLimit(plan, 'max_properties', existing.count ?? 0, 1, 'properties');
+  enforceLimit(plan, 'max_properties', existing.count ?? 0, 1, ['property', 'properties']);
 
   const row = must<PropertyRow>(
     await db

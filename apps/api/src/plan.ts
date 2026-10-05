@@ -185,7 +185,7 @@ export function enforceLimit(
   code: LimitCode,
   used: number,
   adding: number,
-  label: string,
+  label: [one: string, many: string],
 ): void {
   const limit = state.benefits.limits[code];
   if (limit === undefined) return;
@@ -193,7 +193,7 @@ export function enforceLimit(
     throw new HttpError(
       403,
       'LIMIT_REACHED',
-      `Your ${planName(state)} plan allows ${limit} ${label}. Upgrade your plan to add more.`,
+      `Your ${planName(state)} plan allows ${limit} ${limit === 1 ? label[0] : label[1]}. Upgrade your plan to add more.`,
       { limit: String(limit), used: String(used), code },
     );
   }

@@ -95,7 +95,10 @@ photosRouter.post('/properties/:id/photos/intent', async (req, res) => {
   const plan = planOf(req);
   requireFeature(plan, 'photo_upload', 'Photo upload');
   const used = await countForProperty(db, 'property_photos', accountId, propertyId);
-  enforceLimit(plan, 'max_photos_per_property', used, 1, 'photos per property');
+  enforceLimit(plan, 'max_photos_per_property', used, 1, [
+    'photo per property',
+    'photos per property',
+  ]);
   await enforceStorage(db, plan, accountId, input.file_size);
 
   const storagePath = objectPath(accountId, propertyId, input.mime_type);
