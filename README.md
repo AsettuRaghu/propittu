@@ -124,3 +124,4 @@ Run from the repository root.
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): Vercel (API) and EAS (app builds)
 - [docs/TESTING.md](docs/TESTING.md): what is automated, and the manual device checklist
 - [docs/DECISIONS.md](docs/DECISIONS.md): implementation decisions and known tradeoffs
+- [docs/SECURITY.md](docs/SECURITY.md): security controls in place and the security backlog
