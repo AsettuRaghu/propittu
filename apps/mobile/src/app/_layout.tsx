@@ -1,0 +1,121 @@
+import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
+import { Stack } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
+import { useEffect, useState } from 'react';
+import { AppState, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ApiError } from '@/api/client';
+import { SessionProvider, useSession } from '@/auth/SessionProvider';
+import { envProblems } from '@/lib/env';
+import { colors, space, typography } from '@/theme';
+
+// Keep the native splash up until the persisted session is restored (§14).
+void SplashScreen.preventAutoHideAsync();
+
+// Refetch stale data when the app returns to the foreground.
+AppState.addEventListener('change', (state) => focusManager.setFocused(state === 'active'));
+
+function createQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 30_000,
+        // Retry network blips and 5xx; never retry 4xx — it will not change.
+        retry: (failureCount, error) =>
+          !(error instanceof ApiError && error.status >= 400 && error.status < 500) &&
+          failureCount < 2,
+      },
+      mutations: { retry: false },
+    },
+  });
+}
+
+export default function RootLayout() {
+  const [queryClient] = useState(createQueryClient);
+
+  if (envProblems.length > 0) return <ConfigError missing={envProblems} />;
+
+  return (
+    <SafeAreaProvider>
+      <QueryClientProvider client={queryClient}>
+        <SessionProvider>
+          <RootNavigator />
+        </SessionProvider>
+      </QueryClientProvider>
+      <StatusBar style="dark" />
+    </SafeAreaProvider>
+  );
+}
+
+/**
+ * Authentication gate. Stack.Protected removes screens whose guard is
+ * false and redirects away from them, so signing in lands on Home and
+ * signing out (or session expiry) lands on Login with no manual routing.
+ */
+function RootNavigator() {
+  const { session, initializing } = useSession();
+
+  useEffect(() => {
+    if (!initializing) void SplashScreen.hideAsync();
+  }, [initializing]);
+
+  if (initializing) return null;
+
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: colors.background },
+      }}
+    >
+      <Stack.Protected guard={!!session}>
+        <Stack.Screen name="(app)" />
+      </Stack.Protected>
+      <Stack.Protected guard={!session}>
+        <Stack.Screen name="login" />
+        <Stack.Screen
+          name="verify"
+          options={{
+            headerShown: true,
+            title: '',
+            headerShadowVisible: false,
+            headerStyle: { backgroundColor: colors.background },
+            headerTintColor: colors.text,
+          }}
+        />
+      </Stack.Protected>
+    </Stack>
+  );
+}
+
+/** Shown instead of a crash when apps/mobile/.env is incomplete. */
+function ConfigError({ missing }: { missing: string[] }) {
+  useEffect(() => {
+    void SplashScreen.hideAsync();
+  }, []);
+  return (
+    <View style={styles.config}>
+      <Text style={typography.title}>Configuration missing</Text>
+      <Text style={typography.body}>
+        Set these in apps/mobile/.env, then restart Expo with a cleared cache (npx expo start -c):
+      </Text>
+      {missing.map((name) => (
+        <Text key={name} style={styles.mono}>
+          {name}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  config: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: space.xl,
+    gap: space.md,
+    backgroundColor: colors.background,
+  },
+  mono: { fontFamily: 'Courier', fontSize: 14, color: colors.danger },
+});

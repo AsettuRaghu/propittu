@@ -22,6 +22,15 @@ export const OTP_LENGTH = 6;
 /** Client-side courtesy timer; the real limit is the Supabase Auth rate limit. */
 export const OTP_RESEND_COOLDOWN_SECONDS = 30;
 
+/**
+ * Must match Supabase Dashboard → Auth → Providers → Phone → "SMS OTP Expiry".
+ *
+ * Supabase returns the same error for a wrong code and an expired one, so
+ * the app uses elapsed time to tell the user which it was (§11 requires
+ * distinct "Invalid OTP" and "Expired OTP" handling).
+ */
+export const OTP_EXPIRY_SECONDS = 600;
+
 /** Formats a 10-digit local number into the E.164 form Supabase Auth requires. */
 export function toE164(localNumber: string): string {
   return `${COUNTRY_CALLING_CODE}${localNumber.replace(/\D/g, '')}`;
