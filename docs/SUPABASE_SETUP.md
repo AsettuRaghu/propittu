@@ -141,31 +141,28 @@ the API's `/cron/keepalive`, which runs a trivial database query (migration
 `20261005000005_keepalive.sql`). There's nothing to configure here. If the
 project ever shows as **Paused** in the dashboard, click **Restore**.
 
-## 8. Managing service requests
+## 8. Managing service requests and staff
 
-There is no admin app in V1 (§24). To change a request's status, go to
-**SQL Editor** and run:
+Service requests are handled in the app's **Backoffice** (Profile → Open
+Backoffice), which only staff can see. Don't change `service_requests.status` in
+the SQL editor: the Backoffice uses `staff_update_service_request()`, which
+enforces the lifecycle and records Included-Service usage. Editing the table
+directly would skip both.
 
-```sql
-update public.service_requests
-set status = 'in_review'      -- submitted | in_review | in_progress | completed | cancelled
-where reference = 'PR-000123';
-```
-
-The SQL editor runs as the database owner, so it isn't restricted by RLS.
-Users can't change status themselves; the database rejects it.
-
-To see new requests along with the owner's phone number:
+**Adding a staff member** (they become staff on their next login). Run this in
+the SQL Editor or with `supabase db query --linked`. **Never commit it**:
 
 ```sql
-select r.reference, r.status, s.name as service, p.name as property,
-       pr.phone, r.description, r.created_at
-from public.service_requests r
-join public.services s on s.id = r.service_id
-left join public.properties p on p.id = r.property_id
-join public.profiles pr on pr.id = r.user_id
-order by r.created_at desc;
+insert into public.staff_invites (phone, role)          -- phone without '+', e.g. 9198…
+values ('91XXXXXXXXXX', 'operations')                    -- super_admin | operations | support | finance | service_operations
+on conflict (phone) do update set role = excluded.role;
+-- If they have already logged in once:
+insert into public.staff_members (user_id, role)
+select id, 'operations' from auth.users where phone = '91XXXXXXXXXX'
+on conflict (user_id) do update set role = excluded.role, is_active = true;
 ```
+
+To remove someone: `update public.staff_members set is_active = false where user_id = …`.
 
 ## 9. Production SMS (India)
 

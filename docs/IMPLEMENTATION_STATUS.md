@@ -20,8 +20,8 @@ Updated at every checkpoint. **Read this first when resuming work.**
 | 1 | **M1 Account + M10 security foundation + M11 audit events** | ✅ Done |
 | 2 | **M2 Property (location pin, profile completion) + M3 Documents & Media (new categories, videos)** | ✅ Done |
 | 3 | **M5 Plans & Benefits + M6 Trial / Usage / Limited Access** | ✅ Done |
-| 4 | M4 Services (new catalogue, visit reports, usage on confirm) + M9 Backoffice (staff mode) | ⏳ Next |
-| 5 | M7 Payments (Razorpay), full Day-3 and security journeys, final report | Planned |
+| 4 | **M4 Services (catalogue, Included vs Extra, visit reports, usage on confirm) + M9 Backoffice (staff mode)** | ✅ Done |
+| 5 | M7 Payments (Razorpay), full Day-3 and security journeys, final report | ⏳ Next |
 | — | M8 Notifications | Deferred by design (a central extension point only) |
 | — | M12 Property Intelligence & AI | Deferred by design |
 
@@ -108,6 +108,45 @@ Updated at every checkpoint. **Read this first when resuming work.**
 - Limit and Feature errors show the API's message ("Your Basic plan allows 1 properties. Upgrade your plan to add more.").
 
 **Tests:** RLS **126** checks (customers can't grant themselves Plans, write usage or Plan config, or read invites; Trial once per Account; staff can grant) · API **61** checks (Limited Access strict and its allowed routes, limit and feature enforcement, over-limit editing, suspended Account, staff role checks, target-account audit).
+
+## Checkpoint 4: M4 Services + M9 Backoffice (done)
+
+**Database:** migration `20261006000004_services_backoffice.sql`
+- **Service Catalogue:** `services` gains `price_paise` (null = priced after review) and `is_extra_available`. New services: **Property Visit** (flagship), Video Documentation and Repair (13 services in total). Placeholder prices, not final: Visit ₹999, Inspection ₹1,499, Photography ₹1,999, Video ₹2,499, Cleaning ₹1,499, Security check ₹999; the rest are priced after review. Staff edit the catalogue; customers see only active services.
+- **Service Requests:** lifecycle **Requested → Confirmed → Scheduled → In Progress → Completed / Cancelled**. Old rows were remapped (submitted / in review → requested). New fields: `coverage` (included / extra), `price_paise` snapshot, `preferred_date`, `scheduled_for`, `status_note`, and confirmed/completed/cancelled timestamps.
+- **Requests can be created only through `create_service_request()`.** Customers can no longer insert rows directly. The function checks the account, active Plan, property ownership and service availability. It then decides **Included vs Extra on the server**, snapshots the price, and locks the account so the last Included visit can't be given out twice.
+- `included_remaining(account, code)`: allowance minus consumed usage minus requests still awaiting confirmation. The API, the catalogue and Plan & Usage all use this one rule.
+- **Usage is consumed when staff confirm, not when the customer requests** (`staff_update_service_request()`), and it's released if a confirmed request is cancelled. The same function enforces the allowed status transitions. Customers can cancel only while a request is still Requested.
+- **Property Visit reports:** `visit_reports` (visit date, condition good / fair / needs attention, observations, issues, recommendations) and `visit_report_media` (photos and videos). Files live in the **customer's account folder** (`<account>/visits/<request>/…`) so the customer can read them. Only staff can write them.
+- **Backoffice:** the `backoffice_accounts` view (staff only; empty for customers) and `staff_set_document_status()` for document review.
+
+**API**
+- Customer:
+  - `GET /services` returns each service with `coverage` (included / extra / unavailable) and `included_remaining` for the caller's account.
+  - `POST /service-requests` accepts an optional preferred date (today or later). Any coverage, price or status sent by the client is ignored.
+  - `GET /service-requests/:id` includes the visit report.
+  - `POST /service-requests/:id/cancel`.
+- Backoffice (`/backoffice/*`; 404 for customers, role-checked per action, every action audited against the customer's account):
+  - `GET /requests?status=open|all|…`, `GET /requests/:id`
+  - `POST /requests/:id/status` {status, scheduled_for?, note?}
+  - `PUT /requests/:id/report`; `POST …/report/media/intent`, `…/:mediaId/confirm`, `DELETE …/:mediaId`
+  - `GET /accounts?q=` (mobile number or name), `GET /accounts/:id` (Plan, usage, **why the customer is blocked**, properties, requests), `POST /accounts/:id/status` (suspend / reactivate), and the Plan grant / end actions from C3
+  - `GET /properties/:id` (details, photos, documents), `GET /documents/:id/download`, `POST /documents/:id/status`
+  - `GET /services`, `POST /services`, `PATCH /services/:id`
+- Roles (`packages/shared/src/services.ts → STAFF_PERMISSIONS`): requests → operations and service_operations; Plans → operations and finance; account status and document review → operations and support; catalogue → operations. super_admin can do everything. Any staff role can view.
+
+**Mobile**
+- Catalogue and request form show "Included in your plan · 1 left", "Extra · ₹1,499" or "Extra · price confirmed after review". The request form adds an optional **preferred date** (native date picker).
+- Request detail: status, cost, preferred and scheduled date, staff note, timeline, **visit report with photos/videos**, and **Cancel** while Requested.
+- **Staff mode** (Profile → Open Backoffice, shown only to staff):
+  - **Requests** queue with filters. Each request has actions for its allowed next statuses (confirm / schedule with date / start / complete / cancel), a note to the customer, and a visit report form with photo and video upload.
+  - **Customers:** search by mobile number, then Plan & usage, why blocked, give Basic/Plus, extend the trial 7 days, end the plan, suspend/reactivate, and their properties and requests.
+  - **Property:** details, map link, photos, and documents with Open plus review status (Uploaded / Under review / Verified / Rejected).
+  - **Services:** edit name, description, price, active, and available as an Extra.
+
+**Tests:** RLS **164** checks (forged Included rejected, allowance reserved and released, staff-only transitions, invalid transitions, report and media ownership, prices snapshotted) · API **83** checks · live production E2E **38** checks (the full request → confirm → schedule → report with photo → complete → customer sees it journey, isolation, document review, catalogue edit, audit), with the C1–C3 live suites re-run green.
+
+**Not in V1 (by design, per M4):** vendor marketplace, ratings, quotes, field-service tracking. **Payment for Extra Services** comes with M7 in checkpoint 5.
 
 ## How to resume
 1. Read this file and [ARCHITECTURE.md](ARCHITECTURE.md).

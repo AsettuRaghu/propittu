@@ -36,6 +36,10 @@ with the date when finished.
 - **Backoffice is invisible to customers** (`/backoffice` → 404), role-checked
   per action, and RLS re-checks `is_staff()`. Staff actions are audited against
   the customer's Account.
+- **Service requests are created only by a database function (M4)**, which
+  decides Included vs Extra and the price itself. A customer calling Supabase
+  directly cannot mark a request "included", change its price or status, or
+  consume or refund usage. Lifecycle changes are staff-only, in Postgres.
 - Tokens are redacted from logs; all traffic is HTTPS.
 
 ## Backlog

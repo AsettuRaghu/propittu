@@ -52,6 +52,12 @@ Staff are a **separate boundary**: `staff_members`, plus `is_staff()` in RLS. Cu
 - Usage: capacity is derived (`account_usage` view: properties, storage of ready files). Included Services are recorded in `usage_records` when consumed (M4).
 - Limited Access is strict: `/me`, `/plans`, `/account/plan*` (and payments) are mounted **before** the gate; everything else after it. Code: `apps/api/src/plan.ts`.
 
+### Services and Backoffice (M4/M9)
+- Three separate concepts: **Service Catalogue** (`services`), **Included Services** (Plan Benefits) and **Service Requests**.
+- A request is opened only by `create_service_request()` (SECURITY DEFINER). It decides Included vs Extra and snapshots the price. Status changes go through `staff_update_service_request()`, which enforces the lifecycle and **consumes usage on confirmation**. Both run in Postgres, so the API, the Backoffice and any future client share one rule set.
+- **Property Visit report:** `visit_reports` plus `visit_report_media`, with files in the customer's account folder.
+- **Backoffice** is staff mode inside the mobile app. `/backoffice/*` sits behind `requireStaff` (404 otherwise) plus per-action `STAFF_PERMISSIONS`, and RLS / `is_staff()` re-check in the database. Staff actions are audited against the customer's account.
+
 ### Property profile (M2)
 - Location is first-class: address → approximate position (phone geocoder) → the owner confirms or moves the pin → saved with `location_source = user`.
 - **Provenance:** `field_sources` records who supplied each value (user / sale_deed / ai / external / system). Future M12 extraction writes its own source and must never overwrite a `user` value.
