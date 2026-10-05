@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   AccountPlanState,
+  CatalogueService,
   CreatePropertyInput,
   CreateServiceRequestInput,
   Me,
@@ -9,8 +10,8 @@ import type {
   PropertyDocument,
   PropertySummary,
   PublicPlan,
-  Service,
   ServiceRequest,
+  ServiceRequestDetail,
   UpdateDocumentInput,
   UpdatePropertyInput,
 } from '@propittu/shared';
@@ -89,8 +90,8 @@ export const useServices = (enabled = true) =>
   useQuery({
     enabled,
     queryKey: keys.services,
-    queryFn: () => api<Service[]>('/services'),
-    staleTime: 60 * 60 * 1000, // The catalogue changes only via migrations.
+    // Included/Extra depends on the Plan and usage, so it is not cached long.
+    queryFn: () => api<CatalogueService[]>('/services'),
   });
 
 export const useServiceRequests = (propertyId?: string) =>
@@ -105,8 +106,22 @@ export const useServiceRequests = (propertyId?: string) =>
 export const useServiceRequest = (id: string) =>
   useQuery({
     queryKey: keys.serviceRequest(id),
-    queryFn: () => api<ServiceRequest>(`/service-requests/${id}`),
+    queryFn: () => api<ServiceRequestDetail>(`/service-requests/${id}`),
   });
+
+export function useCancelServiceRequest(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      api<ServiceRequestDetail>(`/service-requests/${id}/cancel`, { method: 'POST' }),
+    onSuccess: (request) => {
+      qc.setQueryData(keys.serviceRequest(id), request);
+      void qc.invalidateQueries({ queryKey: keys.serviceRequests });
+      void qc.invalidateQueries({ queryKey: keys.services });
+      void qc.invalidateQueries({ queryKey: keys.accountPlan });
+    },
+  });
+}
 
 /* ------------------------------------------------------------------ *
  * Writes
@@ -200,9 +215,11 @@ export function useCreateServiceRequest() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateServiceRequestInput) =>
-      api<ServiceRequest>('/service-requests', { method: 'POST', body: input }),
+      api<ServiceRequestDetail>('/service-requests', { method: 'POST', body: input }),
     onSuccess: (request) => {
       qc.setQueryData(keys.serviceRequest(request.id), request);
+      void qc.invalidateQueries({ queryKey: keys.services });
+      void qc.invalidateQueries({ queryKey: keys.accountPlan });
       void qc.invalidateQueries({ queryKey: keys.serviceRequests });
       void qc.invalidateQueries({ queryKey: keys.properties });
       void qc.invalidateQueries({ queryKey: keys.me });

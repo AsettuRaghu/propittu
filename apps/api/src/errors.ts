@@ -41,6 +41,7 @@ interface DbError {
 export function fromDbError(error: DbError): HttpError {
   switch (error.code) {
     case 'PGRST116': // .single() matched no rows
+    case 'P0002': // no_data_found, raised by our SQL functions
       return notFound();
     case 'PGRST301': // JWT expired or undecodable at PostgREST
     case 'PGRST303':

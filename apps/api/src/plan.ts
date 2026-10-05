@@ -256,7 +256,7 @@ export async function describeAccountPlan(
   accountId: string,
 ): Promise<AccountPlanState> {
   const state = await loadPlanState(db, accountId);
-  const [usageRes, summariesRes, recordsRes] = await Promise.all([
+  const [usageRes, summariesRes, included] = await Promise.all([
     db
       .from('account_usage')
       .select('property_count, storage_bytes')
@@ -266,21 +266,21 @@ export async function describeAccountPlan(
       .from('property_summaries')
       .select('document_count, photo_count, video_count')
       .eq('account_id', accountId),
-    db
-      .from('usage_records')
-      .select('code, quantity, created_at, account_plan_id')
-      .eq('account_id', accountId)
-      .eq('kind', 'included_service')
-      .is('released_at', null),
+    // Included Services: same rule the database applies when a request is
+    // opened (consumed + still awaiting confirmation), so the numbers agree.
+    Promise.all(
+      state.benefits.included.map(async (b) => {
+        const remaining = must<number | null>(
+          await db.rpc('included_remaining', { p_account: accountId, p_code: b.code }),
+        );
+        return { code: b.code, used: b.quantity - (remaining ?? b.quantity), quantity: b.quantity };
+      }),
+    ),
   ]);
 
   const usage = must<{ property_count: number; storage_bytes: number } | null>(usageRes);
   const perProperty =
     must<{ document_count: number; photo_count: number; video_count: number }[]>(summariesRes);
-  const records =
-    must<{ code: string; quantity: number; created_at: string; account_plan_id: string | null }[]>(
-      recordsRes,
-    );
 
   const properties = usage?.property_count ?? 0;
   const storageBytes = Number(usage?.storage_bytes ?? 0);
@@ -300,19 +300,6 @@ export async function describeAccountPlan(
     over.push('max_storage_mb');
 
   const current = state.current;
-  const yearAgo = Date.now() - 365 * 24 * 3600 * 1000;
-  const included = state.benefits.included.map((b) => {
-    const used = records
-      .filter((r) => r.code === b.code)
-      .filter((r) =>
-        b.period === 'term'
-          ? r.account_plan_id === current?.id
-          : new Date(r.created_at).getTime() >=
-            Math.max(yearAgo, new Date(current?.starts_at ?? 0).getTime()),
-      )
-      .reduce((n, r) => n + r.quantity, 0);
-    return { code: b.code, used, quantity: b.quantity };
-  });
 
   return {
     access: state.access,

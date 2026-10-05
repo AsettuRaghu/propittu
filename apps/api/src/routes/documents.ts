@@ -31,16 +31,16 @@ export const documentsRouter = Router();
 
 const BUCKET = STORAGE_BUCKETS.documents;
 
-interface DocumentRow extends PropertyDocument {
+export interface DocumentRow extends PropertyDocument {
   storage_path: string;
   upload_status: 'pending' | 'ready';
 }
 
-const DOCUMENT_COLUMNS =
+export const DOCUMENT_COLUMNS =
   'id, property_id, document_type, file_name, description, status, mime_type, file_size, ' +
   'storage_path, upload_status, created_at';
 
-function toDocument(row: DocumentRow): PropertyDocument {
+export function toDocument(row: DocumentRow): PropertyDocument {
   return {
     id: row.id,
     property_id: row.property_id,

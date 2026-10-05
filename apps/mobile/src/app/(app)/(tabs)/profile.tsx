@@ -68,6 +68,15 @@ export default function ProfileScreen() {
         </Card>
       ) : null}
 
+      {me?.staff_role ? (
+        <Button
+          title="Open Backoffice"
+          icon="briefcase-outline"
+          variant="secondary"
+          onPress={() => router.push('/backoffice')}
+        />
+      ) : null}
+
       {/* Logout stays available even if the profile failed to load. */}
       <Button
         title="Logout"

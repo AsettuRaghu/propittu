@@ -22,6 +22,7 @@ const COPY: Partial<Record<ClientErrorCode, string>> = {
 const SERVER_COPY = new Set<ClientErrorCode>([
   'VALIDATION_FAILED',
   'FILE_TOO_LARGE',
+  'CONFLICT',
   // Plans (M5/M6): "Your Basic plan allows 1 properties. Upgrade…"
   'LIMITED_ACCESS',
   'FEATURE_NOT_INCLUDED',

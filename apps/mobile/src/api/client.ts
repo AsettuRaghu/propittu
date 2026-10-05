@@ -57,7 +57,7 @@ async function accessToken(forceRefresh: boolean): Promise<string | null> {
 const REQUEST_TIMEOUT_MS = 30_000;
 
 interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
 }
 

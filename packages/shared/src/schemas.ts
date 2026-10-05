@@ -207,6 +207,10 @@ export const createServiceRequestSchema = z.object({
     .trim()
     .min(1, 'Tell us what you need')
     .max(2000, 'Keep the description under 2000 characters'),
+  preferred_date: z.preprocess(
+    (v) => (v === '' || v === undefined ? null : v),
+    z.iso.date({ message: 'Choose a valid date' }).nullable(),
+  ),
 });
 
 export type CreateServiceRequestInput = z.input<typeof createServiceRequestSchema>;

@@ -139,8 +139,9 @@ export const SERVICE_CATEGORY_LABELS: Record<ServiceCategory, string> = {
  * ------------------------------------------------------------------ */
 
 export const SERVICE_REQUEST_STATUSES = [
-  'submitted',
-  'in_review',
+  'requested',
+  'confirmed',
+  'scheduled',
   'in_progress',
   'completed',
   'cancelled',
@@ -149,8 +150,9 @@ export const SERVICE_REQUEST_STATUSES = [
 export type ServiceRequestStatus = (typeof SERVICE_REQUEST_STATUSES)[number];
 
 export const SERVICE_REQUEST_STATUS_LABELS: Record<ServiceRequestStatus, string> = {
-  submitted: 'Submitted',
-  in_review: 'In Review',
+  requested: 'Requested',
+  confirmed: 'Confirmed',
+  scheduled: 'Scheduled',
   in_progress: 'In Progress',
   completed: 'Completed',
   cancelled: 'Cancelled',

@@ -21,6 +21,7 @@ import {
   type VideoMimeType,
   type SignedDownload,
   type UploadIntent,
+  type VisitMedia,
 } from '@propittu/shared';
 import { ApiError, api } from './client';
 
@@ -264,8 +265,27 @@ export async function uploadVideo(
   });
 }
 
+/* ------------------------------------------------------------------ *
+ * Visit report media (M4, staff)
+ * ------------------------------------------------------------------ */
+
+export async function uploadVisitMedia(
+  requestId: string,
+  kind: 'photo' | 'video',
+  file: LocalFile,
+  onProgress?: ProgressFn,
+): Promise<VisitMedia> {
+  const base = `/backoffice/requests/${requestId}/report/media`;
+  const intent = await api<UploadIntent>(`${base}/intent`, {
+    method: 'POST',
+    body: { kind, mime_type: file.mimeType, file_size: file.size },
+  });
+  await putToSignedUrl(intent.upload_url, file, onProgress);
+  return api<VisitMedia>(`${base}/${intent.id}/confirm`, { method: 'POST' });
+}
+
 /** Plays a video in the in-app browser (Safari/Chrome play MP4/MOV natively). */
-export async function playVideo(video: PropertyVideo): Promise<void> {
+export async function playVideo(video: Pick<PropertyVideo, 'url'>): Promise<void> {
   if (!video.url) throw new ApiError(0, 'NETWORK', 'This video is not available right now.');
   await WebBrowser.openBrowserAsync(video.url);
 }
@@ -280,8 +300,12 @@ export async function playVideo(video: PropertyVideo): Promise<void> {
  */
 export async function openDocument(
   doc: PropertyDocument,
+  /** Staff open customer documents through the Backoffice route. */
+  asStaff = false,
 ): Promise<{ kind: 'image'; url: string } | { kind: 'external' }> {
-  const signed = await api<SignedDownload>(`/documents/${doc.id}/download`);
+  const signed = await api<SignedDownload>(
+    `${asStaff ? '/backoffice' : ''}/documents/${doc.id}/download`,
+  );
 
   if (signed.mime_type.startsWith('image/')) return { kind: 'image', url: signed.url };
 

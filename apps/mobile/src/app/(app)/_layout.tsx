@@ -28,6 +28,12 @@ export default function AppLayout() {
       <Stack.Screen name="requests/index" options={{ title: 'Service requests' }} />
       <Stack.Screen name="requests/[id]" options={{ title: 'Service request' }} />
       <Stack.Screen name="plan" options={{ title: 'Plan & Usage' }} />
+      {/* Backoffice (M9): staff only — the API returns 404 to everyone else. */}
+      <Stack.Screen name="backoffice/index" options={{ title: 'Backoffice' }} />
+      <Stack.Screen name="backoffice/requests/[id]" options={{ title: 'Request' }} />
+      <Stack.Screen name="backoffice/accounts/[id]" options={{ title: 'Customer' }} />
+      <Stack.Screen name="backoffice/properties/[id]" options={{ title: 'Property' }} />
+      <Stack.Screen name="backoffice/services/[id]" options={{ title: 'Service' }} />
     </Stack>
   );
 }

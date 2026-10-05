@@ -1,42 +1,78 @@
 import { Router } from 'express';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import {
   createServiceRequestSchema,
   uuidSchema,
+  type CatalogueService,
   type Service,
   type ServiceRequest,
+  type ServiceRequestDetail,
 } from '@propittu/shared';
 import { auth } from '../auth.js';
 import { audit } from '../audit.js';
-import { invalid, must, notFound, ok, uuidParam } from '../errors.js';
+import { HttpError, invalid, must, notFound, ok, uuidParam } from '../errors.js';
 import { assertOwnsProperty } from '../ownership.js';
+import { planOf, type PlanState } from '../plan.js';
+import { loadReport, REQUEST_COLUMNS, todayInIndia } from '../requests.js';
 
 /**
- * Service catalogue and service requests (§8.4, §22–§24).
+ * Property Care & Services (M4).
  *
- * Requests are submit-and-track only: fulfilment is out of scope for V1,
- * and status is changed by operators directly in the database (§24).
+ *   Service Catalogue → Included or Extra → Service Request
+ *
+ * Included vs Extra and the price are decided by the DATABASE function
+ * create_service_request(); customers cannot insert requests directly.
+ * Usage of an Included Service is consumed when staff confirm it.
  */
 export const servicesRouter = Router();
 
-const SERVICE_COLUMNS = 'id, code, name, category, description, sort_order';
+const SERVICE_COLUMNS =
+  'id, code, name, category, description, sort_order, price_paise, is_extra_available';
 
-const REQUEST_COLUMNS =
-  'id, reference, status, description, created_at, updated_at, ' +
-  'service:services(id, code, name, category), ' +
-  'property:properties(id, name, city)';
+/** Included allowance left per service code for this Account (null = not included). */
+async function allowances(
+  db: SupabaseClient,
+  accountId: string,
+  plan: PlanState,
+): Promise<Map<string, number>> {
+  const result = new Map<string, number>();
+  await Promise.all(
+    plan.benefits.included.map(async (b) => {
+      const remaining = must<number | null>(
+        await db.rpc('included_remaining', { p_account: accountId, p_code: b.code }),
+      );
+      if (remaining !== null) result.set(b.code, remaining);
+    }),
+  );
+  return result;
+}
 
-/* GET /services */
+function withCoverage(service: Service, remaining: Map<string, number>): CatalogueService {
+  const left = remaining.has(service.code) ? (remaining.get(service.code) as number) : null;
+  return {
+    ...service,
+    included_remaining: left,
+    coverage:
+      left !== null && left > 0 ? 'included' : service.is_extra_available ? 'extra' : 'unavailable',
+  };
+}
+
+/* GET /services — the catalogue, with Included/Extra for this Account */
 servicesRouter.get('/services', async (req, res) => {
-  const { db } = auth(req);
-  const rows = must<Service[]>(
-    await db
+  const { db, accountId } = auth(req);
+  const [rows, remaining] = await Promise.all([
+    db
       .from('services')
       .select(SERVICE_COLUMNS)
       .eq('is_active', true)
       .order('sort_order', { ascending: true }),
+    allowances(db, accountId, planOf(req)),
+  ]);
+  ok(
+    res,
+    must<Service[]>(rows).map((s) => withCoverage(s, remaining)),
   );
-  ok(res, rows);
 });
 
 /* GET /service-requests[?property_id=] — newest first */
@@ -56,11 +92,11 @@ servicesRouter.get('/service-requests', async (req, res) => {
   ok(res, must<ServiceRequest[]>(await query));
 });
 
-/* GET /service-requests/:id */
-servicesRouter.get('/service-requests/:id', async (req, res) => {
-  const { db, accountId } = auth(req);
-  const id = uuidParam(req.params.id, 'Service request');
-
+async function loadRequest(
+  db: SupabaseClient,
+  accountId: string,
+  id: string,
+): Promise<ServiceRequestDetail> {
   const row = must<ServiceRequest | null>(
     await db
       .from('service_requests')
@@ -70,47 +106,79 @@ servicesRouter.get('/service-requests/:id', async (req, res) => {
       .maybeSingle(),
   );
   if (!row) throw notFound('Service request');
+  return { ...row, report: await loadReport(db, id) };
+}
 
-  ok(res, row);
+/* GET /service-requests/:id — with the visit report, if any */
+servicesRouter.get('/service-requests/:id', async (req, res) => {
+  const { db, accountId } = auth(req);
+  ok(res, await loadRequest(db, accountId, uuidParam(req.params.id, 'Service request')));
 });
 
 /* POST /service-requests */
 servicesRouter.post('/service-requests', async (req, res) => {
-  const { db, userId, accountId } = auth(req);
+  const ctx = auth(req);
+  const { db, accountId } = ctx;
   const input = createServiceRequestSchema.parse(req.body);
+  if (input.preferred_date && input.preferred_date < todayInIndia()) {
+    throw invalid('Choose today or a later date', {
+      preferred_date: 'Choose today or a later date',
+    });
+  }
 
   await assertOwnsProperty(db, accountId, input.property_id);
 
-  const service = must<{ id: string } | null>(
+  // Clear errors up front; the database function re-checks everything.
+  const service = must<Service | null>(
     await db
       .from('services')
-      .select('id')
+      .select(SERVICE_COLUMNS)
       .eq('id', input.service_id)
       .eq('is_active', true)
       .maybeSingle(),
   );
   if (!service) throw invalid('Choose a service', { service_id: 'Choose a service' });
+  const coverage = withCoverage(service, await allowances(db, accountId, planOf(req))).coverage;
+  if (coverage === 'unavailable') {
+    throw new HttpError(
+      403,
+      'FEATURE_NOT_INCLUDED',
+      `${service.name} is not included in your plan and is not offered as an extra service.`,
+    );
+  }
 
-  // user_id comes from the verified token; status is left to its default.
-  const row = must<ServiceRequest>(
-    await db
-      .from('service_requests')
-      .insert({
-        account_id: accountId,
-        user_id: userId,
-        property_id: input.property_id,
-        service_id: input.service_id,
-        description: input.description,
-      })
-      .select(REQUEST_COLUMNS)
-      .single(),
+  const id = must<string>(
+    await db.rpc('create_service_request', {
+      p_property: input.property_id,
+      p_service: input.service_id,
+      p_description: input.description,
+      p_preferred_date: input.preferred_date ?? null,
+    }),
   );
 
+  const row = await loadRequest(db, accountId, id);
   await audit(
-    auth(req),
+    ctx,
     'service_request.created',
-    { type: 'service_request', id: row.id },
-    { reference: row.reference },
+    { type: 'service_request', id },
+    { reference: row.reference, coverage: row.coverage, price_paise: row.price_paise },
   );
   ok(res, row, 201);
+});
+
+/* POST /service-requests/:id/cancel — only while still Requested */
+servicesRouter.post('/service-requests/:id/cancel', async (req, res) => {
+  const ctx = auth(req);
+  const id = uuidParam(req.params.id, 'Service request');
+  const current = await loadRequest(ctx.db, ctx.accountId, id);
+  if (current.status !== 'requested') {
+    throw new HttpError(
+      409,
+      'CONFLICT',
+      'This request has already been confirmed. Contact support to cancel it.',
+    );
+  }
+  must(await ctx.db.rpc('cancel_service_request', { p_request: id }));
+  await audit(ctx, 'service_request.cancelled', { type: 'service_request', id });
+  ok(res, await loadRequest(ctx.db, ctx.accountId, id));
 });

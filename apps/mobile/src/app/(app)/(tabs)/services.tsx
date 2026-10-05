@@ -2,12 +2,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, SectionList, StyleSheet, Text, View } from 'react-native';
-import { SERVICE_CATEGORIES, SERVICE_CATEGORY_LABELS, type Service } from '@propittu/shared';
+import {
+  formatPrice,
+  SERVICE_CATEGORIES,
+  SERVICE_CATEGORY_LABELS,
+  type CatalogueService,
+} from '@propittu/shared';
 import { useMe, useServices } from '@/api/queries';
 import { LimitedAccessState } from '@/components/PlanGate';
 import { ServiceRequestList } from '@/components/ServiceRequestList';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
-import { Card } from '@/components/ui';
+import { Badge, Card } from '@/components/ui';
 import { SERVICE_CATEGORY_ICONS } from '@/lib/icons';
 import { colors, radius, space, typography } from '@/theme';
 
@@ -83,7 +88,7 @@ function Catalogue() {
     return <EmptyState icon="construct-outline" title="No services available right now" />;
   }
 
-  const request = (service: Service) =>
+  const request = (service: CatalogueService) =>
     router.push({ pathname: '/services/request', params: { serviceId: service.id } });
 
   return (
@@ -108,6 +113,7 @@ function Catalogue() {
           <View style={styles.serviceBody}>
             <Text style={typography.bodyStrong}>{item.name}</Text>
             <Text style={typography.small}>{item.description}</Text>
+            <CoverageTag service={item} />
           </View>
           <Ionicons name="chevron-forward" size={20} color={colors.textSubtle} />
         </Card>
@@ -118,6 +124,28 @@ function Catalogue() {
           Propittu helps you request assistance with your property. We do not provide legal advice
           or guarantee outcomes with government departments.
         </Text>
+      }
+    />
+  );
+}
+
+/** Included in the Plan, or an Extra Service with its price (M4). */
+export function CoverageTag({ service }: { service: CatalogueService }) {
+  if (service.coverage === 'included') {
+    return (
+      <Badge tone="success" label={`Included in your plan · ${service.included_remaining} left`} />
+    );
+  }
+  if (service.coverage === 'unavailable') {
+    return <Badge tone="neutral" label="Not available on your plan" />;
+  }
+  return (
+    <Badge
+      tone="info"
+      label={
+        service.price_paise !== null
+          ? `Extra · ${formatPrice(service.price_paise)}`
+          : 'Extra · price confirmed after review'
       }
     />
   );
@@ -146,6 +174,6 @@ const styles = StyleSheet.create({
     marginBottom: space.sm,
   },
   service: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-  serviceBody: { flex: 1, gap: 2 },
+  serviceBody: { flex: 1, gap: space.xs },
   disclaimer: { marginTop: space.xl, textAlign: 'center' },
 });

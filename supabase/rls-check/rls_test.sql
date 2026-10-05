@@ -137,11 +137,9 @@ values ('a1a1a1a1-0000-0000-0000-000000000001', 'acc0000a-0000-0000-0000-0000000
         'acc0000a-0000-0000-0000-00000000000a/a1a1a1a1-0000-0000-0000-000000000001/d2.pdf',
         'application/pdf', 2000, 'pending');
 
-insert into public.service_requests (id, account_id, user_id, property_id, service_id, description)
-select 'a1a1a1a1-0000-0000-0000-0000000000f1', 'acc0000a-0000-0000-0000-00000000000a',
-       'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'a1a1a1a1-0000-0000-0000-000000000001', s.id,
-       'Please inspect the boundary wall'
-from public.services s where s.code = 'site_inspection';
+-- Requests are opened only through create_service_request() (M4).
+select public.create_service_request('a1a1a1a1-0000-0000-0000-000000000001',
+  (select id from public.services where code = 'site_inspection'), 'Please inspect the boundary wall');
 
 insert into storage.objects (bucket_id, name)
 values ('property-documents', 'acc0000a-0000-0000-0000-00000000000a/a1a1a1a1-0000-0000-0000-000000000001/d1.pdf');
@@ -153,7 +151,7 @@ values ('acc0000a-0000-0000-0000-00000000000a', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaa
 select tst.rows('select * from public.properties', 1, 'A sees its account''s property');
 select tst.ok((select reference from public.service_requests limit 1) = 'PR-000123',
   'first service request reference is PR-000123');
-select tst.rows('select * from public.services', 10, 'A sees the 10 catalogue services');
+select tst.rows('select * from public.services', 13, 'A sees the 13 catalogue services');
 select tst.ok(
   (select document_count from public.property_summaries
    where id = 'a1a1a1a1-0000-0000-0000-000000000001') = 1,
@@ -483,6 +481,142 @@ reset role;
 
 -- =====================================================================
 \echo
+\echo '== M4/M9: Service requests, Included vs Extra, visit reports, Backoffice =='
+-- =====================================================================
+
+-- A is on Plus (2 visits/year) and already used 1 (staff-recorded above).
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+
+select tst.ok(public.included_remaining('acc0000a-0000-0000-0000-00000000000a', 'property_visit') = 1,
+  'A has 1 Included property visit left');
+select tst.ok(public.included_remaining('acc0000a-0000-0000-0000-00000000000a', 'site_inspection') is null,
+  'a service not in the Plan has no allowance (NULL)');
+select public.create_service_request('a1a1a1a1-0000-0000-0000-000000000001',
+  (select id from public.services where code = 'property_visit'), 'Quarterly visit', current_date + 7);
+select tst.ok((select coverage from public.service_requests where description = 'Quarterly visit') = 'included',
+  'first visit request is Included (decided by the server)');
+select tst.ok((select price_paise from public.service_requests where description = 'Quarterly visit') is null,
+  'an Included request has no price');
+select tst.ok(public.included_remaining('acc0000a-0000-0000-0000-00000000000a', 'property_visit') = 0,
+  'a pending Included request reserves the allowance');
+select public.create_service_request('a1a1a1a1-0000-0000-0000-000000000001',
+  (select id from public.services where code = 'property_visit'), 'Extra visit please');
+select tst.ok((select coverage = 'extra' and price_paise = 99900 from public.service_requests
+               where description = 'Extra visit please'),
+  'allowance used up → next visit is an Extra Service with its price snapshotted');
+select tst.ok((select status from public.service_requests where description = 'Extra visit please') = 'requested',
+  'new requests start as Requested');
+
+select tst.rejects(
+  $$insert into public.service_requests (account_id, user_id, property_id, service_id, description, coverage)
+    select 'acc0000a-0000-0000-0000-00000000000a', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+           'a1a1a1a1-0000-0000-0000-000000000001', id, 'free visit', 'included'
+    from public.services where code = 'property_visit'$$,
+  'A cannot insert a request directly (cannot forge Included)');
+select tst.rejects($$update public.service_requests set coverage = 'included'$$,
+  'A cannot flip a request to Included');
+select tst.rejects($$select public.create_service_request('b1b1b1b1-0000-0000-0000-000000000001',
+                     (select id from public.services where code = 'property_visit'), 'x')$$,
+  'A cannot open a request for a property it does not own');
+select tst.rejects($$select public.staff_update_service_request(
+                     (select id from public.service_requests where description = 'Quarterly visit'), 'confirmed')$$,
+  'A cannot confirm its own request (staff only)');
+select tst.rejects($$select public.staff_set_document_status(
+                     (select id from public.property_documents where document_type = 'sale_deed'), 'verified')$$,
+  'A cannot verify its own document via the staff function');
+select tst.rejects($$insert into public.visit_reports (service_request_id, account_id, visited_at, condition, created_by)
+                     select id, account_id, current_date, 'good', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+                     from public.service_requests where description = 'Quarterly visit'$$,
+  'A cannot write a visit report');
+select tst.rows($$update public.services set price_paise = 1$$, 0, 'A cannot change service prices');
+select tst.rows('select * from public.backoffice_accounts', 0, 'Backoffice account list is empty for customers');
+
+select public.cancel_service_request((select id from public.service_requests where description = 'Extra visit please'));
+select tst.ok((select status = 'cancelled' and cancelled_by = 'customer' from public.service_requests
+               where description = 'Extra visit please'),
+  'A can cancel its own request while Requested');
+select tst.rejects($$select public.cancel_service_request(
+                     (select id from public.service_requests where description = 'Extra visit please'))$$,
+  'a cancelled request cannot be cancelled again');
+
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.rejects($$select public.cancel_service_request('00000000-0000-0000-0000-000000000000')$$,
+  'B cannot cancel a request it does not own');
+select tst.rejects($$select public.create_service_request('a1a1a1a1-0000-0000-0000-000000000001',
+                     (select id from public.services where code = 'property_visit'), 'x')$$,
+  'B cannot open a request on A''s property');
+select tst.ok(public.included_remaining('acc0000a-0000-0000-0000-00000000000a', 'property_visit') is null,
+  'B cannot read A''s allowance');
+select tst.rows('select * from public.visit_reports', 0, 'B sees no visit reports');
+
+-- Staff: confirm (consumes usage), schedule, report, media, document review.
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+select tst.ok((select count(*) from public.backoffice_accounts) >= 3, 'staff can search all accounts');
+select public.staff_update_service_request(
+  (select id from public.service_requests where description = 'Quarterly visit'), 'confirmed', null, 'Booked');
+select tst.rows($$select * from public.usage_records u join public.service_requests r on r.id = u.service_request_id
+                  where r.description = 'Quarterly visit' and u.released_at is null$$, 1,
+  'confirming an Included request consumes usage (not before)');
+select tst.rejects($$select public.staff_update_service_request(
+                     (select id from public.service_requests where description = 'Quarterly visit'), 'confirmed')$$,
+  'invalid transition (confirmed → confirmed) rejected');
+select tst.rejects($$select public.staff_update_service_request(
+                     (select id from public.service_requests where description = 'Quarterly visit'), 'scheduled')$$,
+  'scheduling needs a date');
+select public.staff_update_service_request(
+  (select id from public.service_requests where description = 'Quarterly visit'), 'scheduled', now() + interval '3 days');
+select tst.ok((select status = 'scheduled' and scheduled_for is not null and status_note = 'Booked'
+               from public.service_requests where description = 'Quarterly visit'),
+  'staff schedule the visit; earlier note kept');
+select tst.rejects($$select public.staff_update_service_request(
+                     (select id from public.service_requests where description = 'Extra visit please'), 'confirmed')$$,
+  'a cancelled request cannot be reopened');
+
+select tst.rejects($$insert into public.visit_reports (service_request_id, account_id, visited_at, condition, created_by)
+                     select id, 'acc0000b-0000-0000-0000-00000000000b', current_date, 'good', '55555555-5555-5555-5555-555555555555'
+                     from public.service_requests where description = 'Quarterly visit'$$,
+  'visit report must belong to the request''s account');
+insert into public.visit_reports (service_request_id, account_id, property_id, visited_at, condition, observations, created_by)
+select id, account_id, property_id, current_date, 'needs_attention', 'Compound wall cracked', '55555555-5555-5555-5555-555555555555'
+from public.service_requests where description = 'Quarterly visit';
+select tst.rejects($$insert into public.visit_report_media (report_id, account_id, kind, storage_path, mime_type, file_size, created_by)
+                     select id, account_id, 'photo', 'acc0000b-0000-0000-0000-00000000000b/visits/x.jpg', 'image/jpeg', 10,
+                            '55555555-5555-5555-5555-555555555555' from public.visit_reports$$,
+  'visit media must live in the customer''s own account folder');
+insert into public.visit_report_media (report_id, account_id, kind, storage_path, mime_type, file_size, upload_status, created_by)
+select id, account_id, 'photo', account_id::text || '/visits/r1/m1.jpg', 'image/jpeg', 10, 'ready',
+       '55555555-5555-5555-5555-555555555555' from public.visit_reports;
+select public.staff_set_document_status((select id from public.property_documents where document_type = 'sale_deed'), 'verified');
+select tst.ok((select status from public.property_documents where document_type = 'sale_deed') = 'verified',
+  'staff can verify a document');
+select tst.rejects($$select public.staff_set_document_status(
+                     (select id from public.property_documents where document_type = 'sale_deed'), 'approved_forever')$$,
+  'unknown document status rejected');
+select tst.rows($$update public.services set price_paise = 109900 where code = 'property_visit'$$, 1,
+  'staff can change a service price');
+select tst.ok((select price_paise from public.service_requests where description = 'Extra visit please') = 99900,
+  'existing requests keep the price they were opened at');
+
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rows('select * from public.visit_reports', 1, 'A reads the visit report for its property');
+select tst.rows('select * from public.visit_report_media', 1, 'A reads the visit media');
+select tst.rows($$delete from public.visit_report_media$$, 0, 'A cannot delete visit media');
+
+-- Staff cancel a confirmed Included visit → usage released.
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+select public.staff_update_service_request(
+  (select id from public.service_requests where description = 'Quarterly visit'), 'cancelled', null, 'Customer travelling');
+select tst.ok((select released_at is not null from public.usage_records u join public.service_requests r on r.id = u.service_request_id
+               where r.description = 'Quarterly visit'),
+  'cancelling a confirmed Included visit releases its usage');
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.ok(public.included_remaining('acc0000a-0000-0000-0000-00000000000a', 'property_visit') = 1,
+  'released usage returns the allowance');
+reset role;
+
+-- =====================================================================
+\echo
 \echo '== Data integrity constraints =='
 -- =====================================================================
 
@@ -550,7 +684,7 @@ select tst.rows($$delete from public.properties where id = 'a1a1a1a1-0000-0000-0
 select tst.rows('select * from public.property_photos',    0, 'photos cascade-deleted');
 select tst.rows('select * from public.property_documents', 0, 'documents cascade-deleted');
 select tst.rows('select * from public.property_videos', 0, 'videos cascade-deleted');
-select tst.rows('select * from public.service_requests',   1, 'service request history survives');
+select tst.rows('select * from public.service_requests',   3, 'service request history survives');
 select tst.ok((select property_id from public.service_requests limit 1) is null,
   'surviving request has property_id nulled');
 

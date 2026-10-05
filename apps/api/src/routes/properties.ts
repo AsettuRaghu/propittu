@@ -22,7 +22,7 @@ import { listReadyVideos } from './videos.js';
 export const propertiesRouter = Router();
 
 /** Every column the client sees. user_id is never returned — it is implied. */
-const PROPERTY_COLUMNS =
+export const PROPERTY_COLUMNS =
   'id, property_type, name, address_line, city, state, pincode, latitude, longitude, ' +
   'area_value, area_unit, survey_number, property_number, khata_number, notes, ' +
   'location_source, location_confirmed_at, field_sources, created_at, updated_at';
@@ -38,7 +38,7 @@ interface SummaryRow extends Omit<PropertySummary, 'cover_photo_url'> {
 }
 
 /** PostgREST returns numeric columns as numbers, but be defensive about strings. */
-function toProperty(row: PropertyRow): Property {
+export function toProperty(row: PropertyRow): Property {
   const num = (v: unknown) => (v === null || v === undefined ? null : Number(v));
   return {
     ...row,

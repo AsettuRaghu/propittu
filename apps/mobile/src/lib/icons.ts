@@ -22,8 +22,9 @@ export const SERVICE_CATEGORY_ICONS: Record<ServiceCategory, IconName> = {
 
 /** §38 "Clear status indicators". */
 export const STATUS_TONES: Record<ServiceRequestStatus, Tone> = {
-  submitted: 'info',
-  in_review: 'warning',
+  requested: 'info',
+  confirmed: 'info',
+  scheduled: 'warning',
   in_progress: 'warning',
   completed: 'success',
   cancelled: 'neutral',

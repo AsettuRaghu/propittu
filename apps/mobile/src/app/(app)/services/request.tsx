@@ -1,16 +1,17 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { createServiceRequestSchema, toFieldErrors } from '@propittu/shared';
+import { createServiceRequestSchema, formatPrice, toFieldErrors } from '@propittu/shared';
 import { useCreateServiceRequest, useProperties, useServices } from '@/api/queries';
+import { DateField, toIsoDate } from '@/components/DateField';
 import { TextField } from '@/components/Field';
 import { Footer } from '@/components/Footer';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
-import { Banner, Button, OptionList, SectionTitle } from '@/components/ui';
+import { Banner, Button, Card, OptionList, SectionTitle } from '@/components/ui';
 import { errorMessage, fieldErrors } from '@/lib/errors';
 import { propertySubtitle } from '@/lib/format';
 import { PROPERTY_TYPE_ICONS } from '@/lib/icons';
-import { colors, space } from '@/theme';
+import { colors, space, typography } from '@/theme';
 
 /**
  * Request a Service (PRODUCT_SPEC.md §23). Either the service or the
@@ -26,6 +27,7 @@ export default function RequestServiceScreen() {
   const [propertyId, setPropertyId] = useState<string | null>(params.propertyId ?? null);
   const [serviceId, setServiceId] = useState<string | null>(params.serviceId ?? null);
   const [description, setDescription] = useState('');
+  const [preferredDate, setPreferredDate] = useState<Date | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -59,11 +61,18 @@ export default function RequestServiceScreen() {
     );
   }
 
+  const selected = services.data.find((s) => s.id === serviceId) ?? null;
+
   const submit = () => {
+    if (selected?.coverage === 'unavailable') {
+      setFormError(`${selected.name} is not available on your plan.`);
+      return;
+    }
     const parsed = createServiceRequestSchema.safeParse({
       property_id: propertyId ?? '',
       service_id: serviceId ?? '',
       description,
+      preferred_date: preferredDate ? toIsoDate(preferredDate) : null,
     });
     if (!parsed.success) {
       const e = toFieldErrors(parsed.error);
@@ -116,7 +125,18 @@ export default function RequestServiceScreen() {
         <View style={styles.section}>
           <SectionTitle title="Service" />
           <OptionList
-            options={services.data.map((s) => ({ value: s.id, label: s.name }))}
+            options={services.data.map((s) => ({
+              value: s.id,
+              label: s.name,
+              description:
+                s.coverage === 'included'
+                  ? 'Included in your plan'
+                  : s.coverage === 'unavailable'
+                    ? 'Not available on your plan'
+                    : s.price_paise !== null
+                      ? `Extra · ${formatPrice(s.price_paise)}`
+                      : 'Extra · price confirmed after review',
+            }))}
             value={serviceId}
             onChange={(v) => {
               setServiceId(v);
@@ -124,7 +144,18 @@ export default function RequestServiceScreen() {
             }}
           />
           {errors.service_id ? <Text style={styles.error}>{errors.service_id}</Text> : null}
+          {selected ? <CoverageSummary service={selected} /> : null}
         </View>
+
+        <DateField
+          label="Preferred date (optional)"
+          value={preferredDate}
+          onChange={setPreferredDate}
+          minimumDate={new Date()}
+          clearable
+          hint="We'll confirm the exact date and time with you."
+        />
+        {errors.preferred_date ? <Text style={styles.error}>{errors.preferred_date}</Text> : null}
 
         <View style={styles.section}>
           <TextField
@@ -149,8 +180,38 @@ export default function RequestServiceScreen() {
   );
 }
 
+/** "Show whether Included or Extra; show price if Extra" (M4). */
+function CoverageSummary({
+  service,
+}: {
+  service: {
+    coverage: 'included' | 'extra' | 'unavailable';
+    included_remaining: number | null;
+    price_paise: number | null;
+  };
+}) {
+  const text =
+    service.coverage === 'included'
+      ? `Included in your plan — ${service.included_remaining} left. It is counted once we confirm the request.`
+      : service.coverage === 'unavailable'
+        ? 'This service is not available on your plan.'
+        : service.price_paise !== null
+          ? `Extra service — ${formatPrice(service.price_paise)}. We confirm with you before any work starts.`
+          : 'Extra service — we will confirm the price with you before any work starts.';
+  return (
+    <Card style={styles.coverage}>
+      <Text style={typography.small}>{text}</Text>
+    </Card>
+  );
+}
+
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  coverage: {
+    padding: space.md,
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primarySoft,
+  },
   content: { padding: space.lg, gap: space.xl, paddingBottom: space.xxl },
   section: { gap: space.md },
   error: { fontSize: 13, color: colors.danger },

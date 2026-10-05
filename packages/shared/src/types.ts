@@ -174,6 +174,10 @@ export interface Service {
   category: ServiceCategory;
   description: string;
   sort_order: number;
+  /** Extra Service price in paise; null = priced after review. */
+  price_paise: number | null;
+  /** Can be requested as a paid Extra when not Included in the Plan. */
+  is_extra_available: boolean;
 }
 
 export interface ServiceRequest {
@@ -185,6 +189,19 @@ export interface ServiceRequest {
   created_at: string;
   updated_at: string;
   service: Pick<Service, 'id' | 'code' | 'name' | 'category'>;
+  /** Decided by the server when the request is opened (M4). */
+  coverage: 'included' | 'extra';
+  /** Extra price snapshot in paise; null when Included or priced after review. */
+  price_paise: number | null;
+  /** Customer's preferred date (YYYY-MM-DD), optional. */
+  preferred_date: string | null;
+  scheduled_for: string | null;
+  /** Latest customer-visible note from staff. */
+  status_note: string | null;
+  confirmed_at: string | null;
+  completed_at: string | null;
+  cancelled_at: string | null;
+  cancelled_by: 'customer' | 'staff' | null;
   /** Null when the property was deleted after the request was made. */
   property: Pick<Property, 'id' | 'name' | 'city'> | null;
 }
