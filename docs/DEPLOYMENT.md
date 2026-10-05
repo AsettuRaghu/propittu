@@ -72,6 +72,24 @@ from `apps/api`:
 | `LOG_LEVEL` | `info` |
 | `SIGNED_DOWNLOAD_TTL_SECONDS` | `3600` |
 | `CRON_SECRET` | random string (`openssl rand -hex 32`); Vercel sends it to the cron endpoint |
+| `SUPABASE_SECRET_KEY` | `sb_secret_…` — **server only**; used solely to record verified payment events. Get it with `supabase projects api-keys --reveal` (without `--reveal` the CLI returns a masked value that will not work). |
+| `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` | Razorpay → Account & Settings → API Keys (test keys now; live keys at launch) |
+| `RAZORPAY_WEBHOOK_SECRET` | the secret entered on the Razorpay webhook (see below) |
+
+Payment variables are optional: without them `POST /billing/checkout` answers
+503 `PAYMENTS_UNAVAILABLE` and everything else works.
+
+### Razorpay webhook (M7)
+
+Razorpay Dashboard → **Account & Settings → Webhooks → Add New Webhook**:
+
+- **URL:** `https://propittu-api.vercel.app/webhooks/razorpay`
+- **Secret:** the same value as `RAZORPAY_WEBHOOK_SECRET` in Vercel
+- **Events:** `payment_link.paid`, `payment.failed`, `refund.processed`
+
+The webhook is authoritative for payment status. If it is late or missing, the
+app's "refresh" asks Razorpay directly (server-to-server), so a paid customer is
+never stuck — but configure the webhook anyway.
 
 After changing a variable, redeploy (**GitHub → Actions → API → Run
 workflow**) for it to take effect.

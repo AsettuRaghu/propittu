@@ -11,6 +11,8 @@ Updated at every checkpoint. **Read this first when resuming work.**
 | Limited Access | **Strict, as written:** only account, Plan/Trial status, available Plans, the payment journey and support are available. Property screens, uploads and service requests are blocked until a Plan is active. Data is never deleted. |
 | Payment provider | **Razorpay** (UPI + cards), behind the provider interface. Stripe India is invite-only and its UPI support is doubtful, so Stripe can be added later as a second adapter. |
 | Backoffice | **Staff mode inside the mobile app**, visible only to staff. Same API and business rules. |
+| Visit reports (2026-10-05) | **Draft until the request is Completed** (staff-only, every save kept as a revision); then **published to the customer and locked**. |
+| Server key (2026-10-05) | The API holds the Supabase server key **only** to record verified payment events. |
 | Trial and placeholder Plans | **30-day Trial with Plus Benefits.** Placeholder prices (not final): Basic ₹499/yr, Plus ₹1,499/yr. Everything is editable data. |
 
 ## Checkpoints
@@ -21,7 +23,8 @@ Updated at every checkpoint. **Read this first when resuming work.**
 | 2 | **M2 Property (location pin, profile completion) + M3 Documents & Media (new categories, videos)** | ✅ Done |
 | 3 | **M5 Plans & Benefits + M6 Trial / Usage / Limited Access** | ✅ Done |
 | 4 | **M4 Services (catalogue, Included vs Extra, visit reports, usage on confirm) + M9 Backoffice (staff mode)** | ✅ Done |
-| 5 | M7 Payments (Razorpay), full Day-3 and security journeys, final report | ⏳ Next |
+| 5 | **M7 Payments (Razorpay behind a provider interface) + visit-report lock** | ✅ Done |
+| 6 | **Day-3 and Security journeys, M8 extension point, docs, final report** | ✅ Done |
 | — | M8 Notifications | Deferred by design (a central extension point only) |
 | — | M12 Property Intelligence & AI | Deferred by design |
 
@@ -147,6 +150,55 @@ Updated at every checkpoint. **Read this first when resuming work.**
 **Tests:** RLS **164** checks (forged Included rejected, allowance reserved and released, staff-only transitions, invalid transitions, report and media ownership, prices snapshotted) · API **83** checks · live production E2E **38** checks (the full request → confirm → schedule → report with photo → complete → customer sees it journey, isolation, document review, catalogue edit, audit), with the C1–C3 live suites re-run green.
 
 **Not in V1 (by design, per M4):** vendor marketplace, ratings, quotes, field-service tracking. **Payment for Extra Services** comes with M7 in checkpoint 5.
+
+## Checkpoint 5: M7 Payments + visit-report lock (done)
+
+**Visit report lock** (migration `20261006000005_visit_report_lock.sql`, product feedback): reports are drafts while the request is Confirmed / Scheduled / In Progress. Only staff can see them; every save writes the previous version to `visit_report_revisions`. **Completing the request publishes the report and locks it**: no edits, no media changes. RLS enforces this; the API answers 409 with a clear message, and the app shows a draft/published banner and warns before completing. The iOS date picker is forced to the light style.
+
+**Billing domain** (migration `20261006000006_billing.sql`):
+- `orders` (plan / extra_service, amount, status pending / paid / cancelled, the granted `account_plan_id`), `payments` (provider, checkout ref, payment ref, method, status), `refunds` (separate events), and `payment_events` (the webhook log, unique per provider event id).
+- Customers create orders only through `create_plan_order(code)` and `create_service_order(request)`, which take the price from the catalogue or the request's snapshot. `attach_checkout()` stores the provider checkout and can't mark anything paid.
+- `record_payment_event()` is executable by **service_role only** and is the single path to "paid". It checks the amount and currency against the order, is idempotent, activates the Plan or queues a renewal, and records refunds without changing the original payment.
+
+**API**
+- `POST /billing/checkout {plan_code}`, `POST /billing/service-requests/:id/checkout`, `GET /billing/orders`, `GET /billing/orders/:id`, `POST /billing/orders/:id/refresh`, and the public `GET /billing/return`. All are mounted **before** the Limited Access gate, so an expired customer can pay.
+- `POST /webhooks/razorpay` takes the raw body, checks the HMAC, normalises the event and records it. It's mounted before the JSON parser.
+- Provider interface plus a **Razorpay Payment Links** adapter: a hosted page with UPI and cards, opened in the in-app browser, so no native SDK is needed and it works in Expo Go.
+- Backoffice: `GET /backoffice/payments`, payments on the customer screen, and payment status on each request.
+- **Vercel env set:** `SUPABASE_SECRET_KEY` (piped from the CLI, never shown), `RAZORPAY_WEBHOOK_SECRET` (generated; a private copy is at `~/propittu-razorpay-webhook-secret.txt` for the Razorpay dashboard), and `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` (set by the owner, test mode).
+
+**Mobile:** Plan & Usage → **Choose / Renew** takes the customer to Razorpay's page, then the status is checked on return. It also shows **payment history**. An Extra Service request has a **Pay ₹…** button. The Backoffice has a **Payments** tab, and each customer shows their payments.
+
+## Checkpoint 6: verification and final report (done)
+
+**Results on the final build (2026-10-05):**
+
+| Check | Result |
+|---|---|
+| Database / RLS suite (`npm run test:rls`) | **203 / 203** pass |
+| API suite on source and on the built Vercel bundle (`npm run test:api`, `test:bundle`) | **98 / 98** pass, both |
+| Typecheck: shared, API, mobile | pass |
+| Lint: API, mobile | pass (0 warnings) |
+| Production build: iOS and Android bundles (`expo export`), expo-doctor | pass, 21/21 |
+| CI deploy to Vercel + production smoke check | pass |
+| **Live Day-3 journey (§19, all 27 steps) + Security journey (§20)** | **64 / 64** pass |
+| Live M1–M4 suites re-run on the final build | all pass |
+
+**Live Day-3 run (production):** OTP login → Account → Trial → property with details → map pin → photo → Sale Deed → completion 88% → Benefits and Usage → Property Visit (Included) → request → Backoffice confirms and schedules → customer sees it → **Trial expiry → Limited Access** (properties and services 402; account, plans and payments still available) → choose Plus → **order + real Razorpay test checkout page** → unsigned / forged / tampered webhooks refused → **signed webhook → payment captured, Plus active** → replay ignored → data intact → Plus limits enforced. The test account was restored afterwards.
+
+**Deferred by design:** M12 (AI, document extraction, valuation, market data, RAG), M8 delivery (push / SMS / email / WhatsApp; only the extension point exists), vendor marketplace, quotes, field-service tracking, multi-user accounts (the schema allows them), automatic refunds (recorded from Razorpay; issued in its dashboard), plan proration, invoices / GST. Security backlog items are in SECURITY.md (S1–S4 before the closed beta).
+
+**Day-3 test instructions:** see "Day-3 test (on the phone)" below.
+
+### Day-3 test (on the phone)
+1. Restart Expo: `npx expo start -c`. Log in as **A** (OTP 123456).
+2. Home shows the trial banner. Add a property, set the map pin, add a photo and the Sale Deed.
+3. Services → Property Visit ("Included") → request it with a preferred date.
+4. Log out and log in as the **admin number** → Profile → Open Backoffice → Requests. Confirm, schedule, write the report and add a photo, then **Complete** (this publishes and locks the report).
+5. Log back in as **A** and open the request: status Completed, with the report and photo.
+6. To see Limited Access: as admin → Customers → search A's number → **End plan now**. As A, Home now shows "Your free trial or plan has ended".
+7. As A: View plans → **Choose Basic** → Razorpay test page → pay with UPI `success@razorpay` or a Razorpay test card → close the page. The plan becomes active; check Payment history.
+8. Admin → Payments shows the payment. To return A to a trial afterwards: Customers → A → **Extend trial 7 days**.
 
 ## How to resume
 1. Read this file and [ARCHITECTURE.md](ARCHITECTURE.md).

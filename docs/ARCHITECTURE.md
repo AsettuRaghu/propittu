@@ -58,6 +58,22 @@ Staff are a **separate boundary**: `staff_members`, plus `is_staff()` in RLS. Cu
 - **Property Visit report:** `visit_reports` plus `visit_report_media`, with files in the customer's account folder.
 - **Backoffice** is staff mode inside the mobile app. `/backoffice/*` sits behind `requireStaff` (404 otherwise) plus per-action `STAFF_PERMISSIONS`, and RLS / `is_staff()` re-check in the database. Staff actions are audited against the customer's account.
 
+### Payments & Billing (M7)
+```
+Mobile ──POST /billing/checkout──► API ──create_plan_order()──► orders (priced by the DB)
+                                    └──PaymentProvider.createCheckout──► Razorpay Payment Link
+Mobile opens the hosted page (UPI / cards) in the in-app browser
+Razorpay ──signed webhook──► /webhooks/razorpay ──verify HMAC──► record_payment_event()  (service_role)
+                                                        └─► payments, orders=paid, account_plans (+ renewals queue)
+Mobile ──POST /billing/orders/:id/refresh──► API asks Razorpay server-to-server (if the webhook is late)
+```
+- **Propittu owns** orders, payments, refunds, payment_events (webhook log) and Plan status. Razorpay ids are references only.
+- **Provider interface** (`apps/api/src/billing/provider.ts`): `createCheckout`, `fetchCheckout`, `verifyWebhook`, `parseWebhook` → provider-neutral events. Razorpay is one adapter; Stripe (or another) is a second file, not a rewrite.
+- **Activation rules** (in `record_payment_event()`): Trial → paid starts now and ends the Trial; buying the Plan you already have queues after the current period (no lost days); a different Plan starts now. Cancellation = no renewal (M5). Extra Services have their own order/payment; fulfilment stays the request lifecycle.
+
+### Notifications (M8 — deferred)
+- One extension point: `notify(event)` in `apps/api/src/notify.ts`, called for request status changes, report publication and payments. It only logs today; a notification service plugs in there.
+
 ### Property profile (M2)
 - Location is first-class: address → approximate position (phone geocoder) → the owner confirms or moves the pin → saved with `location_source = user`.
 - **Provenance:** `field_sources` records who supplied each value (user / sale_deed / ai / external / system). Future M12 extraction writes its own source and must never overwrite a `user` value.

@@ -21,14 +21,31 @@ with the date when finished.
 - **Three independent "own data only" walls:** the API derives the user and
   Account from the verified token and filters every query by Account; Postgres RLS refuses other users'
   rows; Storage policies restrict files to the owner's folder.
-- **The API holds no master key.** It acts as the signed-in user, so RLS applies
-  to every request. The phone holds only the public publishable key.
+- **The API acts as the signed-in user for everything customers and staff do**,
+  so RLS applies to every request. The phone holds only the public publishable
+  key. The Supabase **server key** lives only in Vercel and is used for exactly
+  one call, `record_payment_event()`, after a payment has been verified (and the
+  smoke tests check nothing else uses it).
+- **Payments (M7):** a Plan is never activated because the app says so. Webhooks
+  are verified with HMAC-SHA256 over the raw body (timing-safe); unsigned,
+  forged and tampered payloads get 401 and never reach the database. Events are
+  idempotent by provider event id (replays ignored). A paid amount that differs
+  from the order is recorded as `amount_mismatch` and never activates anything.
+  Orders are priced by the database from the catalogue, never by the client.
+  Refunds are separate records; payment history is never overwritten.
 - **Files never pass through the API.** The API chooses every storage path, and
   files are reached only via short-lived signed URLs.
 - **Validated twice:** shared rules in the app for instant feedback, and
   authoritatively in the API and database (types, sizes, PIN format and so on).
-- **Automated security tests gate every deploy** (GitHub Actions): 51 database
-  checks (80 since M1), 29 API checks (34 since M1); a 46-check end-to-end run was done against production.
+- **Automated security tests gate every deploy** (GitHub Actions): **203** database
+  (RLS) checks and **98** API checks. Live production runs: the Day-3 + Security
+  journey (**64** checks — A attacking B's property, documents, photos, videos,
+  requests, payments and Plan; forged ids/accounts; forged, tampered and expired
+  tokens; forged/tampered/replayed webhooks; client attempts to bypass Plans,
+  usage and pricing), plus the M1–M4 suites.
+- **Visit reports are records, not drafts, once published:** staff-only while the
+  request is open (every save kept in `visit_report_revisions`), published and
+  locked at completion — enforced by RLS.
 - **Plans and limits are enforced only by the API and database (M5/M6).** Customers
   can't grant themselves a Plan, record usage, edit Plan config, or start a second
   Trial (RLS plus a revoked `start_trial()`). The app only displays what the API
@@ -62,6 +79,8 @@ with the date when finished.
 | S7 | **Backups for customer data** | The Supabase free plan has **no automatic backups**; losing sale deeds would be serious. | Supabase Pro (daily backups) at launch. Interim: periodic `supabase db dump`. Storage files need their own backup plan. |
 | S8 | **Renew `VERCEL_TOKEN` before it expires** (~Oct 2027) | Deploys stop when it expires (availability, not exposure). | Steps in DEPLOYMENT.md. Rotate immediately if it ever leaks. |
 | S9 | **Dependency vulnerabilities** | API runtime: **0**. Mobile: 31 advisories (12 moderate, 19 high), almost all in Expo/Metro **build tooling** that runs on the developer machine, pinned by Expo SDK 57. | Before launch: `npx expo install --fix` on the latest SDK 57 patch, re-run `npm audit --omit=dev`, and review anything that ships in the app bundle. Don't `npm audit fix --force` (it breaks SDK alignment). |
+| S15 | **Razorpay live mode** | Test keys accept only test payments. | Complete Razorpay KYC; replace `RAZORPAY_KEY_ID/SECRET` with live keys and add a live-mode webhook with a new secret. Rotate the webhook secret file `~/propittu-razorpay-webhook-secret.txt` and then delete that file. |
+| S16 | **Rotate the Supabase server key if ever exposed** | It bypasses RLS. | Supabase → API Keys → roll the secret key; update `SUPABASE_SECRET_KEY` in Vercel; redeploy. |
 | S10 | **Clean up abandoned uploads** | Uploads started but never confirmed leave `pending` rows (invisible to users) and possibly orphaned files. Hygiene and cost, low risk. | Scheduled job deleting `pending` rows older than a day, plus their objects. |
 
 ### Later / optional
@@ -78,6 +97,8 @@ with the date when finished.
 | Date | Decision | By |
 |---|---|---|
 | 2026-10-05 | Logout ends the user's session on **all** their devices (Supabase default), not just the current phone. Acceptable for V1. | Product owner |
+| 2026-10-05 | The API holds the Supabase server key **only** to record verified payment events (webhooks have no user session). Everything else stays user-scoped under RLS. | Product owner |
+| 2026-10-05 | Visit reports: draft until the request is Completed, then published and locked; edits before that keep revisions. | Product owner |
 | 2026-10-05 | The repository is public. It contains no secrets; environment values live only in `.env` files (git-ignored), Vercel, and GitHub secrets. Making it private later is supported by the deploy setup. | Product owner |
 
 ## Done
