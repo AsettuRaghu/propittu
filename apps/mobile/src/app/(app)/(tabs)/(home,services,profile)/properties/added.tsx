@@ -11,7 +11,7 @@ export default function PropertyAddedScreen() {
   const failedCount = Number(failed) || 0;
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.body}>
         <View style={styles.iconCircle}>
           <Ionicons name="checkmark" size={44} color={colors.success} />

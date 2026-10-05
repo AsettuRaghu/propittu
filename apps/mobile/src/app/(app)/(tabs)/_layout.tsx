@@ -6,31 +6,33 @@ import { colors } from '@/theme';
  * Three tabs rather than §39's suggested four: §15's Home already IS the
  * property list, so a separate Properties tab would show it twice.
  * See docs/DECISIONS.md.
+ *
+ * Each tab hosts its own stack (the shared `(home,services,profile)`
+ * folder), so the tab bar stays visible everywhere. Tapping the tab you are
+ * already in returns to its first screen.
  */
 export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
+        headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textSubtle,
         tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
-        headerTitleStyle: { color: colors.text, fontWeight: '600' },
-        headerStyle: { backgroundColor: colors.surface },
         sceneStyle: { backgroundColor: colors.background },
       }}
     >
       <Tabs.Screen
-        name="index"
+        name="(home)"
         options={{
           title: 'Home',
-          headerShown: false,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home-outline" color={color} size={size} />
           ),
         }}
       />
       <Tabs.Screen
-        name="services"
+        name="(services)"
         options={{
           title: 'Services',
           tabBarIcon: ({ color, size }) => (
@@ -39,7 +41,7 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="profile"
+        name="(profile)"
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, size }) => (
