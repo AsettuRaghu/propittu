@@ -18,7 +18,10 @@ const COPY: Partial<Record<ClientErrorCode, string>> = {
   INTERNAL: 'Something went wrong on our side. Please try again.',
 };
 
-export function errorMessage(err: unknown, fallback = 'Something went wrong. Please try again.'): string {
+export function errorMessage(
+  err: unknown,
+  fallback = 'Something went wrong. Please try again.',
+): string {
   if (err instanceof ApiError) {
     // Validation and size messages from the API are already user-facing.
     if (err.code === 'VALIDATION_FAILED' || err.code === 'FILE_TOO_LARGE') return err.message;

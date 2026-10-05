@@ -22,15 +22,31 @@ export default function ServicesScreen() {
   return (
     <View style={styles.flex}>
       <View style={styles.segments} accessibilityRole="tablist">
-        <SegmentButton label="Browse services" active={segment === 'browse'} onPress={() => setSegment('browse')} />
-        <SegmentButton label="My requests" active={segment === 'requests'} onPress={() => setSegment('requests')} />
+        <SegmentButton
+          label="Browse services"
+          active={segment === 'browse'}
+          onPress={() => setSegment('browse')}
+        />
+        <SegmentButton
+          label="My requests"
+          active={segment === 'requests'}
+          onPress={() => setSegment('requests')}
+        />
       </View>
       {segment === 'browse' ? <Catalogue /> : <ServiceRequestList />}
     </View>
   );
 }
 
-function SegmentButton({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+function SegmentButton({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
   return (
     <Pressable
       onPress={onPress}
@@ -73,7 +89,11 @@ function Catalogue() {
       stickySectionHeadersEnabled={false}
       renderSectionHeader={({ section }) => (
         <View style={styles.sectionHeader}>
-          <Ionicons name={SERVICE_CATEGORY_ICONS[section.category]} size={18} color={colors.primary} />
+          <Ionicons
+            name={SERVICE_CATEGORY_ICONS[section.category]}
+            size={18}
+            color={colors.primary}
+          />
           <Text style={typography.overline}>{section.title}</Text>
         </View>
       )}

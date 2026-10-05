@@ -1,0 +1,59 @@
+# Implementation decisions
+
+PRODUCT_SPEC.md is the source of truth. This file records where the
+implementation made a choice the spec left open, or deliberately departed
+from the letter of the spec, and why. Newest decisions go at the bottom
+of each section.
+
+## Architecture
+
+| Decision | Reason |
+|---|---|
+| **The API queries Supabase as the signed-in user**, forwarding the user's JWT, rather than with the service-role key. | It's the only setup where RLS actually protects the API's own data path (§35, "defense-in-depth"). With a service-role key, one missing `user_id` filter would leak data across users. Handlers still filter by `user_id` as well. |
+| **The API has no secret / service-role key at all.** | Nothing on a request path needs to bypass RLS. Seeding happens in migrations, and status changes happen in the SQL editor. |
+| **JWTs are verified locally against Supabase's JWKS**, falling back to `auth.getUser()` for legacy HS256 projects. | Render's nearest region is Singapore and Supabase is in Mumbai. Local verification saves a cross-region round trip on every request. |
+| **Uploads use signed URLs** (intent → direct upload → confirm), not multipart uploads through the API. | Gives real upload progress (§21), avoids buffering files in the API or hitting request timeouts, and the API still chooses every storage path (§37). |
+| **Express 5**, not Fastify or NestJS. | §27 asks for the simpler option. Express 5 now handles async errors natively. |
+| **npm workspaces** monorepo with `packages/shared` as TypeScript source and no build step. | Validation schemas are shared by the API and the app forms. Metro (SDK 57) detects the workspace automatically. |
+| **The API runs TypeScript with `tsx` in production**, with no compile step. | Avoids monorepo `rootDir`/output problems. `tsc --noEmit` still typechecks. |
+| **No `cors` or `helmet`.** | Native apps aren't subject to CORS, and there's no web client (§9). |
+| **TypeScript ~6.0.3**, not npm's latest 7.x. | It's the version the Expo SDK 57 template pins. |
+| **Root `overrides` pin `react`/`react-dom` to 19.2.3.** | Without them npm installed React 19.3.0 at the root as a peer dependency while the app used 19.2.3. Two copies of React in one bundle crash at runtime. |
+
+## Data model (vs. spec §17–§24)
+
+| Departure | Reason |
+|---|---|
+| Added `properties.khata_number`. | §16 Step 3 collects "Khata / Property ID", but §17's model has no column for it. |
+| Added `user_id` to `property_photos` and `property_documents`. | Lets every RLS policy be a simple `user_id = auth.uid()` check, with no join. |
+| `services` is a table, and `service_requests.service_id` references it (instead of a `service_type` value). | §30 requires `GET /services`, and §22 needs names, descriptions and categories. |
+| `service_requests.property_id` is nullable, with `ON DELETE SET NULL`. | Deleting a property keeps that user's request history (§8.4). |
+| `upload_status` (`pending`/`ready`) on the file tables. | A row exists before its file has finished uploading. Lists only show `ready` rows. |
+| `service_requests.reference`, e.g. `PR-000123`, generated from a sequence that starts at 123. | Matches the §23 confirmation mockup. |
+| Lists such as property types are `text` + `CHECK` constraints, not Postgres `ENUM`s. | §20 asks for extensible lists. A CHECK constraint can be widened in a simple migration. |
+| Users can update only `profiles.full_name`, `photos.caption` and `documents.document_type`/`upload_status`; service requests can't be updated by users at all. | Enforced with column-level grants, so a user can't change their phone number, re-point a file's storage path, or mark their own request completed. |
+
+## Product and UX
+
+| Decision | Reason |
+|---|---|
+| **Service-request photos are dropped from V1.** | The §23 mockup shows them, but §24 and §30 define no model or endpoint for them. Confirmed with product. |
+| **Three tabs (Home, Services, Profile) instead of the four suggested in §39.** | §15's Home already lists the properties, so a separate Properties tab would show the same list twice. §39 also says to avoid overcomplicated navigation. |
+| **Add Property is one form split into sections**, not a four-screen wizard. | Covers the same steps as §16 with far less code and no draft state carried between screens. |
+| **Photos are uploaded right after the property is saved.** | A photo's storage path includes the new property's id. If a photo fails, the property is still saved, and the confirmation screen says how many photos failed. |
+| **Photos are resized to a 1600 px long edge and saved as JPEG on the device.** | Keeps uploads under 5 MB, and converts iPhone HEIC photos, which the bucket doesn't accept. |
+| **Invalid vs. expired OTP is decided by elapsed time.** | Supabase returns the same error for both, but §11 asks for separate handling. |
+| **PDFs open in Safari View Controller on iOS, and download to the share sheet on Android.** | Android's in-app browser can't display PDFs inline. |
+| **Photo delete (`DELETE /photos/:id`) was added** even though §30 doesn't list it. | Without it, a wrongly uploaded photo could only be removed by deleting the whole property. |
+| **Latitude/longitude columns exist but are never filled.** | They're in the §17 model, but no screen uses a map, and a map would mean a Maps API key and extra scope. |
+| **`full_name` exists but there's no screen to edit it.** | §25 says name is optional, and §30/§39 define no edit-profile screen. |
+| **No server-side idempotency keys on create endpoints.** | Buttons disable while a request is in flight, and React Query never retries mutations, which together prevent duplicate submissions (§40). |
+
+## Known debt before public launch
+
+| Item | Risk | Fix |
+|---|---|---|
+| Session tokens are stored in `AsyncStorage`, which is not encrypted. | Someone with access to the unlocked app sandbox (for example a jailbroken phone) could read the refresh token. | Switch to `expo-secure-store` with a chunking adapter, since sessions can exceed SecureStore's 2 KB limit per item on iOS. |
+| Abandoned `pending` upload rows are never deleted. | Clutters the database; users never see them. | A scheduled cleanup of `pending` rows older than a day, plus their storage objects. |
+| Real SMS isn't set up yet (DLT). | Only test numbers can sign in. | See SUPABASE_SETUP.md §8. |
+| No admin interface. | Service-request status is changed by hand in SQL. | Deliberately out of scope for V1 (§9). |

@@ -121,9 +121,7 @@ export default function VerifyScreen() {
       <View style={styles.resend}>
         <Text style={typography.small}>Didn&apos;t receive it?</Text>
         {cooldown > 0 ? (
-          <Text style={styles.cooldown}>
-            Resend OTP in 0:{String(cooldown).padStart(2, '0')}
-          </Text>
+          <Text style={styles.cooldown}>Resend OTP in 0:{String(cooldown).padStart(2, '0')}</Text>
         ) : (
           <Pressable onPress={resend} disabled={resending} hitSlop={8} accessibilityRole="button">
             <Text style={styles.link}>{resending ? 'Sending…' : 'Resend OTP'}</Text>

@@ -14,11 +14,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-  DOCUMENT_TYPE_LABELS,
-  formatFileSize,
-  type PropertyDocument,
-} from '@propittu/shared';
+import { DOCUMENT_TYPE_LABELS, formatFileSize, type PropertyDocument } from '@propittu/shared';
 import { useDeleteDocument, useDocuments } from '@/api/queries';
 import { openDocument } from '@/api/uploads';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
@@ -96,13 +92,17 @@ export default function DocumentsScreen() {
             <Card onPress={() => void open(item)} style={styles.row}>
               <View style={styles.icon}>
                 <Ionicons
-                  name={item.mime_type === 'application/pdf' ? 'document-text-outline' : 'image-outline'}
+                  name={
+                    item.mime_type === 'application/pdf' ? 'document-text-outline' : 'image-outline'
+                  }
                   size={22}
                   color={colors.primary}
                 />
               </View>
               <View style={styles.body}>
-                <Text style={typography.bodyStrong}>{DOCUMENT_TYPE_LABELS[item.document_type]}</Text>
+                <Text style={typography.bodyStrong}>
+                  {DOCUMENT_TYPE_LABELS[item.document_type]}
+                </Text>
                 <Text style={typography.small} numberOfLines={1}>
                   {item.file_name}
                 </Text>

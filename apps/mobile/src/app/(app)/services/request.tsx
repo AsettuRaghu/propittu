@@ -48,7 +48,13 @@ export default function RequestServiceScreen() {
         icon="home-outline"
         title="Add a property first"
         message="Service requests are made for a specific property."
-        action={<Button title="Add Property" icon="add" onPress={() => router.replace('/properties/new')} />}
+        action={
+          <Button
+            title="Add Property"
+            icon="add"
+            onPress={() => router.replace('/properties/new')}
+          />
+        }
       />
     );
   }

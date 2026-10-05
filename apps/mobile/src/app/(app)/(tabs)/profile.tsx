@@ -55,7 +55,13 @@ export default function ProfileScreen() {
       )}
 
       {/* Logout stays available even if the profile failed to load. */}
-      <Button title="Logout" variant="danger" icon="log-out-outline" onPress={confirmLogout} loading={signingOut} />
+      <Button
+        title="Logout"
+        variant="danger"
+        icon="log-out-outline"
+        onPress={confirmLogout}
+        loading={signingOut}
+      />
 
       <Text style={[typography.caption, styles.version]}>
         Propittu {Constants.expoConfig?.version ?? ''}

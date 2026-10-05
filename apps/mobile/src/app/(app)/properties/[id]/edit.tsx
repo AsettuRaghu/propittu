@@ -65,9 +65,7 @@ function EditForm({ property }: { property: PropertyDetail }) {
       `Delete "${property.name}"?`,
       [
         files > 0 ? 'Its photos and documents will be permanently deleted.' : null,
-        property.service_request_count > 0
-          ? 'Your service request history will be kept.'
-          : null,
+        property.service_request_count > 0 ? 'Your service request history will be kept.' : null,
         'This cannot be undone.',
       ]
         .filter(Boolean)
@@ -80,8 +78,7 @@ function EditForm({ property }: { property: PropertyDetail }) {
           onPress: () =>
             remove.mutate(property.id, {
               onSuccess: () => router.dismissTo('/'),
-              onError: (err) =>
-                Alert.alert("Couldn't delete the property", errorMessage(err)),
+              onError: (err) => Alert.alert("Couldn't delete the property", errorMessage(err)),
             }),
         },
       ],

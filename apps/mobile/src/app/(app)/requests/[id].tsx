@@ -57,9 +57,7 @@ export default function ServiceRequestScreen() {
         <KeyValue label="Submitted" value={formatDate(request.created_at)} />
       </Card>
 
-      {submitted === '1' ? (
-        <Button title="Done" onPress={() => router.back()} />
-      ) : null}
+      {submitted === '1' ? <Button title="Done" onPress={() => router.back()} /> : null}
     </ScrollView>
   );
 }

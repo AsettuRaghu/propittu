@@ -40,7 +40,11 @@ export interface LocalFile {
 
 export type ProgressFn = (fraction: number) => void;
 
-async function putToSignedUrl(url: string, file: LocalFile, onProgress?: ProgressFn): Promise<void> {
+async function putToSignedUrl(
+  url: string,
+  file: LocalFile,
+  onProgress?: ProgressFn,
+): Promise<void> {
   let status: number;
   let body = '';
   try {
@@ -55,7 +59,11 @@ async function putToSignedUrl(url: string, file: LocalFile, onProgress?: Progres
     status = result.status;
     body = result.body;
   } catch {
-    throw new ApiError(0, 'NETWORK', 'The upload was interrupted. Check your connection and try again.');
+    throw new ApiError(
+      0,
+      'NETWORK',
+      'The upload was interrupted. Check your connection and try again.',
+    );
   }
 
   if (status >= 200 && status < 300) {

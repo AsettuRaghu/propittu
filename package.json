@@ -14,9 +14,11 @@
     "lint": "npm run lint --workspaces --if-present",
     "format": "prettier --write \"**/*.{ts,tsx,json}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,json}\"",
+    "test": "npm run test:rls && npm run test:api",
     "test:rls": "bash supabase/rls-check/run.sh",
     "db:push": "supabase db push",
-    "db:diff": "supabase db diff"
+    "db:diff": "supabase db diff",
+    "test:api": "npm run test --workspace @propittu/api"
   },
   "devDependencies": {
     "prettier": "^3.4.2",

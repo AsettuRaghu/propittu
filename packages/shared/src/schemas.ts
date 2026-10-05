@@ -27,7 +27,7 @@ import {
  */
 const optionalText = (max: number) =>
   z.preprocess(
-    (v) => (typeof v === 'string' && v.trim() === '') || v === undefined ? null : v,
+    (v) => ((typeof v === 'string' && v.trim() === '') || v === undefined ? null : v),
     z.string().trim().max(max).nullable(),
   );
 

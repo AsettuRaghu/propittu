@@ -171,11 +171,7 @@ export type UploadStatus = (typeof UPLOAD_STATUSES)[number];
 export const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024; // 10 MB
 export const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB
 
-export const ALLOWED_DOCUMENT_MIME_TYPES = [
-  'application/pdf',
-  'image/jpeg',
-  'image/png',
-] as const;
+export const ALLOWED_DOCUMENT_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png'] as const;
 
 export const ALLOWED_PHOTO_MIME_TYPES = ['image/jpeg', 'image/png'] as const;
 

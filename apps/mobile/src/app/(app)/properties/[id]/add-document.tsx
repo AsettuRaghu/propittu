@@ -66,7 +66,10 @@ export default function AddDocumentScreen() {
       invalidate(id);
       setStatus({ kind: 'done' });
     } catch (err) {
-      setStatus({ kind: 'error', message: errorMessage(err, 'The upload failed. Please try again.') });
+      setStatus({
+        kind: 'error',
+        message: errorMessage(err, 'The upload failed. Please try again.'),
+      });
     }
   };
 
@@ -118,7 +121,9 @@ export default function AddDocumentScreen() {
           {file ? (
             <Card style={styles.fileCard}>
               <Ionicons
-                name={file.mimeType === 'application/pdf' ? 'document-text-outline' : 'image-outline'}
+                name={
+                  file.mimeType === 'application/pdf' ? 'document-text-outline' : 'image-outline'
+                }
                 size={24}
                 color={colors.primary}
               />
@@ -128,9 +133,7 @@ export default function AddDocumentScreen() {
                 </Text>
                 <Text style={typography.caption}>{formatFileSize(file.size)}</Text>
               </View>
-              {!uploading ? (
-                <Button title="Change" variant="ghost" onPress={chooseFile} />
-              ) : null}
+              {!uploading ? <Button title="Change" variant="ghost" onPress={chooseFile} /> : null}
             </Card>
           ) : (
             <Button
@@ -147,9 +150,7 @@ export default function AddDocumentScreen() {
       <Footer>
         {status.kind === 'uploading' ? (
           <View style={styles.progress}>
-            <Text style={typography.small}>
-              Uploading… {Math.round(status.progress * 100)}%
-            </Text>
+            <Text style={typography.small}>Uploading… {Math.round(status.progress * 100)}%</Text>
             <ProgressBar progress={status.progress} />
           </View>
         ) : null}

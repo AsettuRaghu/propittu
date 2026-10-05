@@ -30,9 +30,16 @@ export function objectPath(userId: string, propertyId: string, mime: DocumentMim
   return `${userId}/${propertyId}/${randomUUID()}.${EXTENSION_BY_MIME[mime]}`;
 }
 
-export async function signUpload(db: SupabaseClient, bucket: Bucket, path: string): Promise<string> {
+export async function signUpload(
+  db: SupabaseClient,
+  bucket: Bucket,
+  path: string,
+): Promise<string> {
   const { data, error } = await db.storage.from(bucket).createSignedUploadUrl(path);
-  if (error) throw new HttpError(500, 'INTERNAL', 'Could not prepare the upload', undefined, { cause: error });
+  if (error)
+    throw new HttpError(500, 'INTERNAL', 'Could not prepare the upload', undefined, {
+      cause: error,
+    });
   return data.signedUrl;
 }
 

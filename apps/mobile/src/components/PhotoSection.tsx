@@ -1,15 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useState } from 'react';
-import {
-  Alert,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MAX_PHOTOS_PER_PROPERTY, type PropertyPhoto } from '@propittu/shared';
 import { useDeletePhoto, useInvalidateProperty } from '@/api/queries';
@@ -91,7 +83,11 @@ export function PhotoSection({
           <Text style={styles.emptyText}>Add photos of this property</Text>
         </Pressable>
       ) : (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.strip}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.strip}
+        >
           {photos.map((photo) => (
             <Pressable
               key={photo.id}
@@ -100,7 +96,12 @@ export function PhotoSection({
               accessibilityLabel={photo.caption ?? 'Property photo'}
             >
               {photo.url ? (
-                <Image source={signedImage(photo.url)} style={styles.thumb} contentFit="cover" transition={150} />
+                <Image
+                  source={signedImage(photo.url)}
+                  style={styles.thumb}
+                  contentFit="cover"
+                  transition={150}
+                />
               ) : (
                 <View style={[styles.thumb, styles.thumbMissing]}>
                   <Ionicons name="image-outline" size={24} color={colors.textSubtle} />
@@ -141,7 +142,11 @@ export function PhotoSection({
             </Pressable>
           </View>
           {viewing?.url ? (
-            <Image source={signedImage(viewing.url)} style={styles.viewerImage} contentFit="contain" />
+            <Image
+              source={signedImage(viewing.url)}
+              style={styles.viewerImage}
+              contentFit="contain"
+            />
           ) : null}
           <View style={styles.viewerActions}>
             <Button

@@ -28,10 +28,7 @@ export function OtpInput({
       {Array.from({ length: OTP_LENGTH }, (_, i) => {
         const active = focused && i === Math.min(value.length, OTP_LENGTH - 1);
         return (
-          <View
-            key={i}
-            style={[styles.box, active && styles.boxActive, error && styles.boxError]}
-          >
+          <View key={i} style={[styles.box, active && styles.boxActive, error && styles.boxError]}>
             <Text style={styles.digit}>{value[i] ?? ''}</Text>
           </View>
         );

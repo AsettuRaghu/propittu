@@ -7,9 +7,7 @@ if (existsSync('.env')) process.loadEnvFile('.env');
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
-  LOG_LEVEL: z
-    .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
-    .default('info'),
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 
   SUPABASE_URL: z.url().transform((u) => u.replace(/\/+$/, '')),
   SUPABASE_PUBLISHABLE_KEY: z.string().min(20),

@@ -158,7 +158,11 @@ propertiesRouter.delete('/properties/:id', async (req, res) => {
 
   const [photos, documents] = await Promise.all([
     db.from('property_photos').select('storage_path').eq('property_id', id).eq('user_id', userId),
-    db.from('property_documents').select('storage_path').eq('property_id', id).eq('user_id', userId),
+    db
+      .from('property_documents')
+      .select('storage_path')
+      .eq('property_id', id)
+      .eq('user_id', userId),
   ]);
 
   const paths = (r: { storage_path: string }[]) => r.map((x) => x.storage_path);

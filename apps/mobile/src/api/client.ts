@@ -49,7 +49,11 @@ interface RequestOptions {
   body?: unknown;
 }
 
-async function send(path: string, options: RequestOptions, token: string | null): Promise<Response> {
+async function send(
+  path: string,
+  options: RequestOptions,
+  token: string | null,
+): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {

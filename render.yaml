@@ -1,0 +1,45 @@
+# Render Blueprint for the Propittu API.
+# Render dashboard → New → Blueprint → select this repository.
+# See docs/DEPLOYMENT.md.
+
+services:
+  - type: web
+    name: propittu-api
+    runtime: node
+    # Render's only Asia-Pacific region. Supabase is in Mumbai (ap-south-1);
+    # the API verifies JWTs locally (JWKS) to avoid an extra cross-region hop.
+    region: singapore
+    # Free spins down after ~15 min idle (30–60 s cold start on the next
+    # request). Switch to "starter" for device testing and launch.
+    plan: free
+    branch: main
+    autoDeploy: true
+    # Repo root, so the npm workspace can resolve @propittu/shared.
+    rootDir: .
+    # Installs ONLY the API and shared workspaces — not the Expo toolchain.
+    buildCommand: npm ci --workspace @propittu/api --workspace @propittu/shared --include-workspace-root=false
+    startCommand: npm run start --workspace @propittu/api
+    healthCheckPath: /health
+    # Redeploy only when something the API depends on changes.
+    buildFilter:
+      paths:
+        - apps/api/**
+        - packages/shared/**
+        - package.json
+        - package-lock.json
+        - render.yaml
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      - key: SIGNED_DOWNLOAD_TTL_SECONDS
+        value: "3600"
+      # Prompted for in the dashboard on first deploy; never committed.
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      # PORT is injected by Render automatically.

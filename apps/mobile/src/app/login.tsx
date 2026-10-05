@@ -92,7 +92,8 @@ export default function LoginScreen() {
                 keyboardType="phone-pad"
                 textContentType="telephoneNumber"
                 autoComplete="tel"
-                maxLength={14}
+                // Room for a pasted "+91 98765 43210"; onChange keeps the last 10 digits.
+                maxLength={20}
                 autoFocus
                 editable={!sending}
                 accessibilityLabel="Mobile number"

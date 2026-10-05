@@ -40,7 +40,8 @@ interface PhotoRow {
   created_at: string;
 }
 
-const PHOTO_COLUMNS = 'id, property_id, storage_path, mime_type, caption, upload_status, created_at';
+const PHOTO_COLUMNS =
+  'id, property_id, storage_path, mime_type, caption, upload_status, created_at';
 
 function toPhoto(row: PhotoRow, url: string | null): PropertyPhoto {
   return {
