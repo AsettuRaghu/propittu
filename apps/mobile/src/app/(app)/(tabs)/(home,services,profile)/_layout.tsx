@@ -8,17 +8,58 @@ import { colors } from '@/theme';
  * stays in the tab you are in (e.g. "Request a service" from a property
  * opens on the Home tab, and Back returns to the property).
  *
- * Each tab starts at its own root screen.
+ * Each tab must START at its own root screen. When screens are listed
+ * explicitly, Expo Router uses the FIRST listed screen as the start, so the
+ * tab's root is listed first (and also passed as initialRouteName).
  */
+const ROOTS: Record<string, string> = {
+  '(home)': 'index',
+  '(services)': 'services/index',
+  '(profile)': 'profile',
+};
+
 export const unstable_settings = {
   anchor: 'index',
   services: { anchor: 'services/index' },
   profile: { anchor: 'profile' },
 };
 
-export default function TabStackLayout() {
+const SCREENS: { name: string; options: Record<string, unknown> }[] = [
+  // Tab roots
+  { name: 'index', options: { headerShown: false, title: 'Home' } },
+  { name: 'services/index', options: { title: 'Services' } },
+  { name: 'profile', options: { title: 'Profile' } },
+
+  { name: 'properties/new', options: { title: 'Add property' } },
+  { name: 'properties/added', options: { headerShown: false, gestureEnabled: false } },
+  { name: 'properties/[id]/index', options: { title: '' } },
+  { name: 'properties/[id]/edit', options: { title: 'Edit property' } },
+  { name: 'properties/[id]/location', options: { title: 'Property location' } },
+  { name: 'properties/[id]/documents', options: { title: 'Documents' } },
+  { name: 'properties/[id]/add-document', options: { title: 'Add document' } },
+  { name: 'services/request', options: { title: 'Request a service' } },
+  { name: 'requests/index', options: { title: 'Service requests' } },
+  { name: 'requests/[id]', options: { title: 'Service request' } },
+  { name: 'plan', options: { title: 'Plan & Usage' } },
+
+  // Backoffice (M9): staff only — the API returns 404 to everyone else.
+  { name: 'backoffice/index', options: { title: 'Backoffice' } },
+  { name: 'backoffice/requests/[id]', options: { title: 'Request' } },
+  { name: 'backoffice/accounts/[id]', options: { title: 'Customer' } },
+  { name: 'backoffice/properties/[id]', options: { title: 'Property' } },
+  { name: 'backoffice/services/[id]', options: { title: 'Service' } },
+];
+
+export default function TabStackLayout({ segment }: { segment?: string }) {
+  const root = ROOTS[segment ?? '(home)'] ?? 'index';
+  const ordered = [
+    ...SCREENS.filter((s) => s.name === root),
+    ...SCREENS.filter((s) => s.name !== root),
+  ];
+
   return (
     <Stack
+      initialRouteName={root}
       screenOptions={{
         headerTintColor: colors.primary,
         headerTitleStyle: { color: colors.text, fontWeight: '600' },
@@ -27,32 +68,9 @@ export default function TabStackLayout() {
         contentStyle: { backgroundColor: colors.background },
       }}
     >
-      {/* Tab roots */}
-      <Stack.Screen name="index" options={{ headerShown: false, title: 'Home' }} />
-      <Stack.Screen name="services/index" options={{ title: 'Services' }} />
-      <Stack.Screen name="profile" options={{ title: 'Profile' }} />
-
-      <Stack.Screen name="properties/new" options={{ title: 'Add property' }} />
-      <Stack.Screen
-        name="properties/added"
-        options={{ headerShown: false, gestureEnabled: false }}
-      />
-      <Stack.Screen name="properties/[id]/index" options={{ title: '' }} />
-      <Stack.Screen name="properties/[id]/edit" options={{ title: 'Edit property' }} />
-      <Stack.Screen name="properties/[id]/location" options={{ title: 'Property location' }} />
-      <Stack.Screen name="properties/[id]/documents" options={{ title: 'Documents' }} />
-      <Stack.Screen name="properties/[id]/add-document" options={{ title: 'Add document' }} />
-      <Stack.Screen name="services/request" options={{ title: 'Request a service' }} />
-      <Stack.Screen name="requests/index" options={{ title: 'Service requests' }} />
-      <Stack.Screen name="requests/[id]" options={{ title: 'Service request' }} />
-      <Stack.Screen name="plan" options={{ title: 'Plan & Usage' }} />
-
-      {/* Backoffice (M9): staff only — the API returns 404 to everyone else. */}
-      <Stack.Screen name="backoffice/index" options={{ title: 'Backoffice' }} />
-      <Stack.Screen name="backoffice/requests/[id]" options={{ title: 'Request' }} />
-      <Stack.Screen name="backoffice/accounts/[id]" options={{ title: 'Customer' }} />
-      <Stack.Screen name="backoffice/properties/[id]" options={{ title: 'Property' }} />
-      <Stack.Screen name="backoffice/services/[id]" options={{ title: 'Service' }} />
+      {ordered.map((s) => (
+        <Stack.Screen key={s.name} name={s.name} options={s.options} />
+      ))}
     </Stack>
   );
 }
