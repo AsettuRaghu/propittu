@@ -5,11 +5,14 @@ import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'rea
 import {
   formatIndianMobile,
   formatPrice,
+  ORDER_STATUS_LABELS,
   SERVICE_REQUEST_STATUS_LABELS,
+  type BackofficeOrder,
   type BackofficeAccount,
   type BackofficeRequest,
   type StaffService,
 } from '@propittu/shared';
+import { useBoPayments } from '@/api/billing';
 import { useBoAccounts, useBoRequests, useBoServices, type RequestFilter } from '@/api/backoffice';
 import { TextField } from '@/components/Field';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
@@ -18,7 +21,7 @@ import { formatDate } from '@/lib/format';
 import { STATUS_TONES } from '@/lib/icons';
 import { colors, radius, space, typography } from '@/theme';
 
-type Tab = 'requests' | 'accounts' | 'services';
+type Tab = 'requests' | 'accounts' | 'payments' | 'services';
 
 /**
  * Backoffice (M9) — staff mode. Reachable from Profile for staff only;
@@ -33,6 +36,7 @@ export default function BackofficeScreen() {
           [
             ['requests', 'Requests'],
             ['accounts', 'Customers'],
+            ['payments', 'Payments'],
             ['services', 'Services'],
           ] as const
         ).map(([value, label]) => (
@@ -49,7 +53,15 @@ export default function BackofficeScreen() {
           </Pressable>
         ))}
       </View>
-      {tab === 'requests' ? <Requests /> : tab === 'accounts' ? <Accounts /> : <Services />}
+      {tab === 'requests' ? (
+        <Requests />
+      ) : tab === 'accounts' ? (
+        <Accounts />
+      ) : tab === 'payments' ? (
+        <Payments />
+      ) : (
+        <Services />
+      )}
     </View>
   );
 }
@@ -221,6 +233,61 @@ function Services() {
       }
       renderItem={({ item }) => <ServiceRow service={item} />}
     />
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+/** M9 Payments: customer, Plan/Extra, amount, status, date, provider ref, refunds. */
+function Payments() {
+  const { data, isPending, error, refetch, isRefetching } = useBoPayments();
+  if (isPending) return <LoadingState />;
+  if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
+  return (
+    <FlatList
+      data={data}
+      keyExtractor={(o) => o.id}
+      contentContainerStyle={styles.list}
+      ItemSeparatorComponent={() => <View style={{ height: space.sm }} />}
+      refreshControl={
+        <RefreshControl
+          refreshing={isRefetching}
+          onRefresh={() => void refetch()}
+          tintColor={colors.primary}
+        />
+      }
+      renderItem={({ item }) => <PaymentRow order={item} />}
+      ListEmptyComponent={<EmptyState icon="card-outline" title="No payments yet" />}
+    />
+  );
+}
+
+function PaymentRow({ order }: { order: BackofficeOrder }) {
+  return (
+    <Card
+      onPress={() => router.push(`/backoffice/accounts/${order.account_id}`)}
+      style={styles.card}
+    >
+      <View style={styles.row}>
+        <Text style={typography.bodyStrong}>{formatPrice(order.amount_paise)}</Text>
+        <Badge
+          label={ORDER_STATUS_LABELS[order.status]}
+          tone={order.status === 'paid' ? 'success' : 'warning'}
+        />
+      </View>
+      <Text style={typography.small}>{order.description}</Text>
+      <Text style={typography.caption}>
+        {order.customer_phone ? formatIndianMobile(order.customer_phone) : 'Unknown'} ·{' '}
+        {order.reference} · {formatDate(order.paid_at ?? order.created_at)}
+      </Text>
+      {order.payment?.provider_payment_ref ? (
+        <Text style={typography.caption}>
+          {order.payment.provider} {order.payment.provider_payment_ref}
+          {order.payment.method ? ` · ${order.payment.method}` : ''}
+          {order.refunded_paise > 0 ? ` · refunded ${formatPrice(order.refunded_paise)}` : ''}
+        </Text>
+      ) : null}
+    </Card>
   );
 }
 

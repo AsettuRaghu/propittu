@@ -7,12 +7,14 @@ import {
   INCLUDED_SERVICE_LABELS,
   LIMIT_LABELS,
   LIMIT_CODES,
+  ORDER_STATUS_LABELS,
   PLAN_STATUS_LABELS,
   type AccountPlanState,
   type LimitCode,
   type PlanBenefits,
   type PublicPlan,
 } from '@propittu/shared';
+import { useOrders, usePlanCheckout } from '@/api/billing';
 import { useAccountPlan, useCancelPlan, usePlans } from '@/api/queries';
 import { ErrorState, LoadingState } from '@/components/States';
 import {
@@ -47,6 +49,8 @@ export default function PlanScreen() {
   const state = useAccountPlan();
   const plans = usePlans();
   const cancel = useCancelPlan();
+  const checkout = usePlanCheckout();
+  const orders = useOrders();
 
   if (state.isPending) return <LoadingState />;
   if (state.error) return <ErrorState error={state.error} onRetry={() => void state.refetch()} />;
@@ -69,10 +73,32 @@ export default function PlanScreen() {
       ],
     );
 
-  const choose = (plan: PublicPlan) =>
+  const choose = (plan: PublicPlan, renewing: boolean) =>
     Alert.alert(
-      `${plan.name} — ${formatPrice(plan.price_paise)} ${BILLING_PERIOD_LABELS[plan.billing_period]}`,
-      `Online payment is coming very soon. To activate ${plan.name} now, write to ${SUPPORT_EMAIL} from your registered mobile number's account.`,
+      `${renewing ? 'Renew' : 'Get'} ${plan.name} — ${formatPrice(plan.price_paise)} ${BILLING_PERIOD_LABELS[plan.billing_period]}`,
+      (renewing
+        ? 'Your new period starts when the current one ends, so no days are lost. '
+        : s.status === 'trialing'
+          ? 'Your plan starts immediately and replaces the free trial. '
+          : 'Your new plan starts immediately. ') +
+        "You'll pay on Razorpay's secure page (UPI or card).",
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: `Pay ${formatPrice(plan.price_paise)}`,
+          onPress: () =>
+            checkout.mutate(plan.code, {
+              onSuccess: (order) =>
+                order.status === 'paid'
+                  ? Alert.alert('Payment received', `Thank you! Your ${plan.name} plan is active.`)
+                  : Alert.alert(
+                      'Payment not confirmed yet',
+                      'If you completed the payment, your plan updates here within a minute — pull down to refresh.',
+                    ),
+              onError: (err) => Alert.alert("Couldn't start the payment", errorMessage(err)),
+            }),
+        },
+      ],
     );
 
   return (
@@ -179,17 +205,58 @@ export default function PlanScreen() {
               <Divider />
               <BenefitList benefits={p.benefits} />
               {s.plan?.code === p.code && s.status !== 'trialing' ? (
-                <Badge label="Your current plan" tone="success" />
+                <>
+                  <Badge label="Your current plan" tone="success" />
+                  <Button
+                    title="Renew / extend"
+                    variant="secondary"
+                    onPress={() => choose(p, true)}
+                    loading={checkout.isPending && checkout.variables === p.code}
+                    disabled={checkout.isPending}
+                  />
+                </>
               ) : (
-                <Button title={`Choose ${p.name}`} onPress={() => choose(p)} />
+                <Button
+                  title={`Choose ${p.name}`}
+                  onPress={() => choose(p, false)}
+                  loading={checkout.isPending && checkout.variables === p.code}
+                  disabled={checkout.isPending}
+                />
               )}
             </Card>
           ))
         )}
       </View>
 
+      {orders.data && orders.data.length > 0 ? (
+        <View style={styles.section}>
+          <SectionTitle title="Payment history" />
+          <Card style={styles.card}>
+            {orders.data.map((o) => (
+              <View key={o.id} style={styles.row}>
+                <View style={styles.flex}>
+                  <Text style={typography.body}>{o.description}</Text>
+                  <Text style={typography.caption}>
+                    {o.reference} · {formatDate(o.paid_at ?? o.created_at)}
+                    {o.payment?.method ? ` · ${o.payment.method.toUpperCase()}` : ''}
+                    {o.refunded_paise > 0 ? ` · refunded ${formatPrice(o.refunded_paise)}` : ''}
+                  </Text>
+                </View>
+                <View style={styles.amount}>
+                  <Text style={typography.bodyStrong}>{formatPrice(o.amount_paise)}</Text>
+                  <Badge
+                    label={ORDER_STATUS_LABELS[o.status]}
+                    tone={o.status === 'paid' ? 'success' : 'warning'}
+                  />
+                </View>
+              </View>
+            ))}
+          </Card>
+        </View>
+      ) : null}
+
       <Text style={[typography.caption, styles.center]}>
-        Questions about plans? Write to {SUPPORT_EMAIL}
+        Payments are processed securely by Razorpay. Questions? Write to {SUPPORT_EMAIL}
       </Text>
     </ScrollView>
   );
@@ -259,4 +326,6 @@ const styles = StyleSheet.create({
   usage: { gap: space.xs },
   benefits: { gap: space.xs },
   center: { textAlign: 'center' },
+  flex: { flex: 1 },
+  amount: { alignItems: 'flex-end', gap: space.xs },
 });

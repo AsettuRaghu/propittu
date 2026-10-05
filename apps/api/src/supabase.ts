@@ -25,6 +25,16 @@ export function userClient(accessToken: string): SupabaseClient {
 }
 
 /**
+ * Server-privileged client, used ONLY by the billing module to call
+ * record_payment_event() after a provider event has been verified
+ * (webhook signature, or a server-to-server status fetch). Everything
+ * else in the API acts as the signed-in user. Null when not configured.
+ */
+export const serviceClient: SupabaseClient | null = env.SUPABASE_SECRET_KEY
+  ? createClient(env.SUPABASE_URL, env.SUPABASE_SECRET_KEY, { auth: serverAuthOptions })
+  : null;
+
+/**
  * Unauthenticated client used ONLY to ask Supabase Auth whether a token is
  * valid, when it cannot be verified locally (see auth.ts). It reads no data.
  */

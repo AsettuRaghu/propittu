@@ -4,6 +4,10 @@ import { z } from 'zod';
 // Local development reads apps/api/.env; on Vercel the platform injects variables.
 if (existsSync('.env')) process.loadEnvFile('.env');
 
+/** Optional secret: an empty value counts as "not set". */
+const optionalSecret = (min: number) =>
+  z.preprocess((v) => (v === '' ? undefined : v), z.string().trim().min(min).optional());
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
@@ -16,6 +20,18 @@ const envSchema = z.object({
 
   // Set on Vercel; Vercel Cron sends it as a Bearer token to /cron/keepalive.
   CRON_SECRET: z.string().min(16).optional(),
+
+  // ---- Payments (M7). All optional: without them checkout answers 503. ----
+  // Supabase server key — used ONLY to record verified payment events
+  // (record_payment_event is executable by service_role alone).
+  SUPABASE_SECRET_KEY: optionalSecret(20),
+  RAZORPAY_KEY_ID: optionalSecret(8),
+  RAZORPAY_KEY_SECRET: optionalSecret(8),
+  RAZORPAY_WEBHOOK_SECRET: optionalSecret(8),
+  // Public base URL of this API (payment return page). Vercel provides
+  // VERCEL_PROJECT_PRODUCTION_URL automatically.
+  PUBLIC_API_URL: z.url().optional(),
+  VERCEL_PROJECT_PRODUCTION_URL: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -32,3 +48,10 @@ if (!parsed.success) {
 
 export const env = parsed.data;
 export const isProduction = env.NODE_ENV === 'production';
+
+export const publicApiUrl = (
+  env.PUBLIC_API_URL ??
+  (env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : `http://localhost:${env.PORT}`)
+).replace(/\/+$/, '');

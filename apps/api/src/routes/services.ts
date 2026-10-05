@@ -14,6 +14,7 @@ import { audit } from '../audit.js';
 import { HttpError, invalid, must, notFound, ok, uuidParam } from '../errors.js';
 import { assertOwnsProperty } from '../ownership.js';
 import { planOf, type PlanState } from '../plan.js';
+import { orderForRequest } from '../billing/orders.js';
 import { loadReport, REQUEST_COLUMNS, todayInIndia } from '../requests.js';
 
 /**
@@ -106,7 +107,9 @@ async function loadRequest(
       .maybeSingle(),
   );
   if (!row) throw notFound('Service request');
-  return { ...row, report: await loadReport(db, id) };
+  // RLS shows the customer a report only once the request is Completed.
+  const [report, order] = await Promise.all([loadReport(db, id), orderForRequest(db, id)]);
+  return { ...row, report, order };
 }
 
 /* GET /service-requests/:id — with the visit report, if any */

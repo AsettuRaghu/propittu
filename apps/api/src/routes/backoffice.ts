@@ -21,6 +21,7 @@ import {
   type AccountPlanState,
   type BackofficeAccount,
   type BackofficeAccountDetail,
+  type BackofficeOrder,
   type BackofficeProperty,
   type BackofficeRequest,
   type BackofficeRequestDetail,
@@ -38,6 +39,8 @@ import { audit } from '../audit.js';
 import { env } from '../env.js';
 import { HttpError, invalid, must, notFound, ok, uuidParam } from '../errors.js';
 import { describeAccountPlan } from '../plan.js';
+import { ORDER_COLUMNS, orderForRequest, toOrder, type OrderRow } from '../billing/orders.js';
+import { notify } from '../notify.js';
 import { loadReport, REQUEST_COLUMNS } from '../requests.js';
 import {
   removeObjects,
@@ -165,7 +168,7 @@ backofficeRouter.get('/accounts/:accountId', async (req, res) => {
   const accountId = uuidParam(req.params.accountId, 'Account');
   const account = await loadAccount(db, accountId);
 
-  const [plan, properties, requests] = await Promise.all([
+  const [plan, properties, requests, orders] = await Promise.all([
     describeAccountPlan(db, accountId),
     db
       .from('property_summaries')
@@ -173,6 +176,13 @@ backofficeRouter.get('/accounts/:accountId', async (req, res) => {
       .eq('account_id', accountId)
       .order('created_at', { ascending: false }),
     listRequests(db, { accountId }),
+    db
+      .from('orders')
+      .select(ORDER_COLUMNS)
+      .eq('account_id', accountId)
+      .neq('status', 'cancelled')
+      .order('created_at', { ascending: false })
+      .limit(50),
   ]);
 
   const data: BackofficeAccountDetail = {
@@ -181,6 +191,7 @@ backofficeRouter.get('/accounts/:accountId', async (req, res) => {
     blocked_reason: blockedReason(account, plan),
     properties: must<BackofficeAccountDetail['properties']>(properties),
     requests,
+    orders: must<OrderRow[]>(orders).map(toOrder),
   };
   ok(res, data);
 });
@@ -338,7 +349,7 @@ async function loadRequestRow(db: SupabaseClient, id: string): Promise<RequestRo
 
 async function loadRequestDetail(db: SupabaseClient, id: string): Promise<BackofficeRequestDetail> {
   const row = await loadRequestRow(db, id);
-  const [[request], report, address] = await Promise.all([
+  const [[request], report, address, order] = await Promise.all([
     withCustomers(db, [row]),
     loadReport(db, id),
     row.property
@@ -348,6 +359,7 @@ async function loadRequestDetail(db: SupabaseClient, id: string): Promise<Backof
           .eq('id', row.property.id)
           .maybeSingle()
       : Promise.resolve(null),
+    orderForRequest(db, id),
   ]);
   const a = address
     ? must<{
@@ -360,7 +372,7 @@ async function loadRequestDetail(db: SupabaseClient, id: string): Promise<Backof
   const propertyAddress = a
     ? [a.address_line, a.city, a.state, a.pincode].filter(Boolean).join(', ') || null
     : null;
-  return { ...(request as BackofficeRequest), report, property_address: propertyAddress };
+  return { ...(request as BackofficeRequest), report, property_address: propertyAddress, order };
 }
 
 /* GET /backoffice/requests?status=open|all|<status> */
@@ -413,7 +425,12 @@ backofficeRouter.post('/requests/:id/status', allow('requests.manage'), async (r
     { type: 'service_request', id },
     { from: current.status, to: input.status, scheduled_for: input.scheduled_for ?? null },
   );
-  ok(res, await loadRequestDetail(ctx.db, id));
+  const detail = await loadRequestDetail(ctx.db, id);
+  notify({ type: 'service_request.status_changed', requestId: id, status: input.status });
+  if (input.status === 'completed' && detail.report) {
+    notify({ type: 'visit_report.published', requestId: id });
+  }
+  ok(res, detail);
 });
 
 /* PUT /backoffice/requests/:id/report — create or update the visit report */
@@ -422,15 +439,19 @@ backofficeRouter.put('/requests/:id/report', allow('requests.manage'), async (re
   const id = uuidParam(req.params.id, 'Service request');
   const input = visitReportSchema.parse(req.body);
   const request = await loadRequestRow(ctx.db, id);
-  if (request.status === 'requested' || request.status === 'cancelled') {
-    throw new HttpError(409, 'CONFLICT', 'Confirm the request before writing its report.');
-  }
+  assertReportEditable(request.status);
 
   const existing = must<{ id: string } | null>(
     await ctx.db.from('visit_reports').select('id').eq('service_request_id', id).maybeSingle(),
   );
   if (existing) {
-    must(await ctx.db.from('visit_reports').update(input).eq('id', existing.id));
+    // The database keeps the previous version in visit_report_revisions.
+    must(
+      await ctx.db
+        .from('visit_reports')
+        .update({ ...input, updated_by: ctx.userId })
+        .eq('id', existing.id),
+    );
   } else {
     must(
       await ctx.db.from('visit_reports').insert({
@@ -473,7 +494,28 @@ interface MediaRow {
 const MEDIA_COLUMNS =
   'id, report_id, account_id, kind, storage_path, mime_type, upload_status, created_at';
 
+/**
+ * Draft while the request is open; published and LOCKED once Completed
+ * (product decision 2026-10-05). RLS enforces the same rule.
+ */
+function assertReportEditable(status: ServiceRequest['status']): void {
+  if (status === 'requested') {
+    throw new HttpError(409, 'CONFLICT', 'Confirm the request before writing its report.');
+  }
+  if (status === 'completed') {
+    throw new HttpError(
+      409,
+      'CONFLICT',
+      'This report was published to the customer when the request was completed and is now locked.',
+    );
+  }
+  if (status === 'cancelled') {
+    throw new HttpError(409, 'CONFLICT', 'This request was cancelled.');
+  }
+}
+
 async function reportFor(db: SupabaseClient, requestId: string) {
+  assertReportEditable((await loadRequestRow(db, requestId)).status);
   const report = must<{ id: string; account_id: string } | null>(
     await db
       .from('visit_reports')
@@ -742,4 +784,41 @@ backofficeRouter.patch('/services/:id', allow('services.manage'), async (req, re
   if (!row) throw notFound('Service');
   await staffAudit(ctx, 'staff.service.updated', ctx.accountId, { type: 'service', id }, input);
   ok(res, row);
+});
+
+/* ================================================================== *
+ * Payments (M7/M9): customer, Plan/Extra, amount, status, date,
+ * provider reference, refunds.
+ * ================================================================== */
+
+const paymentListSchema = z.object({
+  status: z.enum(['all', 'pending', 'paid']).default('all'),
+});
+
+backofficeRouter.get('/payments', async (req, res) => {
+  const { db } = auth(req);
+  const { status } = paymentListSchema.parse(req.query);
+  let query = db
+    .from('orders')
+    .select(`${ORDER_COLUMNS}, user_id`)
+    .neq('status', 'cancelled')
+    .order('created_at', { ascending: false })
+    .limit(100);
+  if (status !== 'all') query = query.eq('status', status);
+  const rows = must<(OrderRow & { user_id: string })[]>(await query);
+
+  const ids = [...new Set(rows.map((r) => r.user_id))];
+  const profiles =
+    ids.length === 0
+      ? []
+      : must<{ id: string; phone: string }[]>(
+          await db.from('profiles').select('id, phone').in('id', ids),
+        );
+  const phones = new Map(profiles.map((p) => [p.id, p.phone]));
+  const data: BackofficeOrder[] = rows.map((r) => ({
+    ...toOrder(r),
+    account_id: r.account_id,
+    customer_phone: phones.get(r.user_id) || null,
+  }));
+  ok(res, data);
 });

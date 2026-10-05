@@ -8,6 +8,8 @@ import { cronRouter } from './routes/cron.js';
 import { documentsRouter } from './routes/documents.js';
 import { healthRouter } from './routes/health.js';
 import { backofficeRouter } from './routes/backoffice.js';
+import { billingReturnRouter, billingRouter } from './routes/billing.js';
+import { webhooksRouter } from './routes/webhooks.js';
 import { meRouter } from './routes/me.js';
 import { plansRouter } from './routes/plans.js';
 import { requireActivePlan } from './plan.js';
@@ -37,12 +39,16 @@ export function createApp(): express.Express {
     }),
   );
 
+  // Payment webhooks need the RAW body for signature checks: before express.json.
+  app.use(webhooksRouter);
+
   // JSON bodies are small: files never pass through the API (signed URLs).
   app.use(express.json({ limit: '100kb' }));
 
   // Public (cron checks its own secret)
   app.use(healthRouter);
   app.use(cronRouter);
+  app.use(billingReturnRouter);
 
   // Everything below requires a valid Supabase session.
   app.use(requireAuth);
@@ -51,6 +57,7 @@ export function createApp(): express.Express {
   // available Plans, payment journey. Backoffice has its own staff gate.
   app.use(meRouter);
   app.use(plansRouter);
+  app.use(billingRouter);
   app.use('/backoffice', backofficeRouter);
 
   // Normal property-management functionality needs an active Plan or Trial.

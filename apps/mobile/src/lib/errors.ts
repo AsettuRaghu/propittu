@@ -27,6 +27,7 @@ const SERVER_COPY = new Set<ClientErrorCode>([
   'LIMITED_ACCESS',
   'FEATURE_NOT_INCLUDED',
   'LIMIT_REACHED',
+  'PAYMENTS_UNAVAILABLE',
 ]);
 
 export function errorMessage(

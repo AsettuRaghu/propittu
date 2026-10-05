@@ -231,6 +231,8 @@ export const API_ERROR_CODES = [
   'LIMITED_ACCESS', // no active Plan or Trial
   'FEATURE_NOT_INCLUDED', // the Plan lacks this Feature Benefit
   'LIMIT_REACHED', // a Usage Limit would be exceeded
+  // Payments (M7)
+  'PAYMENTS_UNAVAILABLE', // provider not configured yet
 ] as const;
 
 /* ------------------------------------------------------------------ *

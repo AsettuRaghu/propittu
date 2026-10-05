@@ -14,6 +14,7 @@
 import http from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
+import { createHmac } from 'node:crypto';
 import { generateKeyPair, exportJWK, SignJWT } from 'jose';
 
 const SB_PORT = 54400,
@@ -267,6 +268,9 @@ const fake = http.createServer((req, res) => {
         res.writeHead(201);
         return res.end();
       }
+      if (req.url.startsWith('/rest/v1/rpc/record_payment_event')) {
+        return json(200, 'plan_activated');
+      }
       if (req.url.startsWith('/rest/v1/rpc/keepalive')) {
         res.writeHead(200, { 'content-type': 'application/json' });
         return res.end(JSON.stringify('2026-01-01T00:00:00+00:00'));
@@ -313,6 +317,10 @@ await new Promise((r) => fake.listen(SB_PORT, '127.0.0.1', r));
 // SMOKE_TARGET=bundle tests the built Vercel bundle (what actually ships)
 // instead of the TypeScript source. `npm run test:bundle` builds it first.
 const CRON_SECRET = 'smoke-test-cron-secret-0123456789';
+// Payments (M7): webhook secret + server key are set; Razorpay API keys are
+// NOT, so checkout must answer 503 and nothing reaches Razorpay.
+const WEBHOOK_SECRET = 'smoke-webhook-secret-0123456789';
+const SECRET_KEY = 'sb_secret_smoke_test_0123456789abcdef';
 const target =
   process.env.SMOKE_TARGET === 'bundle'
     ? ['node', ['test/serve-bundle.mjs']]
@@ -330,6 +338,10 @@ const api = spawn(target[0], target[1], {
     NODE_ENV: 'production',
     LOG_LEVEL: 'silent',
     CRON_SECRET,
+    RAZORPAY_WEBHOOK_SECRET: WEBHOOK_SECRET,
+    SUPABASE_SECRET_KEY: SECRET_KEY,
+    RAZORPAY_KEY_ID: '',
+    RAZORPAY_KEY_SECRET: '',
   },
   stdio: ['ignore', 'inherit', 'inherit'],
 });
@@ -854,6 +866,65 @@ try {
   r = await call(`/backoffice/accounts/${ACCOUNT}`, { token: SUP });
   check(r.status === 200 && r.json.data.account.phone === '919876543210' && r.json.data.blocked_reason === null,
     'account detail: plan, usage and "why blocked" (none)', r.json?.data);
+
+  // ---- Visit report lock ----
+  reqStatus = 'completed';
+  r = await call(`/backoffice/requests/${REQ_ID}/report`, { token: OPS, method: 'PUT', body: { visited_at: '2026-10-05', condition: 'good' } });
+  check(r.status === 409 && /locked/.test(r.json.error.message), 'published report is locked (completed request) → 409', r.json);
+  r = await call(`/backoffice/requests/${REQ_ID}/report/media/intent`, { token: OPS, method: 'POST', body: { kind: 'photo', mime_type: 'image/jpeg', file_size: 10 } });
+  check(r.status === 409, 'no new media on a published report', r.json);
+  reqStatus = 'requested';
+
+  // ---- M7: Payments ----
+  r = await call('/billing/checkout', { token: valid, method: 'POST', body: { plan_code: 'plus' } });
+  check(r.status === 503 && r.json.error.code === 'PAYMENTS_UNAVAILABLE', 'checkout without provider keys → 503 PAYMENTS_UNAVAILABLE (clear, not a crash)', r.json);
+  planMode = 'expired';
+  r = await call('/billing/checkout', { token: valid, method: 'POST', body: { plan_code: 'plus' } });
+  check(r.status === 503, 'Limited Access: the payment journey stays available (not 402)', r.json);
+  r = await call('/billing/orders', { token: valid });
+  check(r.status === 200, 'Limited Access: payment history stays available', r.json);
+  planMode = 'trial';
+  r = await call('/billing/orders/22222222-2222-2222-2222-222222222222', { token: valid });
+  check(r.status === 404, "another account's order → 404", r.status);
+  r = await call('/billing/checkout', { method: 'POST', body: { plan_code: 'plus' } });
+  check(r.status === 401, 'checkout without login → 401', r.status);
+
+  const ORDER = '0d000000-0000-0000-0000-000000000001';
+  const hook = (payload, signature, eventId = 'evt_smoke_1') =>
+    fetch(`${API}/webhooks/razorpay`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...(signature ? { 'x-razorpay-signature': signature } : {}), 'x-razorpay-event-id': eventId },
+      body: payload,
+    });
+  const sign = (body) => createHmac('sha256', WEBHOOK_SECRET).update(body).digest('hex');
+  const paid = JSON.stringify({
+    event: 'payment_link.paid',
+    payload: {
+      payment_link: { entity: { id: 'plink_smoke', notes: { order_id: ORDER } } },
+      payment: { entity: { id: 'pay_smoke', amount: 149900, currency: 'INR', method: 'upi', status: 'captured' } },
+    },
+  });
+
+  seen.length = 0;
+  let w = await hook(paid, null);
+  check(w.status === 401, 'webhook without signature → 401', w.status);
+  w = await hook(paid, 'deadbeef'.repeat(8));
+  check(w.status === 401, 'webhook with a forged signature → 401', w.status);
+  w = await hook(paid.replace('149900', '100'), sign(paid));
+  check(w.status === 401, 'tampered webhook body (amount changed after signing) → 401', w.status);
+  check(!seen.some((x) => x.url.startsWith('/rest/v1/rpc/record_payment_event')),
+    'rejected webhooks never reach the database', seen.map((x) => x.url));
+
+  w = await hook(paid, sign(paid));
+  const wb = await w.json();
+  const rec = seen.find((x) => x.url.startsWith('/rest/v1/rpc/record_payment_event'));
+  check(w.status === 200 && wb.data.outcome === 'plan_activated', 'correctly signed webhook → recorded', wb);
+  check(rec?.body?.p_order === ORDER && rec.body.p_amount === 149900 && rec.body.p_event_type === 'payment.captured' &&
+        rec.body.p_payment_ref === 'pay_smoke' && rec.body.p_checkout_ref === 'plink_smoke' && rec.body.p_event_id === 'evt_smoke_1',
+    'webhook normalised to a provider-neutral payment event', rec?.body);
+  check(rec?.apikey === SECRET_KEY, 'only the webhook path uses the server key', rec?.apikey?.slice(0, 12));
+  check(seen.filter((x) => x.apikey === SECRET_KEY).every((x) => x.url.startsWith('/rest/v1/rpc/record_payment_event')),
+    'server key used for record_payment_event and nothing else', seen.filter((x) => x.apikey === SECRET_KEY).map((x) => x.url));
 
   r = await call('/cron/keepalive');
   check(r.status === 401, 'keep-alive cron without the cron secret → 401', r);

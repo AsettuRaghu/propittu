@@ -72,10 +72,20 @@ export default function BackofficeRequestScreen() {
     >
       <Summary request={data} />
       {canManage ? <Actions request={data} /> : null}
-      {canManage && data.status !== 'requested' && data.status !== 'cancelled' ? (
+      {canManage && ['confirmed', 'scheduled', 'in_progress'].includes(data.status) ? (
         <ReportEditor key={data.report?.updated_at ?? 'new'} request={data} />
       ) : data.report ? (
-        <VisitReportView report={data.report} />
+        <View style={styles.section}>
+          <Banner
+            tone="info"
+            message={
+              data.status === 'completed'
+                ? 'Published to the customer when the request was completed. The report is now locked.'
+                : 'Draft report — not visible to the customer.'
+            }
+          />
+          <VisitReportView report={data.report} />
+        </View>
       ) : null}
     </ScrollView>
   );
@@ -130,6 +140,16 @@ function Summary({ request }: { request: BackofficeRequestDetail }) {
       />
       <KeyValue label="Note to customer" value={request.status_note} />
       <KeyValue label="Opened" value={formatDate(request.created_at)} />
+      <KeyValue
+        label="Payment"
+        value={
+          request.order
+            ? `${request.order.status === 'paid' ? 'Paid' : 'Awaiting payment'} · ${formatPrice(request.order.amount_paise)} · ${request.order.reference}`
+            : request.coverage === 'extra' && request.price_paise !== null
+              ? 'Not paid yet'
+              : null
+        }
+      />
     </Card>
   );
 }
@@ -162,7 +182,18 @@ function Actions({ request }: { request: BackofficeRequestDetail }) {
           onError: (err) => setProblem(errorMessage(err)),
         },
       );
-    if (status === 'cancelled') {
+    if (status === 'completed') {
+      Alert.alert(
+        'Complete this request?',
+        request.report
+          ? 'The visit report will be published to the customer and locked — check it before completing.'
+          : 'There is no visit report. Complete anyway?',
+        [
+          { text: 'Not yet', style: 'cancel' },
+          { text: 'Complete', onPress: go },
+        ],
+      );
+    } else if (status === 'cancelled') {
       Alert.alert(
         'Cancel this request?',
         request.coverage === 'included' && request.status !== 'requested'
@@ -315,7 +346,11 @@ function ReportEditor({ request }: { request: BackofficeRequestDetail }) {
 
   return (
     <View style={styles.section}>
-      <SectionTitle title={report ? 'Visit report' : 'Write the visit report'} />
+      <SectionTitle title={report ? 'Visit report (draft)' : 'Write the visit report'} />
+      <Text style={typography.caption}>
+        Only staff can see the report until you mark the request Completed. Then it is published to
+        the customer and locked. Every save keeps the previous version.
+      </Text>
       <Card style={styles.card}>
         {problem ? <Banner message={problem} /> : null}
         <DateField

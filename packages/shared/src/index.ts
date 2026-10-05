@@ -4,3 +4,4 @@ export * from './types';
 export * from './completion';
 export * from './plans';
 export * from './services';
+export * from './billing';

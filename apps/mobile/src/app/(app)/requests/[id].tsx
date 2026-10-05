@@ -7,6 +7,7 @@ import {
   SERVICE_REQUEST_STATUS_LABELS,
   type ServiceRequest,
 } from '@propittu/shared';
+import { useServiceCheckout } from '@/api/billing';
 import { useCancelServiceRequest, useServiceRequest } from '@/api/queries';
 import { ErrorState, LoadingState } from '@/components/States';
 import { Badge, Button, Card, KeyValue } from '@/components/ui';
@@ -25,6 +26,7 @@ export default function ServiceRequestScreen() {
   const { id, submitted } = useLocalSearchParams<{ id: string; submitted?: string }>();
   const { data: request, isPending, error, refetch, isRefetching } = useServiceRequest(id);
   const cancel = useCancelServiceRequest(id);
+  const pay = useServiceCheckout(id);
 
   if (isPending) return <LoadingState />;
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
@@ -91,6 +93,36 @@ export default function ServiceRequestScreen() {
       <Timeline request={request} />
 
       {request.report ? <VisitReportView report={request.report} /> : null}
+
+      {request.coverage === 'extra' &&
+      request.price_paise !== null &&
+      request.status !== 'cancelled' ? (
+        request.order?.status === 'paid' ? (
+          <Card style={styles.card}>
+            <Text style={typography.bodyStrong}>
+              Paid {formatPrice(request.order.amount_paise)} · {request.order.reference}
+            </Text>
+          </Card>
+        ) : (
+          <Button
+            title={`Pay ${formatPrice(request.price_paise)}`}
+            icon="card-outline"
+            loading={pay.isPending}
+            onPress={() =>
+              pay.mutate(undefined, {
+                onSuccess: (order) =>
+                  Alert.alert(
+                    order.status === 'paid' ? 'Payment received' : 'Payment not confirmed yet',
+                    order.status === 'paid'
+                      ? 'Thank you! We will confirm the schedule with you.'
+                      : 'If you completed the payment, it updates here within a minute.',
+                  ),
+                onError: (err) => Alert.alert("Couldn't start the payment", errorMessage(err)),
+              })
+            }
+          />
+        )
+      ) : null}
 
       {request.status === 'requested' ? (
         <Button

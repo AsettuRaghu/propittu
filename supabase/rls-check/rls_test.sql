@@ -16,7 +16,7 @@
 -- ---------------------------------------------------------------------
 
 create schema tst;
-grant usage on schema tst to anon, authenticated;
+grant usage on schema tst to anon, authenticated, service_role;
 
 create function tst.ok(cond boolean, label text) returns void
 language plpgsql as $$
@@ -56,7 +56,7 @@ begin
   raise notice 'PASS  % (% rows)', label, n;
 end $$;
 
-grant execute on all functions in schema tst to anon, authenticated;
+grant execute on all functions in schema tst to anon, authenticated, service_role;
 
 create function tst.as_user(uid uuid) returns void
 language plpgsql as $$
@@ -599,8 +599,8 @@ select tst.ok((select price_paise from public.service_requests where description
   'existing requests keep the price they were opened at');
 
 select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
-select tst.rows('select * from public.visit_reports', 1, 'A reads the visit report for its property');
-select tst.rows('select * from public.visit_report_media', 1, 'A reads the visit media');
+select tst.rows('select * from public.visit_reports', 0, 'a DRAFT report (request not completed) is hidden from the customer');
+select tst.rows('select * from public.visit_report_media', 0, 'draft visit media is hidden from the customer');
 select tst.rows($$delete from public.visit_report_media$$, 0, 'A cannot delete visit media');
 
 -- Staff cancel a confirmed Included visit → usage released.
@@ -613,6 +613,166 @@ select tst.ok((select released_at is not null from public.usage_records u join p
 select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
 select tst.ok(public.included_remaining('acc0000a-0000-0000-0000-00000000000a', 'property_visit') = 1,
   'released usage returns the allowance');
+reset role;
+
+-- =====================================================================
+\echo
+\echo '== Visit report lifecycle: draft → published on completion → locked =='
+-- =====================================================================
+
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select public.create_service_request('a1a1a1a1-0000-0000-0000-000000000001',
+  (select id from public.services where code = 'property_visit'), 'Locked report visit');
+
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+select public.staff_update_service_request(
+  (select id from public.service_requests where description = 'Locked report visit'), 'confirmed');
+insert into public.visit_reports (service_request_id, account_id, property_id, visited_at, condition, observations, created_by)
+select id, account_id, property_id, current_date, 'good', 'v1', '55555555-5555-5555-5555-555555555555'
+from public.service_requests where description = 'Locked report visit';
+select tst.rows($$update public.visit_reports set observations = 'v2'
+                  where service_request_id = (select id from public.service_requests where description = 'Locked report visit')$$, 1,
+  'staff can edit a draft report');
+select tst.ok((select count(*) from public.visit_report_revisions r join public.visit_reports v on v.id = r.report_id
+               join public.service_requests sr on sr.id = v.service_request_id
+               where sr.description = 'Locked report visit' and r.snapshot->>'observations' = 'v1') = 1,
+  'every edit keeps the previous version (revision history)');
+insert into public.visit_report_media (report_id, account_id, kind, storage_path, mime_type, file_size, upload_status, created_by)
+select v.id, v.account_id, 'photo', v.account_id::text || '/visits/r2/m1.jpg', 'image/jpeg', 10, 'ready', '55555555-5555-5555-5555-555555555555'
+from public.visit_reports v join public.service_requests sr on sr.id = v.service_request_id
+where sr.description = 'Locked report visit';
+
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rows($$select * from public.visit_reports v join public.service_requests sr on sr.id = v.service_request_id
+                  where sr.description = 'Locked report visit'$$, 0, 'customer cannot see the report while it is a draft');
+
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+select public.staff_update_service_request(
+  (select id from public.service_requests where description = 'Locked report visit'), 'completed');
+select tst.rows($$update public.visit_reports set observations = 'v3'
+                  where service_request_id = (select id from public.service_requests where description = 'Locked report visit')$$, 0,
+  'a published report is LOCKED (staff edit touches 0 rows)');
+select tst.rejects($$insert into public.visit_report_media (report_id, account_id, kind, storage_path, mime_type, file_size, created_by)
+                     select v.id, v.account_id, 'photo', v.account_id::text || '/visits/r2/m2.jpg', 'image/jpeg', 10, '55555555-5555-5555-5555-555555555555'
+                     from public.visit_reports v join public.service_requests sr on sr.id = v.service_request_id
+                     where sr.description = 'Locked report visit'$$,
+  'no media can be added to a published report');
+select tst.rows($$delete from public.visit_report_media where storage_path like '%/visits/r2/%'$$, 0,
+  'media of a published report cannot be deleted');
+
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.ok((select observations from public.visit_reports) = 'v2', 'customer sees the published (final) report');
+select tst.rows('select * from public.visit_report_media', 1, 'customer sees the published report''s media');
+select tst.rows('select * from public.visit_report_revisions', 0, 'customers cannot read report revisions');
+reset role;
+
+
+-- =====================================================================
+\echo
+\echo '== M7: Orders, payments, refunds, webhooks =='
+-- =====================================================================
+
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select public.create_plan_order('plus');
+select tst.ok((select amount_paise = 149900 and status = 'pending' and kind = 'plan' from public.orders),
+  'A creates a Plus order priced from the catalogue (₹1,499)');
+select tst.rejects($$select public.create_plan_order('trial')$$, 'the Trial cannot be bought');
+select tst.rejects($$select public.create_plan_order('platinum')$$, 'unknown plan rejected');
+select tst.rejects($$insert into public.orders (account_id, user_id, kind, plan_version_id, description, amount_paise)
+                     select 'acc0000a-0000-0000-0000-00000000000a', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'plan', id, 'cheap', 1 from public.plan_versions limit 1$$,
+  'A cannot insert an order directly (cannot set its own price)');
+select tst.rejects($$update public.orders set status = 'paid'$$, 'A cannot mark its order paid');
+select tst.rejects($$insert into public.payments (order_id, account_id, provider, amount_paise, status)
+                     select id, account_id, 'razorpay', amount_paise, 'captured' from public.orders$$,
+  'A cannot insert a captured payment');
+select public.attach_checkout((select id from public.orders where kind = 'plan' and status = 'pending'),
+  'razorpay', 'plink_A1', 'https://rzp.io/test');
+select tst.ok((select status from public.payments) = 'created', 'checkout attached: payment created, not captured');
+select tst.rejects($$select public.record_payment_event('razorpay', 'evt_forged', 'payment.captured',
+                     (select id from public.orders limit 1), 'pay_x', 149900, 'INR')$$,
+  'A cannot call record_payment_event (webhook path is server-only)');
+select tst.rejects($$select public.create_service_order(
+                     (select id from public.service_requests where description = 'Extra visit please'))$$,
+  'a cancelled request cannot be paid');
+select public.create_service_order((select id from public.service_requests where description = 'Please inspect the boundary wall'));
+select tst.ok((select amount_paise from public.orders where kind = 'extra_service') = 149900,
+  'Extra Service order uses the request''s snapshotted price');
+
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.rows('select * from public.orders', 0, 'B cannot see A''s orders');
+select tst.rows('select * from public.payments', 0, 'B cannot see A''s payments');
+select tst.rejects($$select public.attach_checkout((select id from public.orders limit 1), 'razorpay', 'plink_B', 'x')$$,
+  'B cannot attach a checkout to A''s order');
+select tst.rejects($$select public.create_service_order('00000000-0000-0000-0000-000000000000')$$,
+  'B cannot pay for a request it does not own');
+reset role;
+
+-- The verified webhook (service_role) is the only path to "paid".
+set role service_role;
+select tst.ok(public.record_payment_event('razorpay', 'evt_1', 'payment.captured',
+  (select id from public.orders where kind = 'plan' and status = 'pending'), 'pay_1', 149900, 'INR', 'upi', 'plink_A1') = 'plan_activated',
+  'captured webhook records the paid Plan');
+select tst.ok(public.record_payment_event('razorpay', 'evt_1', 'payment.captured',
+  (select id from public.orders where kind = 'plan'), 'pay_1', 149900, 'INR') = 'duplicate',
+  'replayed webhook is ignored (idempotent)');
+select tst.ok(public.record_payment_event('razorpay', 'evt_2', 'payment.captured',
+  (select id from public.orders where kind = 'plan'), 'pay_1b', 149900, 'INR') = 'already_paid',
+  'second capture for a paid order does not grant twice');
+select tst.ok(public.record_payment_event('razorpay', 'evt_3', 'payment.captured',
+  (select id from public.orders where kind = 'extra_service'), 'pay_3', 100, 'INR') = 'amount_mismatch',
+  'amount mismatch never marks an order paid');
+select tst.ok((select status from public.orders where kind = 'extra_service') = 'pending', 'mismatched order stays pending');
+select tst.ok(public.record_payment_event('razorpay', 'evt_4', 'refund.processed', null, 'pay_1', 149900, 'INR', null, null, 'rfnd_1') = 'refund_recorded',
+  'refund recorded as a separate event');
+reset role;
+
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+-- A already had Plus (staff grant), so the paid period queues after it.
+select tst.ok((select count(*) from public.account_plans where source = 'payment' and starts_at > now()) = 1,
+  'paying for the Plan you already have extends it (queued, no days lost)');
+select tst.ok((select status = 'captured' and provider_payment_ref = 'pay_1' and method = 'upi' from public.payments
+               where provider_checkout_ref = 'plink_A1'),
+  'payment captured with the provider reference');
+select tst.ok((select count(*) from public.refunds) = 1 and (select status from public.payments where provider_payment_ref = 'pay_1') = 'captured',
+  'refund does not overwrite the original payment');
+select tst.rows('select * from public.payment_events', 0, 'customers cannot read the webhook log');
+
+-- Renewal of the same paid Plan queues after the current period.
+select public.create_plan_order('plus');
+reset role;
+set role service_role;
+select public.record_payment_event('razorpay', 'evt_6', 'payment.captured',
+  (select id from public.orders where kind = 'plan' and status = 'pending'), 'pay_6', 149900, 'INR');
+reset role;
+select tst.ok((select count(*) from public.account_plans where account_id = 'acc0000a-0000-0000-0000-00000000000a' and source = 'payment' and starts_at > now()) = 2,
+  'a further renewal queues after the previous one');
+
+-- B: Trial → paid Plus starts immediately and ends the Trial.
+set role authenticated;
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select public.create_plan_order('plus');
+reset role;
+set role service_role;
+select tst.ok(public.record_payment_event('razorpay', 'evt_7', 'payment.captured',
+  (select id from public.orders where account_id = 'acc0000b-0000-0000-0000-00000000000b' and status = 'pending'), 'pay_7', 149900, 'INR') = 'plan_activated',
+  'B pays for Plus');
+reset role;
+set role authenticated;
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.ok((select ap.source from public.account_plans ap
+               where ap.starts_at <= now() and ap.ends_at > now() order by ap.starts_at desc limit 1) = 'payment',
+  'Trial → paid: the paid Plan is in force immediately');
+select tst.ok((select ends_at <= now() from public.account_plans where source = 'trial'),
+  'the Trial is ended when the paid Plan starts');
+reset role;
+
+set role authenticated;
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+select tst.ok((select count(*) from public.payment_events) = 6, 'staff can read the webhook log (the replay is stored once)');
+select tst.ok((select count(*) from public.orders) = 4, 'staff can see all orders');
 reset role;
 
 -- =====================================================================
@@ -684,7 +844,7 @@ select tst.rows($$delete from public.properties where id = 'a1a1a1a1-0000-0000-0
 select tst.rows('select * from public.property_photos',    0, 'photos cascade-deleted');
 select tst.rows('select * from public.property_documents', 0, 'documents cascade-deleted');
 select tst.rows('select * from public.property_videos', 0, 'videos cascade-deleted');
-select tst.rows('select * from public.service_requests',   3, 'service request history survives');
+select tst.rows('select * from public.service_requests',   4, 'service request history survives');
 select tst.ok((select property_id from public.service_requests limit 1) is null,
   'surviving request has property_id nulled');
 

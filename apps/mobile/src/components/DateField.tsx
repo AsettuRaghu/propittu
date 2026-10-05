@@ -68,6 +68,8 @@ export function DateField({
             maximumDate={maximumDate}
             onChange={(_e, date) => date && onChange(date)}
             accentColor={colors.primary}
+            // The app is light-only; without this iOS renders it dark in dark mode.
+            themeVariant="light"
           />
         ) : (
           <Pressable onPress={openAndroid} style={styles.choose} accessibilityRole="button">

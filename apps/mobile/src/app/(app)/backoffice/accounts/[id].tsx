@@ -3,7 +3,9 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   formatIndianMobile,
+  formatPrice,
   formatStorageMb,
+  ORDER_STATUS_LABELS,
   INCLUDED_SERVICE_LABELS,
   PLAN_STATUS_LABELS,
   PROPERTY_TYPE_LABELS,
@@ -189,6 +191,29 @@ export default function BackofficeAccountScreen() {
         {data.properties.length === 0 ? (
           <Text style={typography.small}>No properties yet.</Text>
         ) : null}
+      </View>
+
+      <View style={styles.section}>
+        <SectionTitle title={`Payments (${data.orders.length})`} />
+        {data.orders.map((o) => (
+          <Card key={o.id} style={styles.listRow}>
+            <View style={styles.flex}>
+              <Text style={typography.bodyStrong}>
+                {formatPrice(o.amount_paise)} · {o.description}
+              </Text>
+              <Text style={typography.small}>
+                {o.reference} · {formatDate(o.paid_at ?? o.created_at)}
+                {o.payment?.provider_payment_ref ? ` · ${o.payment.provider_payment_ref}` : ''}
+                {o.refunded_paise > 0 ? ` · refunded ${formatPrice(o.refunded_paise)}` : ''}
+              </Text>
+            </View>
+            <Badge
+              label={ORDER_STATUS_LABELS[o.status]}
+              tone={o.status === 'paid' ? 'success' : 'warning'}
+            />
+          </Card>
+        ))}
+        {data.orders.length === 0 ? <Text style={typography.small}>No payments yet.</Text> : null}
       </View>
 
       <View style={styles.section}>

@@ -12,6 +12,7 @@ import {
   type ServiceRequestStatus,
   type StaffRole,
 } from './constants';
+import type { Order } from './billing';
 import type { AccountPlanState } from './plans';
 import type {
   Property,
@@ -108,6 +109,8 @@ export interface VisitReport {
 
 export interface ServiceRequestDetail extends ServiceRequest {
   report: VisitReport | null;
+  /** Latest payment order for an Extra Service (null when none). */
+  order: Order | null;
 }
 
 /* ------------------------------------------------------------------ *
@@ -158,6 +161,7 @@ export interface BackofficeRequest extends ServiceRequest {
 export interface BackofficeRequestDetail extends BackofficeRequest {
   report: VisitReport | null;
   property_address: string | null;
+  order: Order | null;
 }
 
 export interface BackofficeAccountDetail {
@@ -170,6 +174,7 @@ export interface BackofficeAccountDetail {
     'id' | 'name' | 'property_type' | 'city' | 'document_count' | 'photo_count' | 'video_count'
   >[];
   requests: BackofficeRequest[];
+  orders: Order[];
 }
 
 export interface BackofficeProperty {
