@@ -1,6 +1,9 @@
 import type {
+  AccountRole,
+  AccountStatus,
   ApiErrorCode,
   AreaUnit,
+  StaffRole,
   DocumentType,
   PropertyType,
   ServiceCategory,
@@ -38,6 +41,14 @@ export interface Me {
   created_at: string;
   property_count: number;
   service_request_count: number;
+  /** The Account this user belongs to (M1). V1: exactly one. */
+  account: {
+    id: string;
+    status: AccountStatus;
+    role: AccountRole;
+  };
+  /** Non-null when this user is Backoffice staff (M9). */
+  staff_role: StaffRole | null;
 }
 
 /* ------------------------------------------------------------------ *

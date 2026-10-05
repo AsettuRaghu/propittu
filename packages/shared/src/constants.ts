@@ -213,6 +213,37 @@ export const API_ERROR_CODES = [
   'UPLOAD_NOT_COMPLETED',
   'CONFLICT',
   'INTERNAL',
+  // Plans, Benefits and Usage (M5/M6)
+  'LIMITED_ACCESS', // no active Plan or Trial
+  'FEATURE_NOT_INCLUDED', // the Plan lacks this Feature Benefit
+  'LIMIT_REACHED', // a Usage Limit would be exceeded
 ] as const;
+
+/* ------------------------------------------------------------------ *
+ * Account (M1) and Backoffice staff (M9)
+ * ------------------------------------------------------------------ */
+
+export const ACCOUNT_STATUSES = ['active', 'suspended', 'closed'] as const;
+export type AccountStatus = (typeof ACCOUNT_STATUSES)[number];
+
+export const ACCOUNT_ROLES = ['owner', 'member'] as const;
+export type AccountRole = (typeof ACCOUNT_ROLES)[number];
+
+export const STAFF_ROLES = [
+  'super_admin',
+  'operations',
+  'support',
+  'finance',
+  'service_operations',
+] as const;
+export type StaffRole = (typeof STAFF_ROLES)[number];
+
+export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
+  super_admin: 'Super Admin',
+  operations: 'Operations',
+  support: 'Customer Support',
+  finance: 'Finance',
+  service_operations: 'Service Operations',
+};
 
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];

@@ -8,6 +8,7 @@ import {
   type UploadIntent,
 } from '@propittu/shared';
 import { auth } from '../auth.js';
+import { audit } from '../audit.js';
 import { HttpError, invalid, must, notFound, ok, uuidParam } from '../errors.js';
 import { assertOwnsProperty } from '../ownership.js';
 import {
@@ -56,7 +57,7 @@ function toPhoto(row: PhotoRow, url: string | null): PropertyPhoto {
 /** Ready photos with fresh signed URLs, oldest first. Shared with GET /properties/:id. */
 export async function listReadyPhotos(
   db: SupabaseClient,
-  userId: string,
+  accountId: string,
   propertyId: string,
 ): Promise<PropertyPhoto[]> {
   const rows = must<PhotoRow[]>(
@@ -64,7 +65,7 @@ export async function listReadyPhotos(
       .from('property_photos')
       .select(PHOTO_COLUMNS)
       .eq('property_id', propertyId)
-      .eq('user_id', userId)
+      .eq('account_id', accountId)
       .eq('upload_status', 'ready')
       .order('created_at', { ascending: true }),
   );
@@ -78,36 +79,37 @@ export async function listReadyPhotos(
 
 /* GET /properties/:id/photos */
 photosRouter.get('/properties/:id/photos', async (req, res) => {
-  const { db, userId } = auth(req);
+  const { db, accountId } = auth(req);
   const propertyId = uuidParam(req.params.id, 'Property');
-  await assertOwnsProperty(db, userId, propertyId);
-  ok(res, await listReadyPhotos(db, userId, propertyId));
+  await assertOwnsProperty(db, accountId, propertyId);
+  ok(res, await listReadyPhotos(db, accountId, propertyId));
 });
 
 /* POST /properties/:id/photos/intent */
 photosRouter.post('/properties/:id/photos/intent', async (req, res) => {
-  const { db, userId } = auth(req);
+  const { db, userId, accountId } = auth(req);
   const propertyId = uuidParam(req.params.id, 'Property');
   const input = photoIntentSchema.parse(req.body);
-  await assertOwnsProperty(db, userId, propertyId);
+  await assertOwnsProperty(db, accountId, propertyId);
 
   const existing = await db
     .from('property_photos')
     .select('id', { count: 'exact', head: true })
     .eq('property_id', propertyId)
-    .eq('user_id', userId)
+    .eq('account_id', accountId)
     .eq('upload_status', 'ready');
   must(existing);
   if ((existing.count ?? 0) >= MAX_PHOTOS_PER_PROPERTY) {
     throw invalid(`A property can have at most ${MAX_PHOTOS_PER_PROPERTY} photos`);
   }
 
-  const storagePath = objectPath(userId, propertyId, input.mime_type);
+  const storagePath = objectPath(accountId, propertyId, input.mime_type);
   const row = must<{ id: string }>(
     await db
       .from('property_photos')
       .insert({
         property_id: propertyId,
+        account_id: accountId,
         user_id: userId,
         storage_path: storagePath,
         mime_type: input.mime_type,
@@ -136,7 +138,7 @@ photosRouter.post('/properties/:id/photos/intent', async (req, res) => {
 
 /* POST /properties/:id/photos/:photoId/confirm — idempotent */
 photosRouter.post('/properties/:id/photos/:photoId/confirm', async (req, res) => {
-  const { db, userId } = auth(req);
+  const { db, accountId } = auth(req);
   const propertyId = uuidParam(req.params.id, 'Property');
   const photoId = uuidParam(req.params.photoId, 'Photo');
 
@@ -146,7 +148,7 @@ photosRouter.post('/properties/:id/photos/:photoId/confirm', async (req, res) =>
       .select(PHOTO_COLUMNS)
       .eq('id', photoId)
       .eq('property_id', propertyId)
-      .eq('user_id', userId)
+      .eq('account_id', accountId)
       .maybeSingle(),
   );
   if (!row) throw notFound('Photo');
@@ -166,8 +168,9 @@ photosRouter.post('/properties/:id/photos/:photoId/confirm', async (req, res) =>
         .from('property_photos')
         .update({ upload_status: 'ready' })
         .eq('id', row.id)
-        .eq('user_id', userId),
+        .eq('account_id', accountId),
     );
+    await audit(auth(req), 'photo.uploaded', { type: 'photo', id: row.id });
   }
 
   const urls = await signDownloads(db, BUCKET, [row.storage_path]);
@@ -180,7 +183,7 @@ photosRouter.post('/properties/:id/photos/:photoId/confirm', async (req, res) =>
  * removed short of deleting the whole property. See docs/DECISIONS.md.
  */
 photosRouter.delete('/photos/:id', async (req, res) => {
-  const { db, userId } = auth(req);
+  const { db, accountId } = auth(req);
   const id = uuidParam(req.params.id, 'Photo');
 
   const row = must<{ id: string; storage_path: string } | null>(
@@ -188,13 +191,14 @@ photosRouter.delete('/photos/:id', async (req, res) => {
       .from('property_photos')
       .select('id, storage_path')
       .eq('id', id)
-      .eq('user_id', userId)
+      .eq('account_id', accountId)
       .maybeSingle(),
   );
   if (!row) throw notFound('Photo');
 
   await removeObjects(db, BUCKET, [row.storage_path]);
-  must(await db.from('property_photos').delete().eq('id', row.id).eq('user_id', userId));
+  must(await db.from('property_photos').delete().eq('id', row.id).eq('account_id', accountId));
+  await audit(auth(req), 'photo.deleted', { type: 'photo', id: row.id });
 
   res.status(204).end();
 });

@@ -15,8 +15,11 @@ with the date when finished.
   message, not broken screens.
 - **Logout cancels the session on Supabase**, not just on the phone, and clears
   all cached data on the device. Logout also works offline.
-- **Three independent "own data only" walls:** the API derives the user from the
-  verified token and filters every query; Postgres RLS refuses other users'
+- **Account isolation (M1/M10):** every customer-owned row carries `account_id`;
+  the API resolves user → account server-side and ignores any account or user
+  ID sent by the client. Staff are a separate boundary (`staff_members`).
+- **Three independent "own data only" walls:** the API derives the user and
+  Account from the verified token and filters every query by Account; Postgres RLS refuses other users'
   rows; Storage policies restrict files to the owner's folder.
 - **The API holds no master key.** It acts as the signed-in user, so RLS applies
   to every request. The phone holds only the public publishable key.
@@ -25,7 +28,7 @@ with the date when finished.
 - **Validated twice:** shared rules in the app for instant feedback, and
   authoritatively in the API and database (types, sizes, PIN format and so on).
 - **Automated security tests gate every deploy** (GitHub Actions): 51 database
-  checks, 29 API checks; a 46-check end-to-end run was done against production.
+  checks (80 since M1), 29 API checks (34 since M1); a 46-check end-to-end run was done against production.
 - Tokens are redacted from logs; all traffic is HTTPS.
 
 ## Backlog

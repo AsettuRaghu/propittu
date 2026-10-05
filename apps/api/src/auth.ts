@@ -2,14 +2,23 @@ import type { Request, RequestHandler } from 'express';
 import { createRemoteJWKSet, errors as joseErrors, jwtVerify } from 'jose';
 import { isAuthRetryableFetchError, type SupabaseClient } from '@supabase/supabase-js';
 import { env } from './env.js';
-import { HttpError, unauthenticated } from './errors.js';
+import { fromDbError, HttpError, unauthenticated } from './errors.js';
 import { authServerClient, userClient } from './supabase.js';
 
-export interface AuthContext {
+interface Identity {
   /** From the verified token's `sub`. NEVER from the request body (§31). */
   userId: string;
   /** E.164, e.g. "+919876543210". */
   phone: string | null;
+}
+
+export interface AuthContext extends Identity {
+  /**
+   * The caller's Account (M1), resolved server-side from the user id.
+   * Never taken from the client — every ownership check uses this.
+   */
+  accountId: string;
+  accountRole: 'owner' | 'member';
   /** RLS-scoped client acting as this user. */
   db: SupabaseClient;
 }
@@ -40,7 +49,7 @@ const jwks = createRemoteJWKSet(new URL(`${issuer}/.well-known/jwks.json`));
 const toE164 = (phone: unknown): string | null =>
   typeof phone === 'string' && phone.length > 0 ? `+${phone.replace(/^\+/, '')}` : null;
 
-async function verifyWithAuthServer(token: string): Promise<Omit<AuthContext, 'db'>> {
+async function verifyWithAuthServer(token: string): Promise<Identity> {
   const { data, error } = await authServerClient.auth.getUser(token);
   if (error && isAuthRetryableFetchError(error)) {
     throw new HttpError(503, 'INTERNAL', 'Sign-in is temporarily unavailable. Please try again.');
@@ -49,7 +58,7 @@ async function verifyWithAuthServer(token: string): Promise<Omit<AuthContext, 'd
   return { userId: data.user.id, phone: toE164(data.user.phone) };
 }
 
-async function verifyAccessToken(token: string): Promise<Omit<AuthContext, 'db'>> {
+async function verifyAccessToken(token: string): Promise<Identity> {
   try {
     const { payload } = await jwtVerify(token, jwks, { issuer, audience: 'authenticated' });
     if (typeof payload.sub !== 'string' || payload.role !== 'authenticated') {
@@ -80,7 +89,25 @@ export const requireAuth: RequestHandler = async (req, _res, next) => {
 
   const token = match[1];
   const identity = await verifyAccessToken(token);
-  req.auth = { ...identity, db: userClient(token) };
+  const db = userClient(token);
+
+  // User → Account (M1). RLS lets a user read only their own membership.
+  const { data: membership, error } = await db
+    .from('account_members')
+    .select('account_id, role')
+    .eq('user_id', identity.userId)
+    .maybeSingle();
+  if (error) throw fromDbError(error);
+  if (!membership) {
+    throw new HttpError(403, 'FORBIDDEN', 'No Propittu account is linked to this login');
+  }
+
+  req.auth = {
+    ...identity,
+    accountId: membership.account_id as string,
+    accountRole: membership.role as AuthContext['accountRole'],
+    db,
+  };
   next();
 };
 

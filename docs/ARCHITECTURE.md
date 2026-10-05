@@ -1,0 +1,69 @@
+# Architecture
+
+```
+Expo mobile app (iOS/Android)  ──login/logout──►  Supabase Auth (Mumbai)
+        │
+        │ HTTPS + Bearer <Supabase access token>
+        ▼
+Propittu API: one stateless Express function on Vercel (bom1, Mumbai)
+   the business boundary: identity → Account → ownership → Benefits → Usage → action
+        │ queries AS the signed-in user (RLS enforced)
+        ▼
+Supabase Postgres (system of record) + Supabase Storage (private files)
+```
+
+- **Mobile is a client.** It never decides Benefits, Usage or ownership.
+- **The API is the business boundary**, used by both the customer app and the Backoffice (staff mode).
+- **Supabase is the system of record.** Schema changes only via versioned migrations in `supabase/migrations/`.
+- **No microservices, queues or caches.** Provider adapters only where required (payments; later notifications and AI).
+
+## Domain model
+
+```
+User (Supabase Auth) ──member of──► Account ──► Plan → Benefits → Usage        (M5/M6, checkpoint 3)
+                                       │
+                                       ├──► Property ──► Photos / Videos       (M2/M3)
+                                       │       │    └──► Documents
+                                       │       └──► Service Requests ──► Visit report (M4)
+                                       ├──► Orders → Payments → Refunds        (M7)
+                                       └──► Audit events                       (M11)
+
+Staff (staff_members) ──► Backoffice: reads across Accounts; staff-only actions  (M9)
+```
+
+### Account (M1)
+- The commercial owner of everything: Plan, Trial eligibility, Properties and Usage belong to the **Account**, not to a phone number.
+- `account_members(account_id, user_id, role)`. **V1: one user per account**, enforced by a unique index on `user_id`. Multi-user later means dropping that index and adding roles and permissions.
+- Created automatically with the first login (database trigger), together with the profile.
+
+### Authorization: every protected operation (M10)
+1. **Authenticated?** The Supabase JWT is verified locally against the published signing keys.
+2. **Which Account?** Looked up server-side from `account_members`, never taken from the client.
+3. **Does the resource belong to that Account?** e.g. `assertOwnsProperty(db, accountId, propertyId)`. Another account's resource returns 404, so IDs can't be probed.
+4. **Benefit available?** (checkpoint 3)
+5. **Usage available?** (checkpoint 3)
+6. **Perform the action**, as the user, so Postgres RLS re-checks account membership.
+
+Staff are a **separate boundary**: `staff_members`, plus `is_staff()` in RLS. Customers can never reach staff-only functions.
+
+### Storage (M3/M10)
+- Private buckets `property-photos` and `property-documents`; a videos bucket arrives in checkpoint 2.
+- Object paths are chosen by the API: `<account_id>/<property_id>/<uuid>.<ext>`. Uploads made before accounts existed use `<user_id>/…` and remain readable.
+- Uploads and downloads use short-lived signed URLs, issued only after the ownership checks above.
+
+### Audit and observability (M11)
+- `audit_events`: important business events, append-only; staff read, customers write their own.
+- Structured JSON logs (pino) with request IDs; tokens redacted. `/health` checks liveness. A daily cron (`/cron/keepalive`) keeps the Supabase free project awake.
+
+## Where things live
+
+| Path | What |
+|---|---|
+| `apps/api/src/auth.ts` | Token verification + user → account resolution |
+| `apps/api/src/ownership.ts` | Resource-belongs-to-account checks |
+| `apps/api/src/audit.ts` | Audit event helper (never fails the request) |
+| `apps/api/src/routes/` | One router per resource |
+| `packages/shared/src/` | Types, zod schemas and constants shared by API and app |
+| `supabase/migrations/` | All schema and RLS, in order |
+| `supabase/rls-check/` | Database security suite (`npm run test:rls`) |
+| `apps/api/test/smoke.mjs` | API security suite (`npm run test:api`) |

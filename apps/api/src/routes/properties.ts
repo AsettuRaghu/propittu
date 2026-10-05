@@ -8,6 +8,7 @@ import {
   type PropertySummary,
 } from '@propittu/shared';
 import { auth } from '../auth.js';
+import { audit } from '../audit.js';
 import { must, notFound, ok, uuidParam } from '../errors.js';
 import { assertOwnsProperty } from '../ownership.js';
 import { removeObjects, signDownloads } from '../storage.js';
@@ -46,13 +47,13 @@ function toProperty(row: PropertyRow): Property {
  * ------------------------------------------------------------------ */
 
 propertiesRouter.get('/properties', async (req, res) => {
-  const { db, userId } = auth(req);
+  const { db, accountId } = auth(req);
 
   const rows = must<SummaryRow[]>(
     await db
       .from('property_summaries')
       .select(SUMMARY_COLUMNS)
-      .eq('user_id', userId)
+      .eq('account_id', accountId)
       .order('created_at', { ascending: false }),
   );
 
@@ -72,17 +73,18 @@ propertiesRouter.get('/properties', async (req, res) => {
  * ------------------------------------------------------------------ */
 
 propertiesRouter.post('/properties', async (req, res) => {
-  const { db, userId } = auth(req);
+  const { db, userId, accountId } = auth(req);
   const input = createPropertySchema.parse(req.body);
 
   const row = must<PropertyRow>(
     await db
       .from('properties')
-      .insert({ ...input, user_id: userId })
+      .insert({ ...input, account_id: accountId, user_id: userId })
       .select(PROPERTY_COLUMNS)
       .single(),
   );
 
+  await audit(auth(req), 'property.created', { type: 'property', id: row.id });
   ok(res, toProperty(row), 201);
 });
 
@@ -91,16 +93,21 @@ propertiesRouter.post('/properties', async (req, res) => {
  * ------------------------------------------------------------------ */
 
 propertiesRouter.get('/properties/:id', async (req, res) => {
-  const { db, userId } = auth(req);
+  const { db, accountId } = auth(req);
   const id = uuidParam(req.params.id, 'Property');
 
   const [propertyResult, summaryResult] = await Promise.all([
-    db.from('properties').select(PROPERTY_COLUMNS).eq('id', id).eq('user_id', userId).maybeSingle(),
+    db
+      .from('properties')
+      .select(PROPERTY_COLUMNS)
+      .eq('id', id)
+      .eq('account_id', accountId)
+      .maybeSingle(),
     db
       .from('property_summaries')
       .select('document_count, service_request_count')
       .eq('id', id)
-      .eq('user_id', userId)
+      .eq('account_id', accountId)
       .maybeSingle(),
   ]);
 
@@ -112,7 +119,7 @@ propertiesRouter.get('/properties/:id', async (req, res) => {
 
   const data: PropertyDetail = {
     ...toProperty(property),
-    photos: await listReadyPhotos(db, userId, id),
+    photos: await listReadyPhotos(db, accountId, id),
     document_count: counts?.document_count ?? 0,
     service_request_count: counts?.service_request_count ?? 0,
   };
@@ -125,7 +132,7 @@ propertiesRouter.get('/properties/:id', async (req, res) => {
  * ------------------------------------------------------------------ */
 
 propertiesRouter.patch('/properties/:id', async (req, res) => {
-  const { db, userId } = auth(req);
+  const { db, accountId } = auth(req);
   const id = uuidParam(req.params.id, 'Property');
   const input = updatePropertySchema.parse(req.body);
 
@@ -134,7 +141,7 @@ propertiesRouter.patch('/properties/:id', async (req, res) => {
       .from('properties')
       .update(input)
       .eq('id', id)
-      .eq('user_id', userId)
+      .eq('account_id', accountId)
       .select(PROPERTY_COLUMNS)
       .maybeSingle(),
   );
@@ -152,24 +159,29 @@ propertiesRouter.patch('/properties/:id', async (req, res) => {
  * ------------------------------------------------------------------ */
 
 propertiesRouter.delete('/properties/:id', async (req, res) => {
-  const { db, userId } = auth(req);
+  const { db, accountId } = auth(req);
   const id = uuidParam(req.params.id, 'Property');
-  await assertOwnsProperty(db, userId, id);
+  await assertOwnsProperty(db, accountId, id);
 
   const [photos, documents] = await Promise.all([
-    db.from('property_photos').select('storage_path').eq('property_id', id).eq('user_id', userId),
+    db
+      .from('property_photos')
+      .select('storage_path')
+      .eq('property_id', id)
+      .eq('account_id', accountId),
     db
       .from('property_documents')
       .select('storage_path')
       .eq('property_id', id)
-      .eq('user_id', userId),
+      .eq('account_id', accountId),
   ]);
 
   const paths = (r: { storage_path: string }[]) => r.map((x) => x.storage_path);
   await removeObjects(db, STORAGE_BUCKETS.photos, paths(must(photos)));
   await removeObjects(db, STORAGE_BUCKETS.documents, paths(must(documents)));
 
-  must(await db.from('properties').delete().eq('id', id).eq('user_id', userId));
+  must(await db.from('properties').delete().eq('id', id).eq('account_id', accountId));
+  await audit(auth(req), 'property.deleted', { type: 'property', id });
 
   res.status(204).end();
 });

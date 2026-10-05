@@ -21,6 +21,9 @@ const SB_URL = `http://127.0.0.1:${SB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}`;
 const PUBLISHABLE = 'sb_publishable_test_0123456789abcdef';
 const USER = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+const ACCOUNT = 'acc0000a-0000-0000-0000-00000000000a';
+// A signed-in user with no account membership (should be refused).
+const ORPHAN = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
 
 const { publicKey, privateKey } = await generateKeyPair('ES256');
 const { privateKey: rogueKey } = await generateKeyPair('ES256');
@@ -39,6 +42,20 @@ const fake = http.createServer((req, res) => {
       seen.push({ method: req.method, url: req.url, auth: req.headers.authorization, apikey: req.headers.apikey, body: body ? JSON.parse(body) : null });
       const single = (req.headers.accept || '').includes('vnd.pgrst.object');
       if (req.method === 'HEAD') { res.writeHead(200, { 'content-range': '*/3' }); return res.end(); }
+      // User → Account resolution (M1): only USER has a membership.
+      if (req.url.startsWith('/rest/v1/account_members')) {
+        const row = req.url.includes(`user_id=eq.${USER}`) ? { account_id: ACCOUNT, role: 'owner' } : null;
+        res.writeHead(200, { 'content-type': 'application/json' });
+        return res.end(JSON.stringify(single ? row : row ? [row] : []));
+      }
+      if (req.url.startsWith('/rest/v1/accounts')) {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        return res.end(JSON.stringify({ id: ACCOUNT, status: 'active' }));
+      }
+      if (req.method === 'POST' && req.url.startsWith('/rest/v1/audit_events')) {
+        res.writeHead(201);
+        return res.end();
+      }
       if (req.url.startsWith('/rest/v1/rpc/keepalive')) {
         res.writeHead(200, { 'content-type': 'application/json' });
         return res.end(JSON.stringify('2026-01-01T00:00:00+00:00'));
@@ -77,7 +94,7 @@ const iss = `${SB_URL}/auth/v1`;
 const mint = (opts = {}) => {
   const claims = { role: 'authenticated', phone: '919876543210', ...(opts.claims || {}) };
   return new SignJWT(claims).setProtectedHeader({ alg: 'ES256', kid: 'k1' })
-    .setSubject(USER).setIssuer(opts.iss ?? iss).setAudience(opts.aud ?? 'authenticated')
+    .setSubject(opts.sub ?? USER).setIssuer(opts.iss ?? iss).setAudience(opts.aud ?? 'authenticated')
     .setIssuedAt().setExpirationTime(opts.exp ?? '1h').sign(opts.key ?? privateKey);
 };
 const call = async (path, { token, method = 'GET', body, raw } = {}) => {
@@ -134,6 +151,11 @@ try {
   check(seen.length >= 3 && seen.every((s) => s.auth === `Bearer ${valid}`),
     'EVERY PostgREST call carried the USER\'S JWT (RLS applies on the API path)', seen.map((s) => s.auth?.slice(0, 20)));
   check(seen.every((s) => s.apikey === PUBLISHABLE), 'apikey header is the publishable key', seen.map((s) => s.apikey));
+  check(r.json?.data?.account?.id === ACCOUNT && r.json.data.account.role === 'owner', '/me returns the Account resolved server-side (M1)', r.json?.data?.account);
+  check(r.json?.data?.staff_role === null, '/me: a customer is not staff', r.json?.data?.staff_role);
+
+  r = await call('/me', { token: await mint({ sub: ORPHAN }) });
+  check(r.status === 403 && r.json.error.code === 'FORBIDDEN', 'valid login with no Account membership → 403', r);
 
   r = await call('/properties/not-a-uuid', { token: valid });
   check(r.status === 404 && r.json.error.code === 'NOT_FOUND', 'malformed id → 404 NOT_FOUND', r);
@@ -155,12 +177,15 @@ try {
   r = await call('/properties', {
     token: valid, method: 'POST',
     body: { property_type: 'land', name: '  My Hyderabad Plot  ', city: '', pincode: '500001', area_value: 2400, area_unit: 'sqft',
-            user_id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', id: 'evil' },
+            user_id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', account_id: 'acc0000b-0000-0000-0000-00000000000b', id: 'evil' },
   });
-  const insert = seen.find((s) => s.method === 'POST');
+  const insert = seen.find((s) => s.method === 'POST' && s.url.startsWith('/rest/v1/properties'));
+  const auditEvent = seen.find((s) => s.method === 'POST' && s.url.startsWith('/rest/v1/audit_events'));
   check(r.status === 201, 'POST /properties → 201', r);
   check(insert?.body?.user_id === USER, 'client-supplied user_id IGNORED; token identity used (§31)', insert?.body);
+  check(insert?.body?.account_id === ACCOUNT, 'forged account_id IGNORED; Account resolved from the token (M10)', insert?.body);
   check(insert && !('id' in insert.body), 'client-supplied id stripped', insert?.body);
+  check(auditEvent?.body?.action === 'property.created' && auditEvent.body.account_id === ACCOUNT && auditEvent.body.actor_user_id === USER, 'audit event recorded for the property creation (M11)', auditEvent?.body);
   check(insert?.body?.name === 'My Hyderabad Plot', 'name trimmed', insert?.body?.name);
   check(insert?.body?.city === null, 'empty optional field stored as null', insert?.body?.city);
 

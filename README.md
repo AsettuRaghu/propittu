@@ -120,6 +120,9 @@ Run from the repository root.
 
 ## Documentation
 
+- [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md): **start here** for M1–M12 progress and how to resume
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): architecture, domain model, authorization flow
+- [docs/requirements/](docs/requirements/): the master implementation requirements
 - [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md): manual Supabase configuration
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): Vercel (API) and EAS (app builds)
 - [docs/TESTING.md](docs/TESTING.md): what is automated, and the manual device checklist

@@ -7,6 +7,7 @@ import {
   type ServiceRequest,
 } from '@propittu/shared';
 import { auth } from '../auth.js';
+import { audit } from '../audit.js';
 import { invalid, must, notFound, ok, uuidParam } from '../errors.js';
 import { assertOwnsProperty } from '../ownership.js';
 
@@ -42,13 +43,13 @@ servicesRouter.get('/services', async (req, res) => {
 const listQuerySchema = z.object({ property_id: uuidSchema.optional() });
 
 servicesRouter.get('/service-requests', async (req, res) => {
-  const { db, userId } = auth(req);
+  const { db, accountId } = auth(req);
   const { property_id } = listQuerySchema.parse(req.query);
 
   let query = db
     .from('service_requests')
     .select(REQUEST_COLUMNS)
-    .eq('user_id', userId)
+    .eq('account_id', accountId)
     .order('created_at', { ascending: false });
   if (property_id) query = query.eq('property_id', property_id);
 
@@ -57,7 +58,7 @@ servicesRouter.get('/service-requests', async (req, res) => {
 
 /* GET /service-requests/:id */
 servicesRouter.get('/service-requests/:id', async (req, res) => {
-  const { db, userId } = auth(req);
+  const { db, accountId } = auth(req);
   const id = uuidParam(req.params.id, 'Service request');
 
   const row = must<ServiceRequest | null>(
@@ -65,7 +66,7 @@ servicesRouter.get('/service-requests/:id', async (req, res) => {
       .from('service_requests')
       .select(REQUEST_COLUMNS)
       .eq('id', id)
-      .eq('user_id', userId)
+      .eq('account_id', accountId)
       .maybeSingle(),
   );
   if (!row) throw notFound('Service request');
@@ -75,10 +76,10 @@ servicesRouter.get('/service-requests/:id', async (req, res) => {
 
 /* POST /service-requests */
 servicesRouter.post('/service-requests', async (req, res) => {
-  const { db, userId } = auth(req);
+  const { db, userId, accountId } = auth(req);
   const input = createServiceRequestSchema.parse(req.body);
 
-  await assertOwnsProperty(db, userId, input.property_id);
+  await assertOwnsProperty(db, accountId, input.property_id);
 
   const service = must<{ id: string } | null>(
     await db
@@ -95,6 +96,7 @@ servicesRouter.post('/service-requests', async (req, res) => {
     await db
       .from('service_requests')
       .insert({
+        account_id: accountId,
         user_id: userId,
         property_id: input.property_id,
         service_id: input.service_id,
@@ -104,5 +106,11 @@ servicesRouter.post('/service-requests', async (req, res) => {
       .single(),
   );
 
+  await audit(
+    auth(req),
+    'service_request.created',
+    { type: 'service_request', id: row.id },
+    { reference: row.reference },
+  );
   ok(res, row, 201);
 });

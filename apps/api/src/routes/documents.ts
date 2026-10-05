@@ -7,6 +7,7 @@ import {
   type UploadIntent,
 } from '@propittu/shared';
 import { auth } from '../auth.js';
+import { audit } from '../audit.js';
 import { env } from '../env.js';
 import { HttpError, must, notFound, ok, uuidParam } from '../errors.js';
 import { assertOwnsProperty } from '../ownership.js';
@@ -57,16 +58,16 @@ function cleanFileName(name: string): string {
 
 /* GET /properties/:id/documents — newest first */
 documentsRouter.get('/properties/:id/documents', async (req, res) => {
-  const { db, userId } = auth(req);
+  const { db, accountId } = auth(req);
   const propertyId = uuidParam(req.params.id, 'Property');
-  await assertOwnsProperty(db, userId, propertyId);
+  await assertOwnsProperty(db, accountId, propertyId);
 
   const rows = must<DocumentRow[]>(
     await db
       .from('property_documents')
       .select(DOCUMENT_COLUMNS)
       .eq('property_id', propertyId)
-      .eq('user_id', userId)
+      .eq('account_id', accountId)
       .eq('upload_status', 'ready')
       .order('created_at', { ascending: false }),
   );
@@ -76,17 +77,18 @@ documentsRouter.get('/properties/:id/documents', async (req, res) => {
 
 /* POST /properties/:id/documents/intent */
 documentsRouter.post('/properties/:id/documents/intent', async (req, res) => {
-  const { db, userId } = auth(req);
+  const { db, userId, accountId } = auth(req);
   const propertyId = uuidParam(req.params.id, 'Property');
   const input = documentIntentSchema.parse(req.body);
-  await assertOwnsProperty(db, userId, propertyId);
+  await assertOwnsProperty(db, accountId, propertyId);
 
-  const storagePath = objectPath(userId, propertyId, input.mime_type);
+  const storagePath = objectPath(accountId, propertyId, input.mime_type);
   const row = must<{ id: string }>(
     await db
       .from('property_documents')
       .insert({
         property_id: propertyId,
+        account_id: accountId,
         user_id: userId,
         document_type: input.document_type,
         file_name: cleanFileName(input.file_name),
@@ -116,7 +118,7 @@ documentsRouter.post('/properties/:id/documents/intent', async (req, res) => {
 
 /* POST /properties/:id/documents/:documentId/confirm — idempotent */
 documentsRouter.post('/properties/:id/documents/:documentId/confirm', async (req, res) => {
-  const { db, userId } = auth(req);
+  const { db, accountId } = auth(req);
   const propertyId = uuidParam(req.params.id, 'Property');
   const documentId = uuidParam(req.params.documentId, 'Document');
 
@@ -126,7 +128,7 @@ documentsRouter.post('/properties/:id/documents/:documentId/confirm', async (req
       .select(DOCUMENT_COLUMNS)
       .eq('id', documentId)
       .eq('property_id', propertyId)
-      .eq('user_id', userId)
+      .eq('account_id', accountId)
       .maybeSingle(),
   );
   if (!row) throw notFound('Document');
@@ -145,8 +147,9 @@ documentsRouter.post('/properties/:id/documents/:documentId/confirm', async (req
         .from('property_documents')
         .update({ upload_status: 'ready' })
         .eq('id', row.id)
-        .eq('user_id', userId),
+        .eq('account_id', accountId),
     );
+    await audit(auth(req), 'document.uploaded', { type: 'document', id: row.id });
   }
 
   ok(res, toDocument(row));
@@ -154,7 +157,7 @@ documentsRouter.post('/properties/:id/documents/:documentId/confirm', async (req
 
 /* GET /documents/:id/download — short-lived signed URL for viewing (§8.3) */
 documentsRouter.get('/documents/:id/download', async (req, res) => {
-  const { db, userId } = auth(req);
+  const { db, accountId } = auth(req);
   const id = uuidParam(req.params.id, 'Document');
 
   const row = must<DocumentRow | null>(
@@ -162,7 +165,7 @@ documentsRouter.get('/documents/:id/download', async (req, res) => {
       .from('property_documents')
       .select(DOCUMENT_COLUMNS)
       .eq('id', id)
-      .eq('user_id', userId)
+      .eq('account_id', accountId)
       .eq('upload_status', 'ready')
       .maybeSingle(),
   );
@@ -179,7 +182,7 @@ documentsRouter.get('/documents/:id/download', async (req, res) => {
 
 /* DELETE /documents/:id */
 documentsRouter.delete('/documents/:id', async (req, res) => {
-  const { db, userId } = auth(req);
+  const { db, accountId } = auth(req);
   const id = uuidParam(req.params.id, 'Document');
 
   const row = must<{ id: string; storage_path: string } | null>(
@@ -187,13 +190,14 @@ documentsRouter.delete('/documents/:id', async (req, res) => {
       .from('property_documents')
       .select('id, storage_path')
       .eq('id', id)
-      .eq('user_id', userId)
+      .eq('account_id', accountId)
       .maybeSingle(),
   );
   if (!row) throw notFound('Document');
 
   await removeObjects(db, BUCKET, [row.storage_path]);
-  must(await db.from('property_documents').delete().eq('id', row.id).eq('user_id', userId));
+  must(await db.from('property_documents').delete().eq('id', row.id).eq('account_id', accountId));
+  await audit(auth(req), 'document.deleted', { type: 'document', id: row.id });
 
   res.status(204).end();
 });
