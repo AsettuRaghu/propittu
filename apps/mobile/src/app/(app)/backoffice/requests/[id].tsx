@@ -163,26 +163,35 @@ function Summary({ request }: { request: BackofficeRequestDetail }) {
 
 /* ---- Progress strip ---------------------------------------------- */
 
-const FLOW: { status: ServiceRequestStatus; label: string }[] = [
-  { status: 'requested', label: 'Requested' },
-  { status: 'confirmed', label: 'Confirmed' },
-  { status: 'scheduled', label: 'Scheduled' },
-  { status: 'in_progress', label: 'Visit' },
-  { status: 'completed', label: 'Done' },
+/**
+ * The same four steps as the "Step N of 4" cards. The step you are on is
+ * the one whose action you still have to take:
+ *   Requested → step 1 (Confirm) … In Progress → step 4 (Report & complete).
+ */
+const FLOW: { label: string; current: ServiceRequestStatus }[] = [
+  { label: 'Confirm', current: 'requested' },
+  { label: 'Schedule', current: 'confirmed' },
+  { label: 'Visit', current: 'scheduled' },
+  { label: 'Report', current: 'in_progress' },
 ];
 
 function Steps({ status }: { status: ServiceRequestStatus }) {
   if (status === 'cancelled') return null;
-  const current = FLOW.findIndex((s) => s.status === status);
+  const current =
+    status === 'completed' ? FLOW.length : FLOW.findIndex((s) => s.current === status);
   return (
     <View style={styles.steps}>
       {FLOW.map((s, i) => {
-        const done = i < current || status === 'completed';
-        const active = i === current && status !== 'completed';
+        const done = i < current;
+        const active = i === current;
         return (
-          <View key={s.status} style={styles.step}>
+          <View key={s.label} style={styles.step}>
             <View style={[styles.dot, done && styles.dotDone, active && styles.dotActive]}>
-              {done ? <Ionicons name="checkmark" size={14} color={colors.onPrimary} /> : null}
+              {done ? (
+                <Ionicons name="checkmark" size={14} color={colors.onPrimary} />
+              ) : (
+                <Text style={[styles.dotNumber, active && styles.dotNumberActive]}>{i + 1}</Text>
+              )}
             </View>
             <Text style={[styles.stepLabel, (done || active) && styles.stepLabelOn]}>
               {s.label}
@@ -578,6 +587,8 @@ const styles = StyleSheet.create({
   },
   dotDone: { backgroundColor: colors.primary, borderColor: colors.primary },
   dotActive: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
+  dotNumber: { fontSize: 11, fontWeight: '600', color: colors.textSubtle },
+  dotNumberActive: { color: colors.primary },
   stepLabel: { fontSize: 11, color: colors.textSubtle },
   stepLabelOn: { color: colors.text, fontWeight: '600' },
   cancel: { alignSelf: 'center', padding: space.md },
