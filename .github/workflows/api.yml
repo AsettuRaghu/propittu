@@ -71,10 +71,11 @@ jobs:
       - name: API security (built bundle)
         run: npm run test:bundle --workspace @propittu/api
 
-      # Runs from the repo root: the Vercel project's Root Directory is
-      # apps/api, so the CLI picks up apps/api/.vercel/output built above.
+      # Deploys apps/api/.vercel/output, built and tested above. The Vercel
+      # project has no Root Directory set: it never builds from Git itself.
       - name: Deploy to Vercel (production)
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        working-directory: apps/api
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
