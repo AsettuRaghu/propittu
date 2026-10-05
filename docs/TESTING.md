@@ -2,6 +2,11 @@
 
 ## Automated
 
+GitHub Actions runs typecheck, lint, `test:rls` and `test:bundle` on every
+push and pull request that touches the API, and **blocks the deploy if any of
+them fail** ([.github/workflows/api.yml](../.github/workflows/api.yml)).
+Locally:
+
 ```bash
 npm test             # both suites below
 npm run typecheck    # all workspaces

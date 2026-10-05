@@ -6,25 +6,63 @@ Finish [SUPABASE_SETUP.md](SUPABASE_SETUP.md) first.
 ## API on Vercel
 
 **Live at https://propittu-api.vercel.app**: Vercel project `propittu-api`,
-team *Moka Projects*.
+team **Propittu** (`propittu`), owned by the **contact@propittu.com** Vercel
+account.
 
-### How it deploys
+### How it deploys: GitHub Actions
 
-Every push to `main` that changes `apps/api`, `packages/shared` or the
-lockfile deploys to production automatically, usually in under a minute.
-Commits that only touch the mobile app or docs are skipped.
+Vercel is **not** connected to GitHub. Deploys are done by the workflow
+[.github/workflows/api.yml](../.github/workflows/api.yml), so the Propittu
+Vercel account never has to be linked to a personal GitHub account, and the
+setup keeps working on the free plan even if the repo becomes private or moves
+to a GitHub organization.
+
+On every push to `main` that touches `apps/api`, `packages/shared`,
+`supabase` or the lockfile:
+
+1. typecheck → lint → RLS suite (real Postgres) → API security suite against
+   the **built bundle**
+2. **only if all pass:** deploy that exact bundle to Vercel production
+3. smoke-check `https://propittu-api.vercel.app/health`
+
+A failing check blocks the deploy. Pull requests run the checks without
+deploying. You can also trigger a deploy manually: **GitHub → Actions → API →
+Run workflow**. A full run takes about 2–3 minutes.
 
 | Piece | Setting | Why |
 |---|---|---|
 | Build | `npm run build` in `apps/api` (esbuild → `.vercel/output`) | The whole API ships as **one self-contained file**, so production runs exactly the code the tests ran against. Uses Vercel's [Build Output API](https://vercel.com/docs/build-output-api). |
 | Region | **`bom1` (Mumbai)** | Same region as the Supabase database. |
-| Project settings | Root Directory `apps/api`, Framework "Other", Node 22 | Configured once; the rest lives in [apps/api/vercel.json](../apps/api/vercel.json). |
+| Vercel project settings | No Git connection, no Root Directory, Framework "Other", Node 22 | Vercel never builds anything itself; it only receives the prebuilt bundle. |
 | Daily cron | `GET /cron/keepalive` at 03:00 UTC | Touches the database so the Supabase free plan never pauses the project for inactivity. Requires `CRON_SECRET`. |
 
-### Environment variables (Production)
+**GitHub settings used by the workflow** (repo → Settings → Secrets and
+variables → Actions):
 
-Set with `npx vercel@latest env add <NAME> production` from `apps/api`, or in
-the dashboard under **Settings → Environment Variables**:
+| Name | Kind | Value |
+|---|---|---|
+| `VERCEL_TOKEN` | Secret | Vercel token created by contact@propittu.com, scoped to team *Propittu*, **expires after 1 year** |
+| `VERCEL_ORG_ID` | Variable | `team_WkwznNrWiBPov7VquqDQgLsL` |
+| `VERCEL_PROJECT_ID` | Variable | `prj_f7kcXCJkzVVS6pgYckbI7YPcsV90` |
+
+**Renewing the token (yearly, or if it leaks):** create a new one at
+vercel.com/account/settings/tokens (signed in as contact@propittu.com, scope
+*Propittu*), run `gh secret set VERCEL_TOKEN -R AsettuRaghu/propittu` and paste
+it, then delete the old token in Vercel. Vercel only lets a person create
+tokens in the dashboard, not the CLI.
+
+**Deploying by hand** (rarely needed), from this Mac with the Propittu login:
+
+```bash
+cd apps/api && npm run build
+npx vercel@latest deploy --prebuilt --prod --global-config ~/.vercel-propittu --scope propittu
+```
+
+### Environment variables (Production and Preview)
+
+Set in the Vercel dashboard under **Settings → Environment Variables**, or with
+`npx vercel@latest env add <NAME> production --global-config ~/.vercel-propittu --scope propittu`
+from `apps/api`:
 
 | Variable | Value |
 |---|---|
@@ -35,8 +73,8 @@ the dashboard under **Settings → Environment Variables**:
 | `SIGNED_DOWNLOAD_TTL_SECONDS` | `3600` |
 | `CRON_SECRET` | random string (`openssl rand -hex 32`); Vercel sends it to the cron endpoint |
 
-After changing a variable, redeploy (push a commit, or use **Redeploy** in the
-dashboard) for it to take effect.
+After changing a variable, redeploy (**GitHub → Actions → API → Run
+workflow**) for it to take effect.
 
 ### Checking a deployment
 
@@ -132,7 +170,8 @@ App Store and Play Store review times are outside our control (§44).
 
 ## Launch checklist
 
-- [ ] Vercel team upgraded from Hobby to **Pro** (Hobby is non-commercial only); `/health` returns ok
+- [ ] Vercel team *Propittu* upgraded from Hobby to **Pro** (Hobby is non-commercial only); `/health` returns ok
+- [ ] `VERCEL_TOKEN` GitHub secret is valid (it expires 1 year after creation)
 - [ ] Supabase project on **Pro** (daily backups, more storage, no pausing)
 - [ ] Migrations applied to the production Supabase project
 - [ ] Phone auth configured with a **DLT-registered** SMS provider ([SUPABASE_SETUP.md §9](SUPABASE_SETUP.md#9-production-sms-india))

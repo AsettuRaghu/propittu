@@ -116,7 +116,7 @@ Run from the repository root.
 | `npm run typecheck` | `tsc --noEmit` in every workspace |
 | `npm run lint` | ESLint in every workspace |
 | `npm run db:push` | Apply migrations to the linked Supabase project |
-| `git push` to `main` | Deploys the API to Vercel when API code changed |
+| `git push` to `main` | GitHub Actions tests, then deploys the API to Vercel, when API code changed |
 
 ## Documentation
 

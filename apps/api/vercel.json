@@ -1,7 +1,0 @@
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": null,
-  "installCommand": "npm ci --workspace @propittu/api --workspace @propittu/shared --include-workspace-root=false",
-  "buildCommand": "npm run build",
-  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- . ../../packages/shared ../../package-lock.json"
-}
