@@ -1,0 +1,90 @@
+# Propittu API: test, then deploy to Vercel.
+#
+# On every push to main that touches the API, the shared package or the
+# database migrations:
+#   typecheck → lint → RLS suite (real Postgres) → API security suite run
+#   against the built bundle → deploy THAT bundle to Vercel production.
+# A failing check blocks the deploy. Pull requests run the checks only.
+#
+# Deploys use a project-scoped Vercel token stored in repo secrets, so the
+# Vercel account never needs to be linked to a GitHub account
+# (see docs/DEPLOYMENT.md).
+
+name: API
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/**'
+      - 'packages/shared/**'
+      - 'supabase/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/api.yml'
+  pull_request:
+    paths:
+      - 'apps/api/**'
+      - 'packages/shared/**'
+      - 'supabase/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/api.yml'
+  workflow_dispatch:
+
+# Never run two production deploys at once; let an in-progress one finish.
+concurrency:
+  group: api-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Only the API and shared workspaces (not the Expo toolchain).
+      - name: Install
+        run: npm ci --workspace @propittu/api --workspace @propittu/shared --include-workspace-root=false
+
+      - name: Typecheck
+        run: npm run typecheck --workspace @propittu/shared --workspace @propittu/api
+
+      - name: Lint
+        run: npm run lint --workspace @propittu/api
+
+      # Applies every migration to a throwaway Postgres and runs the
+      # cross-tenant / escalation suite (uses the runner's Postgres binaries).
+      - name: Database security (RLS)
+        run: npm run test:rls
+
+      # Builds .vercel/output and runs the API security suite against it.
+      - name: API security (built bundle)
+        run: npm run test:bundle --workspace @propittu/api
+
+      - name: Deploy to Vercel (production)
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        working-directory: apps/api
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+        run: npx --yes vercel@62.2.0 deploy --prebuilt --prod --yes --token "$VERCEL_TOKEN"
+
+      - name: Smoke-check production
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        run: |
+          for i in 1 2 3 4 5; do
+            body=$(curl -fsS https://propittu-api.vercel.app/health) && echo "$body" && exit 0
+            sleep 5
+          done
+          echo "Production /health did not respond" && exit 1
