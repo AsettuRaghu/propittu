@@ -1,0 +1,21 @@
+{
+  "name": "@propittu/shared",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Types, zod schemas and enum constants shared by the Propittu API and mobile app.",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3"
+  }
+}
