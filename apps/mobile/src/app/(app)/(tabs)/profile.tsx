@@ -1,7 +1,8 @@
 import Constants from 'expo-constants';
 import { useState } from 'react';
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { formatIndianMobile } from '@propittu/shared';
+import { router } from 'expo-router';
+import { formatIndianMobile, PLAN_STATUS_LABELS, STAFF_ROLE_LABELS } from '@propittu/shared';
 import { useMe } from '@/api/queries';
 import { useSession } from '@/auth/SessionProvider';
 import { ErrorState, LoadingState } from '@/components/States';
@@ -51,8 +52,21 @@ export default function ProfileScreen() {
           <KeyValue label="Mobile Number" value={formatIndianMobile(me.phone)} />
           <KeyValue label="Properties" value={String(me.property_count)} />
           <KeyValue label="Service Requests" value={String(me.service_request_count)} />
+          {me.staff_role ? (
+            <KeyValue label="Staff Role" value={STAFF_ROLE_LABELS[me.staff_role]} />
+          ) : null}
         </Card>
       )}
+
+      {me ? (
+        <Card style={styles.card} onPress={() => router.push('/plan')}>
+          <KeyValue
+            label="Plan"
+            value={`${me.plan.plan_name ?? 'No active plan'} · ${PLAN_STATUS_LABELS[me.plan.status]}`}
+          />
+          <Text style={[typography.small, styles.link]}>View plan & usage ›</Text>
+        </Card>
+      ) : null}
 
       {/* Logout stays available even if the profile failed to load. */}
       <Button
@@ -75,4 +89,5 @@ const styles = StyleSheet.create({
   card: { gap: space.lg },
   error: { minHeight: 240 },
   version: { textAlign: 'center' },
+  link: { color: colors.primary, fontWeight: '600' },
 });

@@ -16,7 +16,8 @@ import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { generateKeyPair, exportJWK, SignJWT } from 'jose';
 
-const SB_PORT = 54400, API_PORT = 54401;
+const SB_PORT = 54400,
+  API_PORT = 54401;
 const SB_URL = `http://127.0.0.1:${SB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}`;
 const PUBLISHABLE = 'sb_publishable_test_0123456789abcdef';
@@ -24,6 +25,86 @@ const USER = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const ACCOUNT = 'acc0000a-0000-0000-0000-00000000000a';
 // A signed-in user with no account membership (should be refused).
 const ORPHAN = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+// Staff (M9): an operations user and a support user, each with their own Account.
+const STAFF_OPS = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
+const STAFF_SUP = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
+// A member of a suspended Account.
+const SUSPENDED = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
+
+// Plan in force for every Account in the fake (M5/M6), switched per test.
+const ALL_FEATURES = [
+  'property_profile',
+  'document_upload',
+  'photo_upload',
+  'video_upload',
+  'service_requests',
+];
+const benefits = (features, limits, included = []) => [
+  ...features.map((code) => ({ kind: 'feature', code, value: null, period: null })),
+  ...Object.entries(limits).map(([code, value]) => ({ kind: 'limit', code, value, period: null })),
+  ...included,
+];
+const PLANS = {
+  trial: {
+    code: 'trial',
+    name: 'Free Trial',
+    source: 'trial',
+    benefits: benefits(
+      ALL_FEATURES,
+      {
+        max_properties: 5,
+        max_documents_per_property: 50,
+        max_photos_per_property: 100,
+        max_videos_per_property: 10,
+        max_storage_mb: 2048,
+      },
+      [{ kind: 'included_service', code: 'property_visit', value: 2, period: 'year' }],
+    ),
+  },
+  basic: {
+    code: 'basic',
+    name: 'Basic',
+    source: 'payment',
+    benefits: benefits(ALL_FEATURES, {
+      max_properties: 1,
+      max_documents_per_property: 10,
+      max_photos_per_property: 20,
+      max_videos_per_property: 2,
+      max_storage_mb: 512,
+    }),
+  },
+  nophotos: {
+    code: 'nophotos',
+    name: 'Docs Only',
+    source: 'staff',
+    benefits: benefits(
+      ALL_FEATURES.filter((f) => f !== 'photo_upload'),
+      {},
+    ),
+  },
+};
+let planMode = 'trial';
+const planRow = () => {
+  const p = PLANS[planMode];
+  if (!p) return null;
+  return {
+    id: 'ap000000-0000-0000-0000-000000000001',
+    source: p.source,
+    starts_at: '2026-01-01T00:00:00Z',
+    ends_at: '2099-01-01T00:00:00Z',
+    cancel_at_period_end: false,
+    plan_version: {
+      id: 'pv000000-0000-0000-0000-000000000001',
+      version: 1,
+      price_paise: 0,
+      currency: 'INR',
+      billing_period: 'year',
+      term_days: 365,
+      plan: { code: p.code, name: p.name, description: '' },
+      benefits: p.benefits,
+    },
+  };
+};
 
 const { publicKey, privateKey } = await generateKeyPair('ES256');
 const { privateKey: rogueKey } = await generateKeyPair('ES256');
@@ -39,18 +120,106 @@ const fake = http.createServer((req, res) => {
       return res.end(JSON.stringify({ keys: [jwk] }));
     }
     if (req.url.startsWith('/rest/v1/')) {
-      seen.push({ method: req.method, url: req.url, auth: req.headers.authorization, apikey: req.headers.apikey, body: body ? JSON.parse(body) : null });
+      seen.push({
+        method: req.method,
+        url: req.url,
+        auth: req.headers.authorization,
+        apikey: req.headers.apikey,
+        body: body ? JSON.parse(body) : null,
+      });
       const single = (req.headers.accept || '').includes('vnd.pgrst.object');
-      if (req.method === 'HEAD') { res.writeHead(200, { 'content-range': '*/3' }); return res.end(); }
+      if (req.method === 'HEAD') {
+        res.writeHead(200, { 'content-range': '*/3' });
+        return res.end();
+      }
       // User → Account resolution (M1): only USER has a membership.
       if (req.url.startsWith('/rest/v1/account_members')) {
-        const row = req.url.includes(`user_id=eq.${USER}`) ? { account_id: ACCOUNT, role: 'owner' } : null;
+        const members = {
+          [USER]: { account_id: ACCOUNT, role: 'owner', account: { status: 'active' } },
+          [STAFF_OPS]: {
+            account_id: 'acc000d0-0000-0000-0000-00000000000d',
+            role: 'owner',
+            account: { status: 'active' },
+          },
+          [STAFF_SUP]: {
+            account_id: 'acc000e0-0000-0000-0000-00000000000e',
+            role: 'owner',
+            account: { status: 'active' },
+          },
+          [SUSPENDED]: {
+            account_id: 'acc000f0-0000-0000-0000-00000000000f',
+            role: 'owner',
+            account: { status: 'suspended' },
+          },
+        };
+        const row =
+          Object.entries(members).find(([id]) => req.url.includes(`user_id=eq.${id}`))?.[1] ?? null;
         res.writeHead(200, { 'content-type': 'application/json' });
         return res.end(JSON.stringify(single ? row : row ? [row] : []));
       }
       if (req.url.startsWith('/rest/v1/accounts')) {
         res.writeHead(200, { 'content-type': 'application/json' });
         return res.end(JSON.stringify({ id: ACCOUNT, status: 'active' }));
+      }
+      const json = (status, data) => {
+        res.writeHead(status, { 'content-type': 'application/json' });
+        return res.end(JSON.stringify(data));
+      };
+      if (req.url.startsWith('/rest/v1/staff_members')) {
+        const role = req.url.includes(STAFF_OPS)
+          ? 'operations'
+          : req.url.includes(STAFF_SUP)
+            ? 'support'
+            : null;
+        const row = role ? { role, is_active: true } : null;
+        return json(200, single ? row : row ? [row] : []);
+      }
+      if (req.url.startsWith('/rest/v1/account_plans')) {
+        if (req.method === 'POST')
+          return json(
+            201,
+            single
+              ? { id: 'ap000000-0000-0000-0000-000000000002' }
+              : [{ id: 'ap000000-0000-0000-0000-000000000002' }],
+          );
+        if (req.method === 'PATCH')
+          return json(200, [{ id: 'ap000000-0000-0000-0000-000000000001' }]);
+        const row = planRow();
+        return json(200, single ? row : row ? [row] : []);
+      }
+      if (req.url.startsWith('/rest/v1/account_usage')) {
+        const row = { property_count: 3, storage_bytes: 1024 };
+        return json(200, single ? row : [row]);
+      }
+      if (req.method === 'GET' && req.url.startsWith('/rest/v1/plan_versions')) {
+        const row = req.url.includes('plan.code=eq.plus')
+          ? { id: 'pv000000-0000-0000-0000-000000000003', term_days: 365, plan: { code: 'plus' } }
+          : null;
+        return json(200, single ? row : row ? [row] : []);
+      }
+      if (req.method === 'GET' && req.url.startsWith('/rest/v1/plans')) {
+        const version = (code, id, current) => ({
+          id,
+          version: 1,
+          price_paise: 49900,
+          currency: 'INR',
+          billing_period: 'year',
+          term_days: 365,
+          is_current: current,
+          benefits: PLANS.basic.benefits,
+        });
+        return json(200, [
+          {
+            code: 'basic',
+            name: 'Basic',
+            description: '',
+            sort_order: 1,
+            versions: [
+              version('basic', 'pv0000b0-0000-0000-0000-000000000001', false),
+              version('basic', 'pv0000b0-0000-0000-0000-000000000002', true),
+            ],
+          },
+        ]);
       }
       if (req.method === 'POST' && req.url.startsWith('/rest/v1/audit_events')) {
         res.writeHead(201);
@@ -61,25 +230,40 @@ const fake = http.createServer((req, res) => {
         return res.end(JSON.stringify('2026-01-01T00:00:00+00:00'));
       }
       // Existing property 1111… (for PATCH provenance checks).
-      if (req.method === 'GET' && req.url.startsWith('/rest/v1/properties') && req.url.includes('id=eq.11111111')) {
+      if (
+        req.method === 'GET' &&
+        req.url.startsWith('/rest/v1/properties') &&
+        req.url.includes('id=eq.11111111')
+      ) {
         const row = { id: '11111111-1111-1111-1111-111111111111', field_sources: { city: 'user' } };
         res.writeHead(200, { 'content-type': 'application/json' });
         return res.end(JSON.stringify(single ? row : [row]));
       }
       if (req.method === 'PATCH' && req.url.startsWith('/rest/v1/properties')) {
-        const row = { id: '11111111-1111-1111-1111-111111111111', created_at: 'now', updated_at: 'now', ...JSON.parse(body) };
+        const row = {
+          id: '11111111-1111-1111-1111-111111111111',
+          created_at: 'now',
+          updated_at: 'now',
+          ...JSON.parse(body),
+        };
         res.writeHead(200, { 'content-type': 'application/json' });
         return res.end(JSON.stringify(single ? row : [row]));
       }
       if (req.method === 'POST' && req.url.startsWith('/rest/v1/properties')) {
-        const row = { id: '11111111-1111-1111-1111-111111111111', created_at: 'now', updated_at: 'now', ...JSON.parse(body) };
+        const row = {
+          id: '11111111-1111-1111-1111-111111111111',
+          created_at: 'now',
+          updated_at: 'now',
+          ...JSON.parse(body),
+        };
         res.writeHead(201, { 'content-type': 'application/json' });
         return res.end(JSON.stringify(single ? row : [row]));
       }
       res.writeHead(200, { 'content-type': 'application/json', 'content-range': '*/3' });
       return res.end(single ? 'null' : '[]');
     }
-    res.writeHead(404); res.end();
+    res.writeHead(404);
+    res.end();
   });
 });
 await new Promise((r) => fake.listen(SB_PORT, '127.0.0.1', r));
@@ -87,31 +271,52 @@ await new Promise((r) => fake.listen(SB_PORT, '127.0.0.1', r));
 // SMOKE_TARGET=bundle tests the built Vercel bundle (what actually ships)
 // instead of the TypeScript source. `npm run test:bundle` builds it first.
 const CRON_SECRET = 'smoke-test-cron-secret-0123456789';
-const target = process.env.SMOKE_TARGET === 'bundle'
-  ? ['node', ['test/serve-bundle.mjs']]
-  : ['npx', ['tsx', 'src/index.ts']];
-console.log(`Target: ${process.env.SMOKE_TARGET === 'bundle' ? 'Vercel bundle (.vercel/output)' : 'TypeScript source'}\n`);
+const target =
+  process.env.SMOKE_TARGET === 'bundle'
+    ? ['node', ['test/serve-bundle.mjs']]
+    : ['npx', ['tsx', 'src/index.ts']];
+console.log(
+  `Target: ${process.env.SMOKE_TARGET === 'bundle' ? 'Vercel bundle (.vercel/output)' : 'TypeScript source'}\n`,
+);
 const api = spawn(target[0], target[1], {
   cwd: fileURLToPath(new URL('..', import.meta.url)),
-  env: { ...process.env, SUPABASE_URL: SB_URL, SUPABASE_PUBLISHABLE_KEY: PUBLISHABLE, PORT: String(API_PORT), NODE_ENV: 'production', LOG_LEVEL: 'silent', CRON_SECRET },
+  env: {
+    ...process.env,
+    SUPABASE_URL: SB_URL,
+    SUPABASE_PUBLISHABLE_KEY: PUBLISHABLE,
+    PORT: String(API_PORT),
+    NODE_ENV: 'production',
+    LOG_LEVEL: 'silent',
+    CRON_SECRET,
+  },
   stdio: ['ignore', 'inherit', 'inherit'],
 });
 for (let i = 0; i < 100; i++) {
-  try { if ((await fetch(`${API}/health`)).ok) break; } catch {}
+  try {
+    if ((await fetch(`${API}/health`)).ok) break;
+  } catch {}
   await new Promise((r) => setTimeout(r, 150));
 }
 
 const iss = `${SB_URL}/auth/v1`;
 const mint = (opts = {}) => {
   const claims = { role: 'authenticated', phone: '919876543210', ...(opts.claims || {}) };
-  return new SignJWT(claims).setProtectedHeader({ alg: 'ES256', kid: 'k1' })
-    .setSubject(opts.sub ?? USER).setIssuer(opts.iss ?? iss).setAudience(opts.aud ?? 'authenticated')
-    .setIssuedAt().setExpirationTime(opts.exp ?? '1h').sign(opts.key ?? privateKey);
+  return new SignJWT(claims)
+    .setProtectedHeader({ alg: 'ES256', kid: 'k1' })
+    .setSubject(opts.sub ?? USER)
+    .setIssuer(opts.iss ?? iss)
+    .setAudience(opts.aud ?? 'authenticated')
+    .setIssuedAt()
+    .setExpirationTime(opts.exp ?? '1h')
+    .sign(opts.key ?? privateKey);
 };
 const call = async (path, { token, method = 'GET', body, raw } = {}) => {
   const res = await fetch(`${API}${path}`, {
     method,
-    headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...(body || raw ? { 'content-type': 'application/json' } : {}) },
+    headers: {
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+      ...(body || raw ? { 'content-type': 'application/json' } : {}),
+    },
     body: raw ?? (body ? JSON.stringify(body) : undefined),
   });
   const text = await res.text();
@@ -120,7 +325,9 @@ const call = async (path, { token, method = 'GET', body, raw } = {}) => {
 
 let failed = 0;
 const check = (cond, label, extra) => {
-  console.log(`${cond ? 'PASS' : 'FAIL'}  ${label}${!cond && extra !== undefined ? '  → ' + JSON.stringify(extra) : ''}`);
+  console.log(
+    `${cond ? 'PASS' : 'FAIL'}  ${label}${!cond && extra !== undefined ? '  → ' + JSON.stringify(extra) : ''}`,
+  );
   if (!cond) failed++;
 };
 
@@ -131,7 +338,11 @@ try {
   check(r.status === 200 && r.json.data.status === 'ok', 'GET /health → 200 ok', r);
 
   r = await call('/me');
-  check(r.status === 401 && r.json.error.code === 'UNAUTHENTICATED', 'no token → 401 UNAUTHENTICATED', r);
+  check(
+    r.status === 401 && r.json.error.code === 'UNAUTHENTICATED',
+    'no token → 401 UNAUTHENTICATED',
+    r,
+  );
 
   r = await call('/me', { token: 'garbage' });
   check(r.status === 401, 'malformed token → 401', r);
@@ -140,7 +351,11 @@ try {
   check(r.status === 401, 'token signed by a foreign key → 401 (signature verified)', r);
 
   r = await call('/me', { token: await mint({ exp: Math.floor(Date.now() / 1000) - 60 }) });
-  check(r.status === 401 && /expired/i.test(r.json.error.message), 'expired token → 401 "session expired"', r);
+  check(
+    r.status === 401 && /expired/i.test(r.json.error.message),
+    'expired token → 401 "session expired"',
+    r,
+  );
 
   r = await call('/me', { token: await mint({ iss: 'https://evil.example/auth/v1' }) });
   check(r.status === 401, 'wrong issuer → 401', r);
@@ -156,17 +371,48 @@ try {
 
   seen.length = 0;
   r = await call('/me', { token: valid });
-  check(r.status === 200 && r.json.data.id === USER, 'valid token → GET /me 200 with id from token', r);
-  check(r.json?.data?.phone === '+919876543210', 'phone normalised to E.164 from token', r.json?.data);
-  check(r.json?.data?.property_count === 3, 'counts read from PostgREST content-range', r.json?.data);
-  check(seen.length >= 3 && seen.every((s) => s.auth === `Bearer ${valid}`),
-    'EVERY PostgREST call carried the USER\'S JWT (RLS applies on the API path)', seen.map((s) => s.auth?.slice(0, 20)));
-  check(seen.every((s) => s.apikey === PUBLISHABLE), 'apikey header is the publishable key', seen.map((s) => s.apikey));
-  check(r.json?.data?.account?.id === ACCOUNT && r.json.data.account.role === 'owner', '/me returns the Account resolved server-side (M1)', r.json?.data?.account);
-  check(r.json?.data?.staff_role === null, '/me: a customer is not staff', r.json?.data?.staff_role);
+  check(
+    r.status === 200 && r.json.data.id === USER,
+    'valid token → GET /me 200 with id from token',
+    r,
+  );
+  check(
+    r.json?.data?.phone === '+919876543210',
+    'phone normalised to E.164 from token',
+    r.json?.data,
+  );
+  check(
+    r.json?.data?.property_count === 3,
+    'counts read from PostgREST content-range',
+    r.json?.data,
+  );
+  check(
+    seen.length >= 3 && seen.every((s) => s.auth === `Bearer ${valid}`),
+    "EVERY PostgREST call carried the USER'S JWT (RLS applies on the API path)",
+    seen.map((s) => s.auth?.slice(0, 20)),
+  );
+  check(
+    seen.every((s) => s.apikey === PUBLISHABLE),
+    'apikey header is the publishable key',
+    seen.map((s) => s.apikey),
+  );
+  check(
+    r.json?.data?.account?.id === ACCOUNT && r.json.data.account.role === 'owner',
+    '/me returns the Account resolved server-side (M1)',
+    r.json?.data?.account,
+  );
+  check(
+    r.json?.data?.staff_role === null,
+    '/me: a customer is not staff',
+    r.json?.data?.staff_role,
+  );
 
   r = await call('/me', { token: await mint({ sub: ORPHAN }) });
-  check(r.status === 403 && r.json.error.code === 'FORBIDDEN', 'valid login with no Account membership → 403', r);
+  check(
+    r.status === 403 && r.json.error.code === 'FORBIDDEN',
+    'valid login with no Account membership → 403',
+    r,
+  );
 
   r = await call('/properties/not-a-uuid', { token: valid });
   check(r.status === 404 && r.json.error.code === 'NOT_FOUND', 'malformed id → 404 NOT_FOUND', r);
@@ -174,71 +420,342 @@ try {
   r = await call('/properties/22222222-2222-2222-2222-222222222222', { token: valid });
   check(r.status === 404, 'property not visible (RLS/ownership) → 404', r);
 
-  r = await call('/properties', { token: valid, method: 'POST', body: { property_type: 'castle' } });
-  check(r.status === 400 && r.json.error.code === 'VALIDATION_FAILED' && r.json.error.details?.name && r.json.error.details?.property_type,
-    'invalid body → 400 with per-field details', r.json);
+  r = await call('/properties', {
+    token: valid,
+    method: 'POST',
+    body: { property_type: 'castle' },
+  });
+  check(
+    r.status === 400 &&
+      r.json.error.code === 'VALIDATION_FAILED' &&
+      r.json.error.details?.name &&
+      r.json.error.details?.property_type,
+    'invalid body → 400 with per-field details',
+    r.json,
+  );
 
   r = await call('/properties', { token: valid, method: 'POST', raw: '{not json' });
   check(r.status === 400 && r.json.error.code === 'VALIDATION_FAILED', 'malformed JSON → 400', r);
 
-  r = await call('/properties', { token: valid, method: 'POST', body: { property_type: 'land', name: 'x', pincode: '012345' } });
-  check(r.status === 400 && r.json.error.details?.pincode, 'invalid PIN code → 400 on pincode', r.json);
+  r = await call('/properties', {
+    token: valid,
+    method: 'POST',
+    body: { property_type: 'land', name: 'x', pincode: '012345' },
+  });
+  check(
+    r.status === 400 && r.json.error.details?.pincode,
+    'invalid PIN code → 400 on pincode',
+    r.json,
+  );
 
   seen.length = 0;
   r = await call('/properties', {
-    token: valid, method: 'POST',
-    body: { property_type: 'land', name: '  My Hyderabad Plot  ', city: '', pincode: '500001', area_value: 2400, area_unit: 'sqft',
-            user_id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', account_id: 'acc0000b-0000-0000-0000-00000000000b', id: 'evil' },
+    token: valid,
+    method: 'POST',
+    body: {
+      property_type: 'land',
+      name: '  My Hyderabad Plot  ',
+      city: '',
+      pincode: '500001',
+      area_value: 2400,
+      area_unit: 'sqft',
+      user_id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+      account_id: 'acc0000b-0000-0000-0000-00000000000b',
+      id: 'evil',
+    },
   });
   const insert = seen.find((s) => s.method === 'POST' && s.url.startsWith('/rest/v1/properties'));
-  const auditEvent = seen.find((s) => s.method === 'POST' && s.url.startsWith('/rest/v1/audit_events'));
+  const auditEvent = seen.find(
+    (s) => s.method === 'POST' && s.url.startsWith('/rest/v1/audit_events'),
+  );
   check(r.status === 201, 'POST /properties → 201', r);
-  check(insert?.body?.user_id === USER, 'client-supplied user_id IGNORED; token identity used (§31)', insert?.body);
-  check(insert?.body?.account_id === ACCOUNT, 'forged account_id IGNORED; Account resolved from the token (M10)', insert?.body);
+  check(
+    insert?.body?.user_id === USER,
+    'client-supplied user_id IGNORED; token identity used (§31)',
+    insert?.body,
+  );
+  check(
+    insert?.body?.account_id === ACCOUNT,
+    'forged account_id IGNORED; Account resolved from the token (M10)',
+    insert?.body,
+  );
   check(insert && !('id' in insert.body), 'client-supplied id stripped', insert?.body);
-  check(auditEvent?.body?.action === 'property.created' && auditEvent.body.account_id === ACCOUNT && auditEvent.body.actor_user_id === USER, 'audit event recorded for the property creation (M11)', auditEvent?.body);
+  check(
+    auditEvent?.body?.action === 'property.created' &&
+      auditEvent.body.account_id === ACCOUNT &&
+      auditEvent.body.actor_user_id === USER,
+    'audit event recorded for the property creation (M11)',
+    auditEvent?.body,
+  );
   check(insert?.body?.name === 'My Hyderabad Plot', 'name trimmed', insert?.body?.name);
   check(insert?.body?.city === null, 'empty optional field stored as null', insert?.body?.city);
 
   r = await call('/properties/11111111-1111-1111-1111-111111111111/documents/intent', {
-    token: valid, method: 'POST', body: { document_type: 'sale_deed', file_name: 'a.exe', mime_type: 'application/x-msdownload', file_size: 10 } });
-  check(r.status === 400 && r.json.error.details?.mime_type, 'unsupported document type → 400 (§21)', r.json);
+    token: valid,
+    method: 'POST',
+    body: {
+      document_type: 'sale_deed',
+      file_name: 'a.exe',
+      mime_type: 'application/x-msdownload',
+      file_size: 10,
+    },
+  });
+  check(
+    r.status === 400 && r.json.error.details?.mime_type,
+    'unsupported document type → 400 (§21)',
+    r.json,
+  );
 
   r = await call('/properties/11111111-1111-1111-1111-111111111111/documents/intent', {
-    token: valid, method: 'POST', body: { document_type: 'sale_deed', file_name: 'big.pdf', mime_type: 'application/pdf', file_size: 11 * 1024 * 1024 } });
-  check(r.status === 400 && r.json.error.details?.file_size, 'document over 10 MB → 400 (§21)', r.json);
+    token: valid,
+    method: 'POST',
+    body: {
+      document_type: 'sale_deed',
+      file_name: 'big.pdf',
+      mime_type: 'application/pdf',
+      file_size: 11 * 1024 * 1024,
+    },
+  });
+  check(
+    r.status === 400 && r.json.error.details?.file_size,
+    'document over 10 MB → 400 (§21)',
+    r.json,
+  );
 
   // ---- M2 / M3 ----
   const P = '/properties/11111111-1111-1111-1111-111111111111';
-  r = await call(`${P}/documents/intent`, { token: valid, method: 'POST',
-    body: { document_type: 'tax_receipt', file_name: 't.pdf', mime_type: 'application/pdf', file_size: 10 } });
-  check(r.status === 400 && r.json.error.details?.document_type, 'retired document category rejected (M3: Sale Deed/Registration/Property Tax/Other)', r.json);
-  r = await call(`${P}/videos/intent`, { token: valid, method: 'POST', body: { mime_type: 'video/x-msvideo', file_size: 10 } });
-  check(r.status === 400 && r.json.error.details?.mime_type, 'unsupported video type → 400', r.json);
-  r = await call(`${P}/videos/intent`, { token: valid, method: 'POST', body: { mime_type: 'video/mp4', file_size: 51 * 1024 * 1024 } });
+  r = await call(`${P}/documents/intent`, {
+    token: valid,
+    method: 'POST',
+    body: {
+      document_type: 'tax_receipt',
+      file_name: 't.pdf',
+      mime_type: 'application/pdf',
+      file_size: 10,
+    },
+  });
+  check(
+    r.status === 400 && r.json.error.details?.document_type,
+    'retired document category rejected (M3: Sale Deed/Registration/Property Tax/Other)',
+    r.json,
+  );
+  r = await call(`${P}/videos/intent`, {
+    token: valid,
+    method: 'POST',
+    body: { mime_type: 'video/x-msvideo', file_size: 10 },
+  });
+  check(
+    r.status === 400 && r.json.error.details?.mime_type,
+    'unsupported video type → 400',
+    r.json,
+  );
+  r = await call(`${P}/videos/intent`, {
+    token: valid,
+    method: 'POST',
+    body: { mime_type: 'video/mp4', file_size: 51 * 1024 * 1024 },
+  });
   check(r.status === 400 && r.json.error.details?.file_size, 'video over 50 MB → 400', r.json);
-  r = await call(`${P}/videos/intent`, { token: valid, method: 'POST', body: { mime_type: 'video/mp4', file_size: 1000, duration_seconds: 300 } });
-  check(r.status === 400 && r.json.error.details?.duration_seconds, 'video longer than 60 s → 400', r.json);
+  r = await call(`${P}/videos/intent`, {
+    token: valid,
+    method: 'POST',
+    body: { mime_type: 'video/mp4', file_size: 1000, duration_seconds: 300 },
+  });
+  check(
+    r.status === 400 && r.json.error.details?.duration_seconds,
+    'video longer than 60 s → 400',
+    r.json,
+  );
   r = await call(P, { token: valid, method: 'PATCH', body: { latitude: 17.385 } });
-  check(r.status === 400 && r.json.error.details?.latitude, 'half a map pin (latitude only) → 400', r.json);
+  check(
+    r.status === 400 && r.json.error.details?.latitude,
+    'half a map pin (latitude only) → 400',
+    r.json,
+  );
   seen.length = 0;
-  r = await call(P, { token: valid, method: 'PATCH', body: { latitude: 17.385, longitude: 78.4867, area_value: 1200, area_unit: 'sqft', location_source: 'ai' } });
+  r = await call(P, {
+    token: valid,
+    method: 'PATCH',
+    body: {
+      latitude: 17.385,
+      longitude: 78.4867,
+      area_value: 1200,
+      area_unit: 'sqft',
+      location_source: 'ai',
+    },
+  });
   const patch = seen.find((s) => s.method === 'PATCH');
-  check(r.status === 200 && patch?.body?.location_source === 'user' && patch.body.location_confirmed_at,
-    'confirmed pin stored as a USER-provided location; client-sent source ignored (M2 provenance)', patch?.body);
-  check(patch?.body?.field_sources?.city === 'user' && patch.body.field_sources.area_value === 'user',
-    'field provenance merged: earlier sources kept, new fields marked user', patch?.body?.field_sources);
-  r = await call('/documents/11111111-1111-1111-1111-111111111111', { token: valid, method: 'PATCH', body: { status: 'verified' } });
+  check(
+    r.status === 200 && patch?.body?.location_source === 'user' && patch.body.location_confirmed_at,
+    'confirmed pin stored as a USER-provided location; client-sent source ignored (M2 provenance)',
+    patch?.body,
+  );
+  check(
+    patch?.body?.field_sources?.city === 'user' && patch.body.field_sources.area_value === 'user',
+    'field provenance merged: earlier sources kept, new fields marked user',
+    patch?.body?.field_sources,
+  );
+  r = await call('/documents/11111111-1111-1111-1111-111111111111', {
+    token: valid,
+    method: 'PATCH',
+    body: { status: 'verified' },
+  });
   check(r.status === 400, 'customer cannot set document review status (only staff)', r.json);
 
-  r = await call('/service-requests', { token: valid, method: 'POST', body: { property_id: 'x', service_id: 'y', description: '' } });
-  check(r.status === 400 && r.json.error.details?.description, 'empty service request → 400', r.json);
+  r = await call('/service-requests', {
+    token: valid,
+    method: 'POST',
+    body: { property_id: 'x', service_id: 'y', description: '' },
+  });
+  check(
+    r.status === 400 && r.json.error.details?.description,
+    'empty service request → 400',
+    r.json,
+  );
+
+  // ---- M5 / M6: Plans, Benefits, Usage, Limited Access ----
+  r = await call('/me', { token: valid });
+  check(
+    r.json?.data?.plan?.access === 'full' &&
+      r.json.data.plan.status === 'trialing' &&
+      r.json.data.plan.plan_name === 'Free Trial',
+    '/me carries the Plan summary (Trial → full access)',
+    r.json?.data?.plan,
+  );
+  r = await call('/plans', { token: valid });
+  check(
+    r.status === 200 &&
+      r.json.data.length === 1 &&
+      r.json.data[0].plan_version_id.endsWith('2') &&
+      r.json.data[0].benefits.limits.max_properties === 1,
+    'GET /plans → current version of each Plan with Benefits',
+    r.json,
+  );
+  r = await call('/account/plan', { token: valid });
+  check(
+    r.status === 200 &&
+      r.json.data.status === 'trialing' &&
+      r.json.data.current.days_left > 0 &&
+      r.json.data.plan.benefits.included[0].code === 'property_visit',
+    'GET /account/plan → status, days left, Included Services',
+    r.json,
+  );
+
+  planMode = 'basic';
+  r = await call('/properties', {
+    token: valid,
+    method: 'POST',
+    body: { property_type: 'land', name: 'Fourth plot' },
+  });
+  check(
+    r.status === 403 &&
+      r.json.error.code === 'LIMIT_REACHED' &&
+      r.json.error.details?.limit === '1',
+    'Basic (1 property) with 3 properties → POST /properties 403 LIMIT_REACHED (API enforces, not the app)',
+    r.json,
+  );
+  r = await call(P, { token: valid, method: 'PATCH', body: { name: 'Renamed' } });
+  check(r.status === 200, 'over the property limit: EDITING existing data still allowed', r.json);
+  r = await call('/account/plan', { token: valid });
+  check(
+    r.json?.data?.over_limit?.includes('max_properties'),
+    'over-limit state reported (downgrade: data kept, additions blocked)',
+    r.json?.data?.over_limit,
+  );
+
+  planMode = 'nophotos';
+  r = await call(`${P}/photos/intent`, {
+    token: valid,
+    method: 'POST',
+    body: { mime_type: 'image/jpeg', file_size: 1000, width: 100, height: 100 },
+  });
+  check(
+    r.status === 403 && r.json.error.code === 'FEATURE_NOT_INCLUDED',
+    'Feature not in Plan → 403 FEATURE_NOT_INCLUDED',
+    r.json,
+  );
+
+  planMode = 'expired';
+  r = await call('/properties', { token: valid });
+  check(
+    r.status === 402 && r.json.error.code === 'LIMITED_ACCESS',
+    'Trial/Plan ended → property list blocked 402 LIMITED_ACCESS (strict)',
+    r.json,
+  );
+  r = await call(`${P}/documents`, { token: valid });
+  check(r.status === 402, 'Limited Access: documents blocked', r.json);
+  r = await call('/services', { token: valid });
+  check(r.status === 402, 'Limited Access: services blocked', r.json);
+  r = await call('/me', { token: valid });
+  check(
+    r.status === 200 &&
+      r.json.data.plan.access === 'limited' &&
+      r.json.data.plan.status === 'expired',
+    'Limited Access: /me still available, reports limited',
+    r.json?.data?.plan,
+  );
+  r = await call('/plans', { token: valid });
+  check(r.status === 200, 'Limited Access: available Plans still visible', r.json);
+  r = await call('/account/plan', { token: valid });
+  check(
+    r.status === 200 && r.json.data.plan === null,
+    'Limited Access: account Plan status still visible',
+    r.json,
+  );
+  planMode = 'trial';
+
+  r = await call('/properties', { token: await mint({ sub: SUSPENDED }) });
+  check(
+    r.status === 403 && /not active/.test(r.json.error.message),
+    'suspended Account → 403 even with an active Plan',
+    r.json,
+  );
+
+  // ---- M9 (minimal): staff Plan operations ----
+  const TARGET = `/backoffice/accounts/${ACCOUNT}/plan`;
+  r = await call(TARGET, { token: valid });
+  check(r.status === 404, 'customer → Backoffice route does not exist (404)', r);
+  r = await call(`${TARGET}/end`, { token: await mint({ sub: STAFF_SUP }), method: 'POST' });
+  check(r.status === 403, 'support staff cannot end a Plan (role check)', r.json);
+  seen.length = 0;
+  r = await call(TARGET, {
+    token: await mint({ sub: STAFF_OPS }),
+    method: 'POST',
+    body: { plan_code: 'plus' },
+  });
+  const grant = seen.find((x) => x.method === 'POST' && x.url.startsWith('/rest/v1/account_plans'));
+  const staffAudit = seen.find(
+    (x) => x.method === 'POST' && x.url.startsWith('/rest/v1/audit_events'),
+  );
+  check(
+    r.status === 201 && grant?.body?.account_id === ACCOUNT && grant.body.source === 'staff',
+    'operations staff grants Plus → account_plans row (source staff) for the TARGET account',
+    grant?.body,
+  );
+  check(
+    staffAudit?.body?.actor_type === 'staff' &&
+      staffAudit.body.account_id === ACCOUNT &&
+      staffAudit.body.actor_user_id === STAFF_OPS,
+    'staff action audited against the target Account with the staff actor',
+    staffAudit?.body,
+  );
+  r = await call(TARGET, {
+    token: await mint({ sub: STAFF_OPS }),
+    method: 'POST',
+    body: { plan_code: 'nope' },
+  });
+  check(r.status === 404, 'grant of an unknown Plan → 404', r.json);
 
   r = await call('/cron/keepalive');
   check(r.status === 401, 'keep-alive cron without the cron secret → 401', r);
-  const cron = await fetch(`${API}/cron/keepalive`, { headers: { authorization: `Bearer ${CRON_SECRET}` } });
+  const cron = await fetch(`${API}/cron/keepalive`, {
+    headers: { authorization: `Bearer ${CRON_SECRET}` },
+  });
   const cronBody = await cron.json();
-  check(cron.status === 200 && cronBody.data.database_time, 'keep-alive cron with the secret → touches the database', cronBody);
+  check(
+    cron.status === 200 && cronBody.data.database_time,
+    'keep-alive cron with the secret → touches the database',
+    cronBody,
+  );
 } finally {
   api.kill('SIGTERM');
   fake.close();

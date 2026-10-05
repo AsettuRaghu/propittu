@@ -3,7 +3,8 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, SectionList, StyleSheet, Text, View } from 'react-native';
 import { SERVICE_CATEGORIES, SERVICE_CATEGORY_LABELS, type Service } from '@propittu/shared';
-import { useServices } from '@/api/queries';
+import { useMe, useServices } from '@/api/queries';
+import { LimitedAccessState } from '@/components/PlanGate';
 import { ServiceRequestList } from '@/components/ServiceRequestList';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
 import { Card } from '@/components/ui';
@@ -18,6 +19,10 @@ type Segment = 'browse' | 'requests';
  */
 export default function ServicesScreen() {
   const [segment, setSegment] = useState<Segment>('browse');
+  const me = useMe();
+
+  if (me.data?.plan.access === 'limited')
+    return <LimitedAccessState status={me.data.plan.status} />;
 
   return (
     <View style={styles.flex}>

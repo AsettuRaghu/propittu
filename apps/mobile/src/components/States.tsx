@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps, ReactNode } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ApiError } from '@/api/client';
 import { errorMessage } from '@/lib/errors';
+import { LimitedAccessState } from './PlanGate';
 import { colors, space, typography } from '@/theme';
 import { Button } from './ui';
 
@@ -21,6 +23,7 @@ export function LoadingState({ label }: { label?: string }) {
 }
 
 export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
+  if (error instanceof ApiError && error.code === 'LIMITED_ACCESS') return <LimitedAccessState />;
   return (
     <View style={styles.center}>
       <Ionicons name="cloud-offline-outline" size={40} color={colors.textSubtle} />

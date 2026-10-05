@@ -12,6 +12,7 @@ import { audit } from '../audit.js';
 import { env } from '../env.js';
 import { HttpError, must, notFound, ok, uuidParam } from '../errors.js';
 import { assertOwnsProperty } from '../ownership.js';
+import { countForProperty, enforceLimit, enforceStorage, planOf, requireFeature } from '../plan.js';
 import {
   objectPath,
   removeObjects,
@@ -85,6 +86,12 @@ documentsRouter.post('/properties/:id/documents/intent', async (req, res) => {
   const propertyId = uuidParam(req.params.id, 'Property');
   const input = documentIntentSchema.parse(req.body);
   await assertOwnsProperty(db, accountId, propertyId);
+
+  const plan = planOf(req);
+  requireFeature(plan, 'document_upload', 'Document upload');
+  const used = await countForProperty(db, 'property_documents', accountId, propertyId);
+  enforceLimit(plan, 'max_documents_per_property', used, 1, 'documents per property');
+  await enforceStorage(db, plan, accountId, input.file_size);
 
   const storagePath = objectPath(accountId, propertyId, input.mime_type);
   const row = must<{ id: string }>(

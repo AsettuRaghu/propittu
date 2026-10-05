@@ -1,4 +1,5 @@
 import type { PropertyCompletion } from './completion';
+import type { PlanSummary } from './plans';
 import type {
   AccountRole,
   AccountStatus,
@@ -52,6 +53,8 @@ export interface Me {
   };
   /** Non-null when this user is Backoffice staff (M9). */
   staff_role: StaffRole | null;
+  /** Plan/Trial status (M5/M6); access = limited means Limited Access. */
+  plan: PlanSummary;
 }
 
 /* ------------------------------------------------------------------ *

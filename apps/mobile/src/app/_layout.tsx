@@ -5,7 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { AppState, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { ApiError } from '@/api/client';
+import { ApiError, setLimitedAccessHandler } from '@/api/client';
 import { SessionProvider, useSession } from '@/auth/SessionProvider';
 import { envProblems } from '@/lib/env';
 import { colors, space, typography } from '@/theme';
@@ -33,6 +33,14 @@ function createQueryClient() {
 
 export default function RootLayout() {
   const [queryClient] = useState(createQueryClient);
+
+  useEffect(() => {
+    setLimitedAccessHandler(() => {
+      void queryClient.invalidateQueries({ queryKey: ['me'] });
+      void queryClient.invalidateQueries({ queryKey: ['account-plan'] });
+    });
+    return () => setLimitedAccessHandler(null);
+  }, [queryClient]);
 
   if (envProblems.length > 0) return <ConfigError missing={envProblems} />;
 

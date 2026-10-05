@@ -2,7 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useProperties } from '@/api/queries';
+import { useMe, useProperties } from '@/api/queries';
+import { LimitedAccessState, PlanBanner } from '@/components/PlanGate';
 import { PropertyCard } from '@/components/PropertyCard';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
 import { Button } from '@/components/ui';
@@ -11,8 +12,22 @@ import { colors, radius, space, typography } from '@/theme';
 
 /** Home (PRODUCT_SPEC.md §15). */
 export default function HomeScreen() {
-  const { data, isPending, error, refetch, isRefetching } = useProperties();
+  const me = useMe();
+  // Strict Limited Access (M6): property data is not even fetched.
+  const limited = me.data?.plan.access === 'limited';
+  const { data, isPending, error, refetch, isRefetching } = useProperties(!limited);
   const addProperty = () => router.push('/properties/new');
+
+  if (limited) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={styles.header}>
+          <Text style={typography.title}>{greeting()}</Text>
+        </View>
+        <LimitedAccessState status={me.data?.plan.status} />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -33,6 +48,7 @@ export default function HomeScreen() {
         {data && data.length > 0 ? (
           <Text style={typography.small}>{plural(data.length, 'Property', 'Properties')}</Text>
         ) : null}
+        {me.data ? <PlanBanner plan={me.data.plan} /> : null}
       </View>
 
       {isPending ? (

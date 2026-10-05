@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
-  MAX_PHOTOS_PER_PROPERTY,
   photoIntentSchema,
   STORAGE_BUCKETS,
   type PropertyPhoto,
@@ -9,8 +8,9 @@ import {
 } from '@propittu/shared';
 import { auth } from '../auth.js';
 import { audit } from '../audit.js';
-import { HttpError, invalid, must, notFound, ok, uuidParam } from '../errors.js';
+import { HttpError, must, notFound, ok, uuidParam } from '../errors.js';
 import { assertOwnsProperty } from '../ownership.js';
+import { countForProperty, enforceLimit, enforceStorage, planOf, requireFeature } from '../plan.js';
 import {
   objectPath,
   removeObjects,
@@ -92,16 +92,11 @@ photosRouter.post('/properties/:id/photos/intent', async (req, res) => {
   const input = photoIntentSchema.parse(req.body);
   await assertOwnsProperty(db, accountId, propertyId);
 
-  const existing = await db
-    .from('property_photos')
-    .select('id', { count: 'exact', head: true })
-    .eq('property_id', propertyId)
-    .eq('account_id', accountId)
-    .eq('upload_status', 'ready');
-  must(existing);
-  if ((existing.count ?? 0) >= MAX_PHOTOS_PER_PROPERTY) {
-    throw invalid(`A property can have at most ${MAX_PHOTOS_PER_PROPERTY} photos`);
-  }
+  const plan = planOf(req);
+  requireFeature(plan, 'photo_upload', 'Photo upload');
+  const used = await countForProperty(db, 'property_photos', accountId, propertyId);
+  enforceLimit(plan, 'max_photos_per_property', used, 1, 'photos per property');
+  await enforceStorage(db, plan, accountId, input.file_size);
 
   const storagePath = objectPath(accountId, propertyId, input.mime_type);
   const row = must<{ id: string }>(

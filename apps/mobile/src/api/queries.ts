@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  AccountPlanState,
   CreatePropertyInput,
   CreateServiceRequestInput,
   Me,
@@ -7,6 +8,7 @@ import type {
   PropertyDetail,
   PropertyDocument,
   PropertySummary,
+  PublicPlan,
   Service,
   ServiceRequest,
   UpdateDocumentInput,
@@ -28,6 +30,8 @@ export const keys = {
   serviceRequests: ['service-requests'] as const,
   serviceRequestsFor: (propertyId: string) => ['service-requests', { propertyId }] as const,
   serviceRequest: (id: string) => ['service-requests', id] as const,
+  plans: ['plans'] as const,
+  accountPlan: ['account-plan'] as const,
 };
 
 /* ------------------------------------------------------------------ *
@@ -36,8 +40,38 @@ export const keys = {
 
 export const useMe = () => useQuery({ queryKey: keys.me, queryFn: () => api<Me>('/me') });
 
-export const useProperties = () =>
-  useQuery({ queryKey: keys.properties, queryFn: () => api<PropertySummary[]>('/properties') });
+export const useProperties = (enabled = true) =>
+  useQuery({
+    queryKey: keys.properties,
+    queryFn: () => api<PropertySummary[]>('/properties'),
+    enabled,
+  });
+
+/* Plans (M5/M6) — available even in Limited Access. */
+export const usePlans = () =>
+  useQuery({
+    queryKey: keys.plans,
+    queryFn: () => api<PublicPlan[]>('/plans'),
+    staleTime: 60 * 60 * 1000,
+  });
+
+export const useAccountPlan = () =>
+  useQuery({
+    queryKey: keys.accountPlan,
+    queryFn: () => api<AccountPlanState>('/account/plan'),
+    staleTime: 0, // Usage changes with every upload.
+  });
+
+export function useCancelPlan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<AccountPlanState>('/account/plan/cancel', { method: 'POST' }),
+    onSuccess: (state) => {
+      qc.setQueryData(keys.accountPlan, state);
+      void qc.invalidateQueries({ queryKey: keys.me });
+    },
+  });
+}
 
 export const useProperty = (id: string) =>
   useQuery({
@@ -51,8 +85,9 @@ export const useDocuments = (propertyId: string) =>
     queryFn: () => api<PropertyDocument[]>(`/properties/${propertyId}/documents`),
   });
 
-export const useServices = () =>
+export const useServices = (enabled = true) =>
   useQuery({
+    enabled,
     queryKey: keys.services,
     queryFn: () => api<Service[]>('/services'),
     staleTime: 60 * 60 * 1000, // The catalogue changes only via migrations.

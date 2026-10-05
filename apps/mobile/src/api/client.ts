@@ -28,6 +28,17 @@ export function setSessionExpiredHandler(handler: (() => void) | null): void {
   onSessionExpired = handler;
 }
 
+/*
+ * Limited Access hook (M6) — set by the root layout so that a 402 from
+ * any screen (e.g. the Trial ended while the app was open) refreshes /me
+ * and the app switches to its Limited Access state.
+ */
+let onLimitedAccess: (() => void) | null = null;
+
+export function setLimitedAccessHandler(handler: (() => void) | null): void {
+  onLimitedAccess = handler;
+}
+
 async function accessToken(forceRefresh: boolean): Promise<string | null> {
   if (forceRefresh) {
     const { data } = await supabase.auth.refreshSession();
@@ -108,6 +119,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
 
   if (!res.ok) {
     const error = (json as ApiFailure | null)?.error;
+    if (res.status === 402 && error?.code === 'LIMITED_ACCESS') onLimitedAccess?.();
     throw new ApiError(
       res.status,
       error?.code ?? 'INTERNAL',

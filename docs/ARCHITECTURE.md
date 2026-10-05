@@ -20,7 +20,7 @@ Supabase Postgres (system of record) + Supabase Storage (private files)
 ## Domain model
 
 ```
-User (Supabase Auth) ──member of──► Account ──► Plan → Benefits → Usage        (M5/M6, checkpoint 3)
+User (Supabase Auth) ──member of──► Account ──► Plan → Benefits → Usage        (M5/M6)
                                        │
                                        ├──► Property ──► Photos / Videos       (M2/M3)
                                        │       │    └──► Documents
@@ -40,11 +40,17 @@ Staff (staff_members) ──► Backoffice: reads across Accounts; staff-only ac
 1. **Authenticated?** The Supabase JWT is verified locally against the published signing keys.
 2. **Which Account?** Looked up server-side from `account_members`, never taken from the client.
 3. **Does the resource belong to that Account?** e.g. `assertOwnsProperty(db, accountId, propertyId)`. Another account's resource returns 404, so IDs can't be probed.
-4. **Benefit available?** (checkpoint 3)
-5. **Usage available?** (checkpoint 3)
+4. **Benefit available?** `requireActivePlan` (no Plan in force → 402 Limited Access), then `requireFeature` → 403 `FEATURE_NOT_INCLUDED`.
+5. **Usage available?** `enforceLimit` / `enforceStorage` → 403 `LIMIT_REACHED`. Only *additions* count, so editing and deleting always work.
 6. **Perform the action**, as the user, so Postgres RLS re-checks account membership.
 
 Staff are a **separate boundary**: `staff_members`, plus `is_staff()` in RLS. Customers can never reach staff-only functions.
+
+### Plans, Benefits and Usage (M5/M6)
+- Plans are versioned data: `plans → plan_versions → plan_version_benefits`. Benefit **codes** are fixed in `packages/shared/src/plans.ts` because the API enforces them; their **values** are rows.
+- `account_plans` holds the Account's periods; the Plan in force is the most recently started one covering now. Sources: trial (once per Account, from the sign-up trigger), payment (M7), staff (Backoffice).
+- Usage: capacity is derived (`account_usage` view: properties, storage of ready files). Included Services are recorded in `usage_records` when consumed (M4).
+- Limited Access is strict: `/me`, `/plans`, `/account/plan*` (and payments) are mounted **before** the gate; everything else after it. Code: `apps/api/src/plan.ts`.
 
 ### Property profile (M2)
 - Location is first-class: address → approximate position (phone geocoder) → the owner confirms or moves the pin → saved with `location_source = user`.

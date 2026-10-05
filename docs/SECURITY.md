@@ -29,6 +29,13 @@ with the date when finished.
   authoritatively in the API and database (types, sizes, PIN format and so on).
 - **Automated security tests gate every deploy** (GitHub Actions): 51 database
   checks (80 since M1), 29 API checks (34 since M1); a 46-check end-to-end run was done against production.
+- **Plans and limits are enforced only by the API and database (M5/M6).** Customers
+  can't grant themselves a Plan, record usage, edit Plan config, or start a second
+  Trial (RLS plus a revoked `start_trial()`). The app only displays what the API
+  decides.
+- **Backoffice is invisible to customers** (`/backoffice` → 404), role-checked
+  per action, and RLS re-checks `is_staff()`. Staff actions are audited against
+  the customer's Account.
 - Tokens are redacted from logs; all traffic is HTTPS.
 
 ## Backlog

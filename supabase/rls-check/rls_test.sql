@@ -101,6 +101,8 @@ insert into public.account_members (account_id, user_id, role) values
   ('acc0000b-0000-0000-0000-00000000000b', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'owner');
 insert into public.staff_members (user_id, role)
 values ('55555555-5555-5555-5555-555555555555', 'super_admin');
+select public.start_trial('acc0000a-0000-0000-0000-00000000000a');
+select public.start_trial('acc0000b-0000-0000-0000-00000000000b');
 
 
 -- =====================================================================
@@ -270,7 +272,7 @@ select tst.rejects($$update public.property_documents set account_id = 'acc0000b
 select tst.rejects($$update public.properties set account_id = 'acc0000b-0000-0000-0000-00000000000b'
                      where id = 'a1a1a1a1-0000-0000-0000-000000000001'$$,
   'A cannot give a property away to another account');
-select tst.rejects($$update public.accounts set status = 'active'$$,
+select tst.rows($$update public.accounts set status = 'suspended'$$, 0,
   'A cannot change its account status');
 select tst.rejects(
   $$insert into public.account_members (account_id, user_id) values
@@ -378,6 +380,105 @@ select tst.rows($$delete from public.property_videos$$, 0, 'B delete of A''s vid
 
 select tst.as_user('55555555-5555-5555-5555-555555555555');
 select tst.rows('select * from public.property_videos', 1, 'staff can see A''s video');
+reset role;
+
+-- =====================================================================
+\echo
+\echo '== M5/M6: Plans, Benefits, Trial, Usage =='
+-- =====================================================================
+
+reset role;
+-- A brand-new user gets account + Trial automatically; an invited phone becomes staff.
+insert into public.staff_invites (phone, role) values ('919000000009', 'operations');
+insert into auth.users (id, phone) values
+  ('cccccccc-cccc-cccc-cccc-cccccccccccc', '919000000008'),
+  ('99999999-9999-9999-9999-999999999999', '919000000009');
+
+select tst.ok(
+  (select count(*) from public.account_plans ap
+     join public.account_members m on m.account_id = ap.account_id
+   where m.user_id = 'cccccccc-cccc-cccc-cccc-cccccccccccc' and ap.source = 'trial') = 1,
+  'new user automatically gets exactly one Trial');
+select tst.ok(
+  (select ap.ends_at - ap.starts_at from public.account_plans ap
+     join public.account_members m on m.account_id = ap.account_id
+   where m.user_id = 'cccccccc-cccc-cccc-cccc-cccccccccccc') = interval '30 days',
+  'Trial lasts the configured 30 days');
+select public.start_trial((select account_id from public.account_members
+                           where user_id = 'cccccccc-cccc-cccc-cccc-cccccccccccc'));
+select tst.ok(
+  (select count(*) from public.account_plans ap
+     join public.account_members m on m.account_id = ap.account_id
+   where m.user_id = 'cccccccc-cccc-cccc-cccc-cccccccccccc') = 1,
+  'Trial eligibility is once per Account (second start is a no-op)');
+select tst.ok(
+  (select role from public.staff_members where user_id = '99999999-9999-9999-9999-999999999999') = 'operations',
+  'invited phone number becomes staff on first login');
+select tst.ok(
+  not exists (select 1 from public.staff_members where user_id = 'cccccccc-cccc-cccc-cccc-cccccccccccc'),
+  'uninvited users do not become staff');
+
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+
+select tst.rows('select * from public.plans', 3, 'A can read the Plan catalogue (Trial, Basic, Plus)');
+select tst.rows($$select * from public.plan_version_benefits b
+                   join public.plan_versions v on v.id = b.plan_version_id
+                   join public.plans p on p.id = v.plan_id where p.code = 'plus'$$, 10,
+  'Plus v1 has 4 Feature Benefits + 5 Usage Limits + 1 Included Service');
+select tst.rows('select * from public.account_plans', 1, 'A sees its own Trial');
+select tst.ok((select property_count from public.account_usage) = 1, 'A''s usage: 1 property');
+select tst.ok((select storage_bytes from public.account_usage) = 1000 + 2000 + 5000000,
+  'A''s storage usage sums READY photos, documents and videos');
+
+select tst.rejects(
+  $$insert into public.account_plans (account_id, plan_version_id, source, ends_at)
+    select 'acc0000a-0000-0000-0000-00000000000a', v.id, 'payment', now() + interval '1 year'
+    from public.plan_versions v join public.plans p on p.id = v.plan_id where p.code = 'plus'$$,
+  'A cannot grant itself a Plan (client cannot bypass Plans)');
+select tst.rows($$update public.account_plans set ends_at = now() + interval '10 years'$$, 0,
+  'A cannot extend its own Trial');
+select tst.rejects(
+  $$insert into public.usage_records (account_id, kind, code) values
+    ('acc0000a-0000-0000-0000-00000000000a', 'included_service', 'property_visit')$$,
+  'A cannot write usage records');
+select tst.rows($$update public.usage_records set released_at = now()$$, 0,
+  'A cannot release (refund) its own usage');
+select tst.rows($$update public.plan_version_benefits set value = 999$$, 0,
+  'A cannot raise its own Usage Limits');
+select tst.rejects($$insert into public.plans (code, name) values ('free_forever', 'Free')$$,
+  'A cannot create Plans');
+select tst.rejects($$select public.start_trial('acc0000a-0000-0000-0000-00000000000a')$$,
+  'A cannot call start_trial() directly');
+select tst.rows($$update public.accounts set status = 'active'$$, 0,
+  'A cannot change its own account status');
+select tst.ok(public.cancel_current_plan() = 0, 'a Trial cannot be "cancelled" (nothing to renew)');
+
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.rows($$select * from public.account_plans where account_id = 'acc0000a-0000-0000-0000-00000000000a'$$, 0,
+  'B cannot see A''s Plan');
+select tst.rows($$select * from public.account_usage where account_id = 'acc0000a-0000-0000-0000-00000000000a'$$, 0,
+  'B cannot see A''s usage');
+select tst.rows('select * from public.staff_invites', 0, 'customers cannot read staff invites');
+
+-- Staff grant Plus to A (e.g. offline payment), then A cancels: no renewal.
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+insert into public.account_plans (account_id, plan_version_id, source, starts_at, ends_at)
+select 'acc0000a-0000-0000-0000-00000000000a', v.id, 'staff', now(), now() + interval '365 days'
+from public.plan_versions v join public.plans p on p.id = v.plan_id where p.code = 'plus' and v.is_current;
+select tst.rows($$select * from public.account_plans where account_id = 'acc0000a-0000-0000-0000-00000000000a'$$, 2,
+  'staff can grant a Plan and see the Account''s Plan history');
+insert into public.usage_records (account_id, kind, code)
+values ('acc0000a-0000-0000-0000-00000000000a', 'included_service', 'property_visit');
+select tst.rows('select * from public.staff_invites', 1, 'staff can read staff invites');
+
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.ok(public.cancel_current_plan() = 1, 'A can cancel its paid Plan');
+select tst.ok((select cancel_at_period_end from public.account_plans where source = 'staff'),
+  'cancellation = no renewal (cancel_at_period_end), the period continues');
+select tst.ok((select ends_at > now() from public.account_plans where source = 'staff'),
+  'the cancelled Plan stays active until its period ends');
+select tst.rows('select * from public.usage_records', 1, 'A can read its own usage records');
 reset role;
 
 -- =====================================================================

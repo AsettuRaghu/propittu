@@ -7,7 +7,10 @@ import { logger } from './logger.js';
 import { cronRouter } from './routes/cron.js';
 import { documentsRouter } from './routes/documents.js';
 import { healthRouter } from './routes/health.js';
+import { backofficeRouter } from './routes/backoffice.js';
 import { meRouter } from './routes/me.js';
+import { plansRouter } from './routes/plans.js';
+import { requireActivePlan } from './plan.js';
 import { photosRouter } from './routes/photos.js';
 import { propertiesRouter } from './routes/properties.js';
 import { servicesRouter } from './routes/services.js';
@@ -43,7 +46,15 @@ export function createApp(): express.Express {
 
   // Everything below requires a valid Supabase session.
   app.use(requireAuth);
+
+  // Always available, even in Limited Access (M6): account, Plan status,
+  // available Plans, payment journey. Backoffice has its own staff gate.
   app.use(meRouter);
+  app.use(plansRouter);
+  app.use('/backoffice', backofficeRouter);
+
+  // Normal property-management functionality needs an active Plan or Trial.
+  app.use(requireActivePlan);
   app.use(propertiesRouter);
   app.use(photosRouter);
   app.use(videosRouter);

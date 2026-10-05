@@ -18,13 +18,23 @@ const COPY: Partial<Record<ClientErrorCode, string>> = {
   INTERNAL: 'Something went wrong on our side. Please try again.',
 };
 
+/** Codes whose API message is already written for the customer. */
+const SERVER_COPY = new Set<ClientErrorCode>([
+  'VALIDATION_FAILED',
+  'FILE_TOO_LARGE',
+  // Plans (M5/M6): "Your Basic plan allows 1 properties. Upgrade…"
+  'LIMITED_ACCESS',
+  'FEATURE_NOT_INCLUDED',
+  'LIMIT_REACHED',
+]);
+
 export function errorMessage(
   err: unknown,
   fallback = 'Something went wrong. Please try again.',
 ): string {
   if (err instanceof ApiError) {
     // Validation and size messages from the API are already user-facing.
-    if (err.code === 'VALIDATION_FAILED' || err.code === 'FILE_TOO_LARGE') return err.message;
+    if (SERVER_COPY.has(err.code)) return err.message;
     return COPY[err.code] ?? fallback;
   }
   if (err instanceof AuthError) return authErrorMessage(err);

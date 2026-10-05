@@ -19,6 +19,7 @@ export interface AuthContext extends Identity {
    */
   accountId: string;
   accountRole: 'owner' | 'member';
+  accountStatus: 'active' | 'suspended' | 'closed';
   /** RLS-scoped client acting as this user. */
   db: SupabaseClient;
 }
@@ -94,7 +95,7 @@ export const requireAuth: RequestHandler = async (req, _res, next) => {
   // User → Account (M1). RLS lets a user read only their own membership.
   const { data: membership, error } = await db
     .from('account_members')
-    .select('account_id, role')
+    .select('account_id, role, account:accounts(status)')
     .eq('user_id', identity.userId)
     .maybeSingle();
   if (error) throw fromDbError(error);
@@ -106,6 +107,8 @@ export const requireAuth: RequestHandler = async (req, _res, next) => {
     ...identity,
     accountId: membership.account_id as string,
     accountRole: membership.role as AuthContext['accountRole'],
+    accountStatus: ((membership.account as unknown as { status?: string } | null)?.status ??
+      'active') as AuthContext['accountStatus'],
     db,
   };
   next();

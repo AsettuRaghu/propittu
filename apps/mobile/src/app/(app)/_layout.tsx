@@ -27,6 +27,7 @@ export default function AppLayout() {
       <Stack.Screen name="services/request" options={{ title: 'Request a service' }} />
       <Stack.Screen name="requests/index" options={{ title: 'Service requests' }} />
       <Stack.Screen name="requests/[id]" options={{ title: 'Service request' }} />
+      <Stack.Screen name="plan" options={{ title: 'Plan & Usage' }} />
     </Stack>
   );
 }

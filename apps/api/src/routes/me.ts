@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { AccountStatus, Me, StaffRole } from '@propittu/shared';
 import { auth } from '../auth.js';
 import { must, ok } from '../errors.js';
+import { loadPlanState, planSummary } from '../plan.js';
 
 /** GET /me — Profile screen (§25) plus Account (M1) and staff status (M9). */
 export const meRouter = Router();
@@ -15,7 +16,7 @@ interface ProfileRow {
 meRouter.get('/me', async (req, res) => {
   const { db, userId, phone, accountId, accountRole } = auth(req);
 
-  const [profile, account, staff, properties, requests] = await Promise.all([
+  const [profile, account, staff, properties, requests, plan] = await Promise.all([
     db.from('profiles').select('id, full_name, created_at').eq('id', userId).maybeSingle(),
     db.from('accounts').select('id, status').eq('id', accountId).single(),
     db.from('staff_members').select('role, is_active').eq('user_id', userId).maybeSingle(),
@@ -24,6 +25,7 @@ meRouter.get('/me', async (req, res) => {
       .from('service_requests')
       .select('id', { count: 'exact', head: true })
       .eq('account_id', accountId),
+    loadPlanState(db, accountId),
   ]);
 
   const row = must<ProfileRow | null>(profile);
@@ -42,6 +44,7 @@ meRouter.get('/me', async (req, res) => {
     service_request_count: requests.count ?? 0,
     account: { id: acc.id, status: acc.status, role: accountRole },
     staff_role: staffRow?.is_active ? staffRow.role : null,
+    plan: planSummary(plan),
   };
 
   ok(res, data);

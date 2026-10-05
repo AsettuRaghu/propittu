@@ -14,9 +14,10 @@ export async function audit(
   entity?: { type: string; id: string },
   data: Record<string, unknown> = {},
   actorType: 'user' | 'staff' = 'user',
+  targetAccountId?: string,
 ): Promise<void> {
   const { error } = await ctx.db.from('audit_events').insert({
-    account_id: ctx.accountId,
+    account_id: targetAccountId ?? ctx.accountId,
     actor_user_id: ctx.userId,
     actor_type: actorType,
     action,

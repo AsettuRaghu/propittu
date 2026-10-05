@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
-  MAX_VIDEOS_PER_PROPERTY,
   STORAGE_BUCKETS,
   videoIntentSchema,
   type PropertyVideo,
@@ -9,8 +8,9 @@ import {
 } from '@propittu/shared';
 import { auth } from '../auth.js';
 import { audit } from '../audit.js';
-import { HttpError, invalid, must, notFound, ok, uuidParam } from '../errors.js';
+import { HttpError, must, notFound, ok, uuidParam } from '../errors.js';
 import { assertOwnsProperty } from '../ownership.js';
+import { countForProperty, enforceLimit, enforceStorage, planOf, requireFeature } from '../plan.js';
 import {
   objectPath,
   removeObjects,
@@ -94,16 +94,11 @@ videosRouter.post('/properties/:id/videos/intent', async (req, res) => {
   const input = videoIntentSchema.parse(req.body);
   await assertOwnsProperty(db, accountId, propertyId);
 
-  const existing = await db
-    .from('property_videos')
-    .select('id', { count: 'exact', head: true })
-    .eq('property_id', propertyId)
-    .eq('account_id', accountId)
-    .eq('upload_status', 'ready');
-  must(existing);
-  if ((existing.count ?? 0) >= MAX_VIDEOS_PER_PROPERTY) {
-    throw invalid(`A property can have at most ${MAX_VIDEOS_PER_PROPERTY} videos`);
-  }
+  const plan = planOf(req);
+  requireFeature(plan, 'video_upload', 'Video upload');
+  const used = await countForProperty(db, 'property_videos', accountId, propertyId);
+  enforceLimit(plan, 'max_videos_per_property', used, 1, 'videos per property');
+  await enforceStorage(db, plan, accountId, input.file_size);
 
   const storagePath = objectPath(accountId, propertyId, input.mime_type);
   const row = must<{ id: string }>(

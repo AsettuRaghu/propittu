@@ -13,6 +13,7 @@ import { auth } from '../auth.js';
 import { audit } from '../audit.js';
 import { must, notFound, ok, uuidParam } from '../errors.js';
 import { assertOwnsProperty } from '../ownership.js';
+import { enforceLimit, planOf, requireFeature } from '../plan.js';
 import { removeObjects, signDownloads } from '../storage.js';
 import { listReadyPhotos } from './photos.js';
 import { listReadyVideos } from './videos.js';
@@ -108,6 +109,16 @@ propertiesRouter.get('/properties', async (req, res) => {
 propertiesRouter.post('/properties', async (req, res) => {
   const { db, userId, accountId } = auth(req);
   const input = createPropertySchema.parse(req.body);
+
+  // Benefit + Usage (M5/M6): creation counts, edit does not, delete frees capacity.
+  const plan = planOf(req);
+  requireFeature(plan, 'property_profile', 'Adding properties');
+  const existing = await db
+    .from('properties')
+    .select('id', { count: 'exact', head: true })
+    .eq('account_id', accountId);
+  must(existing);
+  enforceLimit(plan, 'max_properties', existing.count ?? 0, 1, 'properties');
 
   const row = must<PropertyRow>(
     await db
