@@ -29,21 +29,12 @@ export default function HomeScreen() {
 
   const header = (
     <View style={styles.header}>
-      <View style={styles.greetingRow}>
-        <Icon name={greetingIcon()} size={16} color={accents.amber.fg} />
-        <Text style={styles.greeting}>
+      <View style={styles.titleRow}>
+        <Icon name={greetingIcon()} size={24} color={accents.amber.fg} />
+        <Text style={[typography.display, styles.flex]} numberOfLines={1}>
           {greeting()}
           {name ? `, ${name}` : ''}
         </Text>
-      </View>
-      <View style={styles.titleRow}>
-        <Text style={typography.display}>Your properties</Text>
-        {data && data.length > 0 ? (
-          <View style={styles.count}>
-            <Text style={styles.countText}>{data.length}</Text>
-          </View>
-        ) : null}
-        <View style={styles.flex} />
         {!limited ? (
           <IconButton
             icon="add"
