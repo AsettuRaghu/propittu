@@ -52,3 +52,149 @@ export interface DocumentAnalysis {
   finished_at: string | null;
   facts: PropertyFact[];
 }
+
+/* ------------------------------------------------------------------ *
+ * From facts to a property (shared so the app pre-fills exactly what
+ * the API later compares against — the customer's edits are then known
+ * precisely, and kept as the improvement signal).
+ * ------------------------------------------------------------------ */
+
+/** Property fields Pittu can pre-fill, and the fact each comes from. */
+export const PREFILL_FIELDS = [
+  'property_type',
+  'name',
+  'address_line',
+  'city',
+  'state',
+  'pincode',
+  'area_value',
+  'area_unit',
+  'survey_number',
+  'property_number',
+  'khata_number',
+] as const;
+export type PrefillField = (typeof PREFILL_FIELDS)[number];
+
+export type PropertyPrefill = Partial<Record<PrefillField, string | number | null>>;
+
+const PROPERTY_KINDS = [
+  'land',
+  'apartment',
+  'independent_house',
+  'commercial',
+  'industrial',
+  'other',
+];
+const UNITS = ['sqft', 'sqyd', 'sqm', 'acre', 'guntha', 'cent'];
+
+/** Builds the pre-filled property from a reading's facts (nothing invented). */
+export function prefillFromFacts(facts: Pick<PropertyFact, 'key' | 'value'>[]): PropertyPrefill {
+  const f = new Map(facts.map((x) => [x.key, x.value]));
+  const s = (k: string): string | null => {
+    const v = f.get(k);
+    return typeof v === 'string' && v.trim() ? v.trim() : null;
+  };
+  const kind = s('property_kind');
+  const project = s('project_name');
+  const unit = s('unit_number');
+  const block = s('block_or_tower');
+  const isFlat = kind === 'apartment';
+  const unitLabel = unit
+    ? isFlat
+      ? [block, unit].filter(Boolean).join(' · ')
+      : `Site ${unit}`
+    : null;
+  const surveys = f.get('survey_numbers');
+  // Layout sites are identified by site number + Khata; the layout's survey
+  // numbers stay background facts (owner decision 6 Oct 2026).
+  const survey =
+    kind === 'land' && !project && Array.isArray(surveys) && surveys[0] ? surveys[0] : null;
+  const area = f.get('area_value');
+
+  const address = [
+    unit ? (isFlat ? `Flat ${unit}` : `Site No. ${unit}`) : null,
+    block,
+    s('floor') ? `${s('floor')} floor` : null,
+    project,
+    s('village') ? `${s('village')} village` : null,
+    s('hobli') ? `${s('hobli')} Hobli` : null,
+    s('taluk_or_mandal'),
+  ]
+    .filter(Boolean)
+    .join(', ');
+
+  return {
+    property_type: kind && PROPERTY_KINDS.includes(kind) ? kind : null,
+    name: project && unitLabel ? `${project} – ${unitLabel}` : (project ?? unitLabel),
+    address_line: address || null,
+    city: s('city'),
+    state: s('state'),
+    pincode: s('pincode'),
+    area_value: typeof area === 'number' ? area : null,
+    area_unit: s('area_unit') && UNITS.includes(s('area_unit') as string) ? s('area_unit') : null,
+    survey_number: survey,
+    property_number: unit,
+    khata_number: s('khata_number'),
+  };
+}
+
+/** Which facts feed which field (for highlighting uncertain values). */
+export const PREFILL_SOURCES: Record<PrefillField, string[]> = {
+  property_type: ['property_kind'],
+  name: ['project_name', 'unit_number', 'block_or_tower'],
+  address_line: ['unit_number', 'project_name', 'village', 'hobli', 'taluk_or_mandal'],
+  city: ['city', 'district'],
+  state: ['state'],
+  pincode: ['pincode'],
+  area_value: ['area_value'],
+  area_unit: ['area_unit'],
+  survey_number: ['survey_numbers'],
+  property_number: ['unit_number'],
+  khata_number: ['khata_number'],
+};
+
+/** Readable labels for the details Pittu shows besides the form. */
+export const FACT_LABELS: Record<string, string> = {
+  buyers: 'Buyer(s)',
+  sellers: 'Seller(s)',
+  registration_number: 'Registration no.',
+  registration_date: 'Registered on',
+  execution_date: 'Signed on',
+  sub_registrar_office: 'Sub-Registrar',
+  sale_consideration_inr: 'Sale price',
+  village: 'Village',
+  hobli: 'Hobli',
+  taluk_or_mandal: 'Taluk / Mandal',
+  district: 'District',
+  project_name: 'Layout / project',
+  developer: 'Developer',
+  survey_numbers: 'Survey no(s).',
+  land_khata_number: 'Land Khata',
+  undivided_share: 'Undivided share',
+  super_built_up_sqft: 'Super built-up (sq ft)',
+  carpet_sqft: 'Carpet area (sq ft)',
+  boundary_north: 'North',
+  boundary_south: 'South',
+  boundary_east: 'East',
+  boundary_west: 'West',
+};
+
+/** Same value? (case, spaces and punctuation don't count as an edit) */
+export function sameFactValue(a: unknown, b: unknown): boolean {
+  const n = (v: unknown) =>
+    v === null || v === undefined
+      ? ''
+      : String(v)
+          .toLowerCase()
+          .replace(/[^a-z0-9.]/g, '');
+  if (typeof a === 'number' || typeof b === 'number') return Number(a) === Number(b);
+  return n(a) === n(b);
+}
+
+/** An unfinished deed set-up (GET /properties/drafts). */
+export interface DraftProperty {
+  id: string;
+  created_at: string;
+  /** The uploaded sale deed, if the upload finished. */
+  document_id: string | null;
+}

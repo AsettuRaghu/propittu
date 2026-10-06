@@ -32,6 +32,8 @@ const SCREENS: { name: string; options: Record<string, unknown> }[] = [
 
   { name: 'properties/new', options: { title: 'Add property' } },
   { name: 'properties/added', options: { headerShown: false, gestureEnabled: false } },
+  { name: 'properties/deed', options: { title: 'Add with sale deed' } },
+  { name: 'properties/[id]/setup', options: { title: 'Check the details' } },
   { name: 'properties/[id]/index', options: { title: '' } },
   { name: 'properties/[id]/edit', options: { title: 'Edit property' } },
   { name: 'properties/[id]/location', options: { title: 'Property location' } },

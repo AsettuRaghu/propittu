@@ -54,7 +54,7 @@ export default function AddDocumentScreen() {
     const asset = result.canceled ? undefined : result.assets[0];
     if (!asset) return;
     try {
-      setFile(prepareDocument(asset));
+      setFile(prepareDocument(asset, documentType ?? undefined));
       if (status.kind === 'error') setStatus({ kind: 'idle' });
     } catch (err) {
       setFile(null);

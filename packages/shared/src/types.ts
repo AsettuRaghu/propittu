@@ -91,6 +91,8 @@ export interface Property {
   location_confirmed_at: string | null;
   /** Per-field provenance, e.g. { area_value: 'user' } (future AI must not overwrite). */
   field_sources: Partial<Record<string, ValueSource>>;
+  /** True while being set up from a sale deed (hidden from Home and limits). */
+  is_draft: boolean;
   created_at: string;
   updated_at: string;
 }

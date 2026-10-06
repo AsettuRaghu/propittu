@@ -2,6 +2,12 @@ import { Router } from 'express';
 import {
   computePropertyCompletion,
   createPropertySchema,
+  PREFILL_FIELDS,
+  prefillFromFacts,
+  sameFactValue,
+  type DraftProperty,
+  type FactValue,
+  type PrefillField,
   OPEN_REQUEST_STATUSES,
   STORAGE_BUCKETS,
   updatePropertySchema,
@@ -14,7 +20,10 @@ import {
 } from '@propittu/shared';
 import { auth } from '../auth.js';
 import { audit } from '../audit.js';
-import { must, notFound, ok, uuidParam } from '../errors.js';
+import { z } from 'zod';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { assertAiAvailable } from '../ai/jobs.js';
+import { HttpError, must, notFound, ok, uuidParam } from '../errors.js';
 import { assertOwnsProperty } from '../ownership.js';
 import { enforceLimit, planOf, requireFeature } from '../plan.js';
 import { removeObjects, signDownloads } from '../storage.js';
@@ -28,7 +37,7 @@ export const propertiesRouter = Router();
 export const PROPERTY_COLUMNS =
   'id, property_type, name, address_line, city, state, pincode, latitude, longitude, ' +
   'area_value, area_unit, survey_number, property_number, khata_number, notes, ' +
-  'location_source, location_confirmed_at, field_sources, created_at, updated_at';
+  'location_source, location_confirmed_at, field_sources, is_draft, created_at, updated_at';
 
 const SUMMARY_COLUMNS =
   'id, property_type, name, city, state, created_at, document_count, service_request_count, ' +
@@ -95,6 +104,7 @@ propertiesRouter.get('/properties', async (req, res) => {
       .from('property_summaries')
       .select(SUMMARY_COLUMNS)
       .eq('account_id', accountId)
+      .eq('is_draft', false)
       .order('created_at', { ascending: false }),
     db.from('properties').select(PROPERTY_COLUMNS).eq('account_id', accountId),
     db
@@ -177,12 +187,10 @@ propertiesRouter.post('/properties', async (req, res) => {
   // Benefit + Usage (M5/M6): creation counts, edit does not, delete frees capacity.
   const plan = planOf(req);
   requireFeature(plan, 'property_profile', 'Adding properties');
-  const existing = await db
-    .from('properties')
-    .select('id', { count: 'exact', head: true })
-    .eq('account_id', accountId);
-  must(existing);
-  enforceLimit(plan, 'max_properties', existing.count ?? 0, 1, ['property', 'properties']);
+  enforceLimit(plan, 'max_properties', await countConfirmed(db, accountId), 1, [
+    'property',
+    'properties',
+  ]);
 
   const row = must<PropertyRow>(
     await db
@@ -199,6 +207,231 @@ propertiesRouter.post('/properties', async (req, res) => {
 /* ------------------------------------------------------------------ *
  * GET /properties/:id — Property details (§18) + completion (M2)
  * ------------------------------------------------------------------ */
+
+/** Confirmed properties only — drafts never count toward the plan. */
+async function countConfirmed(db: SupabaseClient, accountId: string): Promise<number> {
+  const res = await db
+    .from('properties')
+    .select('id', { count: 'exact', head: true })
+    .eq('account_id', accountId)
+    .eq('is_draft', false);
+  must(res);
+  return res.count ?? 0;
+}
+
+/* ------------------------------------------------------------------ *
+ * Sale Deed path (Pittu): draft → deed read → customer confirms
+ * ------------------------------------------------------------------ */
+
+const MAX_OPEN_DRAFTS = 3;
+
+/* POST /properties/draft — a placeholder the deed can be stored against */
+propertiesRouter.post('/properties/draft', async (req, res) => {
+  const ctx = auth(req);
+  assertAiAvailable(ctx.accountId);
+  const plan = planOf(req);
+  requireFeature(plan, 'property_profile', 'Adding properties');
+  // Check the limit now, so nobody reads a deed only to be refused at the end.
+  enforceLimit(plan, 'max_properties', await countConfirmed(ctx.db, ctx.accountId), 1, [
+    'property',
+    'properties',
+  ]);
+  const drafts = await ctx.db
+    .from('properties')
+    .select('id', { count: 'exact', head: true })
+    .eq('account_id', ctx.accountId)
+    .eq('is_draft', true);
+  must(drafts);
+  if ((drafts.count ?? 0) >= MAX_OPEN_DRAFTS) {
+    throw new HttpError(
+      409,
+      'CONFLICT',
+      'You have properties waiting to be finished. Finish or remove one of them first.',
+    );
+  }
+  const row = must<PropertyRow>(
+    await ctx.db
+      .from('properties')
+      .insert({
+        account_id: ctx.accountId,
+        user_id: ctx.userId,
+        property_type: 'other',
+        name: 'New property',
+        is_draft: true,
+        field_sources: {},
+      })
+      .select(PROPERTY_COLUMNS)
+      .single(),
+  );
+  await audit(ctx, 'property.draft_created', { type: 'property', id: row.id });
+  ok(res, toProperty(row), 201);
+});
+
+/* GET /properties/drafts — unfinished deed set-ups, for "Finish adding" on Home */
+propertiesRouter.get('/properties/drafts', async (req, res) => {
+  const { db, accountId } = auth(req);
+  const drafts = must<{ id: string; name: string; created_at: string }[]>(
+    await db
+      .from('properties')
+      .select('id, name, created_at')
+      .eq('account_id', accountId)
+      .eq('is_draft', true)
+      .order('created_at', { ascending: false }),
+  );
+  const ids = drafts.map((d) => d.id);
+  const docs =
+    ids.length === 0
+      ? []
+      : must<{ id: string; property_id: string }[]>(
+          await db
+            .from('property_documents')
+            .select('id, property_id')
+            .in('property_id', ids)
+            .eq('document_type', 'sale_deed')
+            .eq('upload_status', 'ready')
+            .order('created_at', { ascending: false }),
+        );
+  const data: DraftProperty[] = drafts.map((d) => ({
+    id: d.id,
+    created_at: d.created_at,
+    document_id: docs.find((x) => x.property_id === d.id)?.id ?? null,
+  }));
+  ok(res, data);
+});
+
+/*
+ * POST /properties/:id/setup {property, analysis_id?} — the customer confirms.
+ * Turns the draft into a real property, records where each value came from
+ * (deed vs typed), and keeps each fact's outcome: confirmed / edited (with
+ * the customer's value) / rejected. Nothing Pittu found is applied unless
+ * it is in what the customer submitted.
+ */
+const setupSchema = z.object({
+  property: createPropertySchema,
+  analysis_id: z.uuid().nullable().optional(),
+});
+
+/** Facts that map one-to-one onto a property field (the rest are confirmed as shown). */
+const FACT_FIELD: Record<string, PrefillField> = {
+  property_kind: 'property_type',
+  city: 'city',
+  state: 'state',
+  pincode: 'pincode',
+  area_value: 'area_value',
+  area_unit: 'area_unit',
+  khata_number: 'khata_number',
+  unit_number: 'property_number',
+};
+
+propertiesRouter.post('/properties/:id/setup', async (req, res) => {
+  const ctx = auth(req);
+  const id = uuidParam(req.params.id, 'Property');
+  const { property: input, analysis_id: analysisId } = setupSchema.parse(req.body);
+
+  const draft = must<{ id: string; is_draft: boolean } | null>(
+    await ctx.db
+      .from('properties')
+      .select('id, is_draft')
+      .eq('id', id)
+      .eq('account_id', ctx.accountId)
+      .maybeSingle(),
+  );
+  if (!draft) throw notFound('Property');
+  if (!draft.is_draft) throw new HttpError(409, 'CONFLICT', 'This property is already set up.');
+  const plan = planOf(req);
+  enforceLimit(plan, 'max_properties', await countConfirmed(ctx.db, ctx.accountId), 1, [
+    'property',
+    'properties',
+  ]);
+
+  const facts = analysisId
+    ? must<{ id: string; key: string; value: FactValue }[]>(
+        await ctx.db
+          .from('property_facts')
+          .select('id, key, value')
+          .eq('analysis_id', analysisId)
+          .eq('property_id', id)
+          .eq('account_id', ctx.accountId),
+      )
+    : [];
+  const prefill = prefillFromFacts(facts);
+
+  // Provenance: unchanged deed values are 'sale_deed'; anything typed is 'user'.
+  const update = withProvenance(input, {});
+  const sources = update.field_sources as Partial<Record<string, ValueSource>>;
+  for (const field of PREFILL_FIELDS) {
+    const deed = prefill[field];
+    if (
+      deed !== null &&
+      deed !== undefined &&
+      sameFactValue(deed, input[field as keyof typeof input])
+    ) {
+      sources[field] = 'sale_deed';
+    }
+  }
+  const row = must<PropertyRow | null>(
+    await ctx.db
+      .from('properties')
+      .update({ ...update, field_sources: sources, is_draft: false })
+      .eq('id', id)
+      .eq('account_id', ctx.accountId)
+      .select(PROPERTY_COLUMNS)
+      .maybeSingle(),
+  );
+  if (!row) throw notFound('Property');
+
+  // The improvement signal: what the customer did with each fact.
+  const now = new Date().toISOString();
+  const confirmed: string[] = [];
+  let edited = 0;
+  let rejected = 0;
+  for (const f of facts) {
+    const field = FACT_FIELD[f.key];
+    if (!field) {
+      confirmed.push(f.id);
+      continue;
+    }
+    const submitted = input[field as keyof typeof input] ?? null;
+    if (sameFactValue(f.value, submitted)) {
+      confirmed.push(f.id);
+    } else {
+      const removed = submitted === null || submitted === '';
+      if (removed) rejected++;
+      else edited++;
+      must(
+        await ctx.db
+          .from('property_facts')
+          .update({
+            status: removed ? 'rejected' : 'edited',
+            final_value: removed ? null : submitted,
+            decided_by: ctx.userId,
+            decided_at: now,
+          })
+          .eq('id', f.id),
+      );
+    }
+  }
+  if (confirmed.length) {
+    must(
+      await ctx.db
+        .from('property_facts')
+        .update({ status: 'confirmed', decided_by: ctx.userId, decided_at: now })
+        .in('id', confirmed),
+    );
+  }
+  await audit(
+    ctx,
+    'property.created_from_deed',
+    { type: 'property', id },
+    {
+      analysis_id: analysisId ?? null,
+      facts_confirmed: confirmed.length,
+      facts_edited: edited,
+      facts_rejected: rejected,
+    },
+  );
+  ok(res, toProperty(row));
+});
 
 propertiesRouter.get('/properties/:id', async (req, res) => {
   const { db, accountId } = auth(req);

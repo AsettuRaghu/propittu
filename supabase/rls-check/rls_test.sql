@@ -1147,6 +1147,27 @@ select tst.ok(exists (select 1 from public.property_documents where document_typ
 
 -- =====================================================================
 \echo
+\echo '== Draft properties: hidden from usage until confirmed =='
+-- =====================================================================
+
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+create temp table usage_before as select property_count from public.account_usage where account_id = 'acc0000a-0000-0000-0000-00000000000a';
+insert into public.properties (account_id, user_id, property_type, name, is_draft)
+values ('acc0000a-0000-0000-0000-00000000000a', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'other', 'New property (reading deed)', true);
+select tst.ok((select property_count from public.account_usage where account_id = 'acc0000a-0000-0000-0000-00000000000a')
+              = (select property_count from usage_before),
+  'a draft property does not count toward the plan''s property limit');
+select tst.ok((select bool_or(is_draft) from public.property_summaries), 'summaries mark drafts so lists can leave them out');
+update public.properties set is_draft = false, name = 'Confirmed from deed' where is_draft;
+select tst.ok((select property_count from public.account_usage where account_id = 'acc0000a-0000-0000-0000-00000000000a')
+              = (select property_count from usage_before) + 1,
+  'once confirmed, it counts');
+delete from public.properties where name = 'Confirmed from deed';
+reset role;
+
+-- =====================================================================
+\echo
 \echo '== Deleting a property =='
 -- =====================================================================
 

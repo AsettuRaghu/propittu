@@ -117,3 +117,63 @@ test('task metadata is versioned and the schema has no union types (API limit)',
   const json = JSON.stringify(saleDeedTask.schema);
   assert.ok(!json.includes('"null"') && !json.includes('anyOf'), 'no nullable / anyOf fields');
 });
+
+import { prefillFromFacts, sameFactValue } from '@propittu/shared';
+
+const facts = (o: Record<string, unknown>) =>
+  Object.entries(o).map(([key, value]) => ({ key, value: value as never }));
+
+test('pre-fill: a layout plot gets site + Khata, and NO survey number (owner decision)', () => {
+  const p = prefillFromFacts(
+    facts({
+      property_kind: 'land',
+      project_name: 'Prasanthi Green Park',
+      unit_number: '28',
+      khata_number: '1371',
+      village: 'Marasur',
+      hobli: 'Kasaba',
+      taluk_or_mandal: 'Anekal',
+      city: 'Bengaluru Urban',
+      state: 'Karnataka',
+      area_value: 1200,
+      area_unit: 'sqft',
+      survey_numbers: ['207/1A', '205/1'],
+    }),
+  );
+  assert.equal(p.name, 'Prasanthi Green Park – Site 28');
+  assert.equal(p.property_type, 'land');
+  assert.equal(p.property_number, '28');
+  assert.equal(p.khata_number, '1371');
+  assert.equal(p.survey_number, null);
+  assert.equal(p.area_value, 1200);
+  assert.equal(
+    p.address_line,
+    'Site No. 28, Prasanthi Green Park, Marasur village, Kasaba Hobli, Anekal',
+  );
+  assert.equal(p.pincode, null, 'never invented');
+});
+
+test('pre-fill: an apartment name carries block and flat', () => {
+  const p = prefillFromFacts(
+    facts({
+      property_kind: 'apartment',
+      project_name: 'NCC Urban Mayfair',
+      block_or_tower: 'Block E',
+      unit_number: '1102',
+    }),
+  );
+  assert.equal(p.name, 'NCC Urban Mayfair – Block E · 1102');
+  assert.equal(p.khata_number, null, 'land Khata is not the flat Khata');
+});
+
+test('pre-fill: plain land without a layout keeps its survey number', () => {
+  const p = prefillFromFacts(facts({ property_kind: 'land', survey_numbers: ['83'] }));
+  assert.equal(p.survey_number, '83');
+});
+
+test('edits are detected, formatting differences are not', () => {
+  assert.ok(sameFactValue('Prasanthi Green Park – Site 28', 'prasanthi green park - site 28'));
+  assert.ok(sameFactValue(1200, '1200'));
+  assert.ok(!sameFactValue('1371', '1372'));
+  assert.ok(!sameFactValue('Anekal', null));
+});

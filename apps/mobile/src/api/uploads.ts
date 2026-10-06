@@ -8,6 +8,7 @@ import { Platform } from 'react-native';
 import {
   ALLOWED_DOCUMENT_MIME_TYPES,
   MAX_DOCUMENT_BYTES,
+  maxDocumentBytes,
   MAX_PHOTO_BYTES,
   MAX_VIDEO_BYTES,
   MAX_VIDEO_SECONDS,
@@ -161,17 +162,22 @@ function documentMime(asset: DocumentPickerAsset): DocumentMimeType | null {
 }
 
 /** Validates a picked document BEFORE any network call (§21). */
-export function prepareDocument(asset: DocumentPickerAsset): LocalFile {
+export function prepareDocument(
+  asset: DocumentPickerAsset,
+  /** Sale deeds / registration documents may be larger (long scans). */
+  documentType?: DocumentType,
+): LocalFile {
   const mimeType = documentMime(asset);
   if (!mimeType) {
     throw new ApiError(415, 'UNSUPPORTED_FILE_TYPE', 'Only PDF, JPG and PNG files are supported.');
   }
   const size = asset.size ?? new File(asset.uri).size;
-  if (size > MAX_DOCUMENT_BYTES) {
+  const limit = documentType ? maxDocumentBytes(documentType) : MAX_DOCUMENT_BYTES;
+  if (size > limit) {
     throw new ApiError(
       413,
       'FILE_TOO_LARGE',
-      `This file is ${formatFileSize(size)}. The limit is ${formatFileSize(MAX_DOCUMENT_BYTES)}.`,
+      `This file is ${formatFileSize(size)}. The limit is ${formatFileSize(limit)}.`,
     );
   }
   return { uri: asset.uri, name: asset.name, mimeType, size };

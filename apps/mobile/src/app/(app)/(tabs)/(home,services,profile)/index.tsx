@@ -2,6 +2,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useDraftProperties } from '@/api/ai';
 import { useMe, useProperties } from '@/api/queries';
 import { Icon, type IconName } from '@/components/Icon';
 import { LimitedAccessState, PlanBanner } from '@/components/PlanGate';
@@ -41,6 +42,8 @@ export default function HomeScreen() {
   const addProperty = () => router.push('/properties/new');
   const name = me.data?.full_name?.split(' ')[0];
   const hasProperties = !!data && data.length > 0;
+  const drafts = useDraftProperties(!limited && !!me.data?.features.document_reading);
+  const unfinished = (drafts.data ?? []).filter((d) => d.document_id);
 
   const header = (
     <View style={styles.header}>
@@ -65,6 +68,26 @@ export default function HomeScreen() {
         ) : null}
       </View>
       {me.data && !limited ? <PlanBanner plan={me.data.plan} /> : null}
+      {unfinished.map((d) => (
+        <Pressable
+          key={d.id}
+          onPress={() =>
+            router.push({
+              pathname: '/properties/[id]/setup',
+              params: { id: d.id, doc: d.document_id ?? '' },
+            })
+          }
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.draft, shadow, pressed && { opacity: 0.85 }]}
+        >
+          <IconTile icon="document" accent="indigo" size={36} />
+          <View style={styles.flex}>
+            <Text style={typography.bodyStrong}>Finish adding your property</Text>
+            <Text style={typography.caption}>Pittu has read your sale deed — check and save.</Text>
+          </View>
+          <Icon name="chevron" size={16} color={colors.textSubtle} />
+        </Pressable>
+      ))}
       {hasProperties ? (
         <Text style={styles.section}>
           My properties <Text style={styles.count}>· {data.length}</Text>
@@ -236,6 +259,16 @@ const styles = StyleSheet.create({
   greetRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   greet: { fontSize: 14, fontWeight: '600', color: colors.textMuted },
   section: { ...typography.heading, marginTop: space.xs },
+  draft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: space.md,
+    borderWidth: 1.5,
+    borderColor: colors.primaryBorder,
+  },
   count: { color: colors.textSubtle, fontWeight: '700' },
   list: { paddingHorizontal: space.lg, paddingBottom: space.xxl, flexGrow: 1 },
   skeletons: { gap: space.md },

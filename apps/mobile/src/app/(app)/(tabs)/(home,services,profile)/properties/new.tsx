@@ -1,10 +1,11 @@
 import { Image } from 'expo-image';
 import type { ImagePickerAsset } from 'expo-image-picker';
-import { Stack, router } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MAX_PHOTOS_AT_CREATION } from '@propittu/shared';
-import { useCreateProperty, useInvalidateProperty } from '@/api/queries';
+import { useCreateProperty, useInvalidateProperty, useMe } from '@/api/queries';
 import { preparePhoto, uploadPhoto } from '@/api/uploads';
 import { Footer } from '@/components/Footer';
 import { Icon } from '@/components/Icon';
@@ -18,7 +19,7 @@ import {
 import { Banner, Button, ProgressBar } from '@/components/ui';
 import { errorMessage, fieldErrors } from '@/lib/errors';
 import { pickPhotos } from '@/lib/pickPhotos';
-import { accents, colors, radius, space, typography } from '@/theme';
+import { accents, colors, gradients, radius, shadow, space, typography } from '@/theme';
 
 type Phase =
   | { kind: 'idle' }
@@ -31,6 +32,66 @@ type Phase =
  * new property's id. A failed photo never loses the property.
  */
 export default function AddPropertyScreen() {
+  const me = useMe();
+  const { manual } = useLocalSearchParams<{ manual?: string }>();
+  // Pittu is offered only where it is switched on; everyone else sees the form.
+  const [mode, setMode] = useState<'choose' | 'form'>(manual === '1' ? 'form' : 'choose');
+  if (mode === 'choose' && me.data?.features.document_reading) {
+    return <ChooseHowToAdd onManual={() => setMode('form')} />;
+  }
+  return <AddPropertyForm />;
+}
+
+/** "Upload your Sale Deed" (recommended) or "Enter details myself". */
+function ChooseHowToAdd({ onManual }: { onManual: () => void }) {
+  return (
+    <ScrollView contentContainerStyle={styles.content}>
+      <Text style={typography.small}>How would you like to add your property?</Text>
+      <LinearGradient
+        colors={gradients.brand}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.deedCard}
+      >
+        <Text style={styles.badge}>RECOMMENDED</Text>
+        <Text style={styles.deedTitle}>Upload your Sale Deed</Text>
+        <Text style={styles.deedText}>
+          Pittu reads it and sets up your property for you — no long forms.
+        </Text>
+        {['Details filled in for you', 'We spot what needs attention', 'About a minute'].map(
+          (t) => (
+            <View key={t} style={styles.perk}>
+              <Icon name="check" size={15} color="#FFFFFF" strokeWidth={3} />
+              <Text style={styles.perkText}>{t}</Text>
+            </View>
+          ),
+        )}
+        <Button
+          title="Upload sale deed"
+          icon="upload"
+          variant="secondary"
+          onPress={() => router.push('/properties/deed')}
+        />
+      </LinearGradient>
+      <Pressable
+        onPress={onManual}
+        accessibilityRole="button"
+        style={({ pressed }) => [styles.manual, shadow, pressed && { opacity: 0.85 }]}
+      >
+        <View style={styles.manualIcon}>
+          <Icon name="edit" size={18} color={colors.textMuted} />
+        </View>
+        <View style={styles.flex}>
+          <Text style={typography.bodyStrong}>Enter details myself</Text>
+          <Text style={typography.caption}>You can upload the deed later</Text>
+        </View>
+        <Icon name="chevron" size={16} color={colors.textSubtle} />
+      </Pressable>
+    </ScrollView>
+  );
+}
+
+function AddPropertyForm() {
   const [values, setValues] = useState<PropertyFormValues>(emptyPropertyForm);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -171,6 +232,39 @@ export default function AddPropertyScreen() {
 }
 
 const styles = StyleSheet.create({
+  deedCard: { borderRadius: radius.xl, padding: space.xl, gap: space.md },
+  badge: {
+    alignSelf: 'flex-start',
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    overflow: 'hidden',
+  },
+  deedTitle: { fontSize: 21, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.3 },
+  deedText: { fontSize: 14, lineHeight: 20, color: 'rgba(255,255,255,0.92)' },
+  perk: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  perkText: { fontSize: 13, color: '#FFFFFF' },
+  manual: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: space.md,
+  },
+  manualIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   flex: { flex: 1 },
   content: { padding: space.lg, paddingTop: space.xs, gap: space.lg, paddingBottom: space.xxl },
   photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },

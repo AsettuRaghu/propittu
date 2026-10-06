@@ -30,7 +30,11 @@ meRouter.get('/me', async (req, res) => {
     db.from('profiles').select('id, full_name, created_at').eq('id', userId).maybeSingle(),
     db.from('accounts').select('id, status').eq('id', accountId).single(),
     db.from('staff_members').select('role, is_active').eq('user_id', userId).maybeSingle(),
-    db.from('properties').select('id', { count: 'exact', head: true }).eq('account_id', accountId),
+    db
+      .from('properties')
+      .select('id', { count: 'exact', head: true })
+      .eq('account_id', accountId)
+      .eq('is_draft', false),
     db
       .from('service_requests')
       .select('id', { count: 'exact', head: true })
