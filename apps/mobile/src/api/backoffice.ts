@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   AccountPlanState,
+  AuditEntry,
   BackofficeAccount,
   BackofficeAccountDetail,
   BackofficeProperty,
@@ -58,6 +59,13 @@ export const useBoAccount = (id: string) =>
   useQuery({
     queryKey: boKeys.account(id),
     queryFn: () => api<BackofficeAccountDetail>(`/backoffice/accounts/${id}`),
+    staleTime: 0,
+  });
+
+export const useBoActivity = (accountId: string, kind: 'events' | 'changes') =>
+  useQuery({
+    queryKey: ['backoffice', 'activity', accountId, kind],
+    queryFn: () => api<AuditEntry[]>(`/backoffice/accounts/${accountId}/activity?kind=${kind}`),
     staleTime: 0,
   });
 

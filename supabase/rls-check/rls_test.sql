@@ -299,7 +299,7 @@ select tst.rows('select * from public.properties', 1, 'staff can see A''s proper
 select tst.rows('select * from public.property_documents', 2, 'staff can see A''s documents');
 select tst.rows('select * from public.service_requests', 1, 'staff can see A''s service request');
 select tst.rows('select * from public.profiles', 3, 'staff can see customer profiles');
-select tst.rows('select * from public.audit_events', 1, 'staff can read the audit log');
+select tst.rows($$select * from public.audit_events where action not like 'db.%'$$, 1, 'staff can read the audit log');
 select tst.rows('select * from storage.objects', 1, 'staff can see A''s storage objects');
 select tst.rejects(
   $$insert into public.properties (account_id, user_id, property_type, name)
@@ -1049,6 +1049,36 @@ select tst.ok((select summary from public.service_outcomes) = 'Paid 2026-27 prop
 select tst.rows($$select * from public.service_outcome_files$$, 1, 'customer sees the result files once completed');
 select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
 select tst.rows($$select * from public.service_outcomes$$, 0, 'B cannot see A''s outcomes');
+reset role;
+
+-- =====================================================================
+\echo
+\echo '== Audit trail: every important change is recorded, history cannot be rewritten =='
+-- =====================================================================
+
+select tst.ok((select count(*) from public.audit_events
+               where action = 'db.service_requests.update'
+                 and data->'changes' ? 'status'
+                 and actor_type = 'staff') > 0,
+  'staff status changes are recorded with old → new values');
+select tst.ok((select count(*) from public.audit_events
+               where action = 'db.orders.update' and data->'changes'->'status'->>1 = 'paid'
+                 and actor_type = 'provider') > 0,
+  'a payment marking an order paid is recorded as the provider (webhook)');
+select tst.ok((select count(*) from public.audit_events where action = 'db.account_plans.insert') > 0,
+  'plan periods granted are recorded');
+update public.services set sort_order = sort_order + 1 where code = 'repair';
+select tst.ok((select actor_type from public.audit_events where action = 'db.services.update'
+               order by created_at desc limit 1) = 'system',
+  'an operator SQL change is recorded too (actor: system)');
+
+set role authenticated;
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+select tst.rejects($$update public.audit_events set action = 'x'$$, 'staff cannot edit the audit log');
+select tst.rejects($$delete from public.audit_events$$, 'staff cannot delete from the audit log');
+reset role;
+set role service_role;
+select tst.rejects($$delete from public.audit_events$$, 'even the server key cannot delete audit history');
 reset role;
 
 -- =====================================================================

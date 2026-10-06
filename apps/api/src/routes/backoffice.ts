@@ -24,6 +24,7 @@ import {
   visitMediaIntentSchema,
   visitReportSchema,
   type AccountPlanState,
+  type AuditEntry,
   type BackofficeAccount,
   type BackofficeAccountDetail,
   type BackofficeOrder,
@@ -224,6 +225,48 @@ backofficeRouter.post('/accounts/:accountId/status', allow('accounts.status'), a
     accountId,
   );
   ok(res, await loadAccount(ctx.db, accountId));
+});
+
+/*
+ * GET /backoffice/accounts/:accountId/activity?kind=events|changes|all — the
+ * account's audit trail, newest first (M11). Business events by default.
+ */
+const activitySchema = z.object({ kind: z.enum(['events', 'changes', 'all']).default('events') });
+
+backofficeRouter.get('/accounts/:accountId/activity', async (req, res) => {
+  const { db } = auth(req);
+  const accountId = uuidParam(req.params.accountId, 'Account');
+  const { kind } = activitySchema.parse(req.query);
+  let q = db
+    .from('audit_events')
+    .select(
+      'id, created_at, actor_type, actor_user_id, action, entity_type, entity_id, data, request_id',
+    )
+    .eq('account_id', accountId)
+    .order('created_at', { ascending: false })
+    .limit(100);
+  if (kind === 'events') q = q.not('action', 'like', 'db.%');
+  if (kind === 'changes') q = q.like('action', 'db.%');
+  const rows = must<
+    (Omit<AuditEntry, 'actor_name' | 'changes'> & {
+      actor_user_id: string | null;
+      data: { changes?: AuditEntry['changes'] } | null;
+    })[]
+  >(await q);
+  const ids = [...new Set(rows.flatMap((r) => (r.actor_user_id ? [r.actor_user_id] : [])))];
+  const people =
+    ids.length === 0
+      ? []
+      : must<{ id: string; full_name: string | null; phone: string }[]>(
+          await db.from('profiles').select('id, full_name, phone').in('id', ids),
+        );
+  const name = new Map(people.map((p) => [p.id, p.full_name || p.phone || null]));
+  const data: AuditEntry[] = rows.map(({ actor_user_id, data: d, ...r }) => ({
+    ...r,
+    actor_name: actor_user_id ? (name.get(actor_user_id) ?? null) : null,
+    changes: d?.changes ?? null,
+  }));
+  ok(res, data);
 });
 
 /* GET /backoffice/accounts/:accountId/plan */

@@ -282,6 +282,7 @@ supportRouter.post('/support/tickets/:id/messages', async (req, res) => {
       body,
     }),
   );
+  await audit(ctx, 'support_ticket.replied', { type: 'support_ticket', id });
   ok(res, await loadTicket(ctx.db, ctx.accountId, id), 201);
 });
 

@@ -17,10 +17,16 @@ const serverAuthOptions = {
  *
  * Built per request; it holds no state beyond the token.
  */
-export function userClient(accessToken: string): SupabaseClient {
+export function userClient(accessToken: string, requestId?: string): SupabaseClient {
   return createClient(env.SUPABASE_URL, env.SUPABASE_PUBLISHABLE_KEY, {
     auth: serverAuthOptions,
-    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+    global: {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        // The database stamps it on audit entries, so they join the API logs.
+        ...(requestId ? { 'x-request-id': requestId } : {}),
+      },
+    },
   });
 }
 

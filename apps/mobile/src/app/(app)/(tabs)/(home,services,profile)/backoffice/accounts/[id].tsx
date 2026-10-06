@@ -21,6 +21,7 @@ import {
 import { PullRefresh } from '@/components/PullRefresh';
 import { useMe } from '@/api/queries';
 import { ErrorState, LoadingState } from '@/components/States';
+import { ActivityLog } from '@/components/ActivityLog';
 import { Badge, Banner, Button, Card, KeyValue, SectionTitle } from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
@@ -254,6 +255,10 @@ export default function BackofficeAccountScreen() {
           </Card>
         ))}
         {data.requests.length === 0 ? <Text style={typography.small}>No requests yet.</Text> : null}
+      </View>
+      <View style={styles.section}>
+        <SectionTitle title="Activity" subtitle="Audit trail · newest first" />
+        <ActivityLog accountId={id} />
       </View>
     </ScrollView>
   );

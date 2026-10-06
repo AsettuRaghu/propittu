@@ -281,6 +281,21 @@ export interface BackofficeAccountDetail {
   orders: Order[];
 }
 
+/** One audit entry for the Backoffice activity list (M11). */
+export interface AuditEntry {
+  id: string;
+  created_at: string;
+  actor_type: 'user' | 'staff' | 'system' | 'provider';
+  actor_name: string | null;
+  /** Business event ("service_request.created") or row change ("db.orders.update"). */
+  action: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  /** For row changes: the columns that changed, old → new. */
+  changes: Record<string, [unknown, unknown]> | null;
+  request_id: string | null;
+}
+
 export interface BackofficeProperty {
   property: Property;
   account_id: string;
