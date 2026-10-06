@@ -267,18 +267,12 @@ function CurrentPlan({
         </View>
       </View>
       {s.current ? (
-        <>
-          <Text style={styles.heroLine}>
-            {paid
-              ? `${formatPrice(s.plan?.price_paise ?? 0)} ${BILLING_PERIOD_LABELS[s.plan?.billing_period ?? 'year']} · `
-              : ''}
-            {formatDate(s.current.starts_at)} – {formatDate(s.current.ends_at)}
-          </Text>
-          <Text style={styles.heroLine}>
-            {trial ? 'Trial ends' : 'Valid till'} {formatDate(s.current.ends_at)} ·{' '}
-            {s.current.days_left} day{s.current.days_left === 1 ? '' : 's'} left
-          </Text>
-        </>
+        <Text style={styles.heroLine}>
+          {paid
+            ? `${formatPrice(s.plan?.price_paise ?? 0)} ${BILLING_PERIOD_LABELS[s.plan?.billing_period ?? 'year']} · `
+            : ''}
+          {formatDate(s.current.starts_at)} – {formatDate(s.current.ends_at)}
+        </Text>
       ) : (
         <Text style={styles.heroLine}>Your data is safe — choose a plan to carry on</Text>
       )}
