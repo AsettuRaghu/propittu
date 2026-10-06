@@ -84,6 +84,7 @@ export const DOCUMENT_TYPE_VISUALS: Record<DocumentType, { icon: IconName; accen
   sale_deed: { icon: 'deed', accent: 'amber' },
   registration: { icon: 'verified', accent: 'indigo' },
   property_tax: { icon: 'receipt', accent: 'teal' },
+  khata: { icon: 'government', accent: 'sky' },
   other: { icon: 'document', accent: 'slate' },
 };
 

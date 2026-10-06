@@ -208,7 +208,8 @@ function Review({
       {
         onSuccess: (p) => {
           toast('Property added');
-          router.replace(`/properties/${p.id}`);
+          // Pittu's quick questions, documents checklist and care plan.
+          router.replace(`/properties/${p.id}/pittu`);
         },
         onError: (err) => {
           setErrors(fieldErrors(err));

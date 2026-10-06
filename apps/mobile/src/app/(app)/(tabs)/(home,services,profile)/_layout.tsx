@@ -33,6 +33,10 @@ const SCREENS: { name: string; options: Record<string, unknown> }[] = [
   { name: 'properties/new', options: { title: 'Add property' } },
   { name: 'properties/added', options: { headerShown: false, gestureEnabled: false } },
   { name: 'properties/[id]/setup', options: { title: 'Check the details' } },
+  {
+    name: 'properties/[id]/pittu',
+    options: { title: 'A few quick questions', gestureEnabled: false },
+  },
   { name: 'properties/[id]/index', options: { title: '' } },
   { name: 'properties/[id]/edit', options: { title: 'Edit property' } },
   { name: 'properties/[id]/location', options: { title: 'Property location' } },

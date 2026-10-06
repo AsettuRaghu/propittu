@@ -1241,6 +1241,35 @@ reset role;
 
 -- =====================================================================
 \echo
+\echo '== Pittu answers: customers answer their own; staff read =='
+-- =====================================================================
+
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+insert into public.property_answers (property_id, account_id, question_id, answer, answered_by)
+select id, account_id, 'plot_built', 'vacant', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+from public.properties where account_id = 'acc0000a-0000-0000-0000-00000000000a' and not is_draft limit 1;
+select tst.rows('select * from public.property_answers', 1, 'A answers a Pittu question about its property');
+select tst.rejects($$insert into public.property_answers (property_id, account_id, question_id, answer, answered_by)
+                     select id, account_id, 'tax_paid', 'paid', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
+                     from public.properties where account_id = 'acc0000a-0000-0000-0000-00000000000a' limit 1$$,
+  'an answer cannot be recorded in someone else''s name');
+select tst.rejects($$insert into public.property_answers (property_id, account_id, question_id, answer, answered_by)
+                     select id, account_id, 'tax_paid', 'DROP TABLE', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+                     from public.properties where account_id = 'acc0000a-0000-0000-0000-00000000000a' limit 1$$,
+  'answers are plain codes only');
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.rows('select * from public.property_answers', 0, 'B cannot see A''s answers');
+select tst.rejects($$insert into public.property_answers (property_id, account_id, question_id, answer, answered_by)
+                     values ('a1a1a1a1-0000-0000-0000-000000000001', 'acc0000a-0000-0000-0000-00000000000a',
+                             'tax_paid', 'paid', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb')$$,
+  'B cannot answer for A''s property (even knowing its id)');
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+select tst.rows('select * from public.property_answers', 1, 'staff can read answers (for review)');
+reset role;
+
+-- =====================================================================
+\echo
 \echo '== Deleting a property =='
 -- =====================================================================
 

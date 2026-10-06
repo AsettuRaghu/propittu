@@ -3,6 +3,7 @@ import type {
   CreatePropertyInput,
   DocumentAnalysis,
   DraftProperty,
+  PittuState,
   Property,
 } from '@propittu/shared';
 import { api } from './client';
@@ -57,5 +58,28 @@ export function useFinishSetup(propertyId: string) {
       void qc.invalidateQueries({ queryKey: keys.properties });
       void qc.invalidateQueries({ queryKey: keys.me });
     },
+  });
+}
+
+/* ---- Pittu guided setup ---- */
+
+export const pittuKey = (propertyId: string) => ['properties', propertyId, 'pittu'] as const;
+
+export const usePittu = (propertyId: string) =>
+  useQuery({
+    queryKey: pittuKey(propertyId),
+    queryFn: () => api<PittuState>(`/properties/${propertyId}/pittu`),
+    staleTime: 0,
+  });
+
+export function useAnswerPittu(propertyId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ question, answer }: { question: string; answer: string }) =>
+      api<PittuState>(`/properties/${propertyId}/pittu/answers/${question}`, {
+        method: 'PUT',
+        body: { answer },
+      }),
+    onSuccess: (state) => qc.setQueryData(pittuKey(propertyId), state),
   });
 }

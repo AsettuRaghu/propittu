@@ -90,7 +90,13 @@ export const AREA_UNIT_LABELS: Record<AreaUnit, string> = {
  * ------------------------------------------------------------------ */
 
 /** M3 V1 categories. Sale Deed is first-class (future M12 extraction source). */
-export const DOCUMENT_TYPES = ['sale_deed', 'registration', 'property_tax', 'other'] as const;
+export const DOCUMENT_TYPES = [
+  'sale_deed',
+  'registration',
+  'property_tax',
+  'khata',
+  'other',
+] as const;
 
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 
@@ -98,6 +104,7 @@ export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   sale_deed: 'Sale Deed',
   registration: 'Registration',
   property_tax: 'Property Tax',
+  khata: 'Khata',
   other: 'Other',
 };
 
