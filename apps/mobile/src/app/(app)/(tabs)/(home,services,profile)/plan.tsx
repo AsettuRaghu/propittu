@@ -20,7 +20,7 @@ import {
 } from '@propittu/shared';
 import { PullRefresh } from '@/components/PullRefresh';
 import { fetchPlanQuote, useOrders, usePlanCheckout } from '@/api/billing';
-import { useAccountPlan, usePlans } from '@/api/queries';
+import { useAccountPlan, usePlans, useProperties, useServices } from '@/api/queries';
 import { dialog } from '@/components/Dialog';
 import { Icon, type IconName } from '@/components/Icon';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
@@ -68,6 +68,8 @@ export default function PlanScreen() {
   const plans = usePlans();
   const orders = useOrders();
   const checkout = usePlanCheckout();
+  const properties = useProperties();
+  const services = useServices();
   const [tab, setTab] = useState<Tab>('usage');
 
   if (state.isPending) return <LoadingState />;
@@ -113,6 +115,26 @@ export default function PlanScreen() {
         icon: 'clock',
       });
       return;
+    }
+    // Decision 2026-10-06: warn (never block) when the plan's included visits
+    // can't be used at any of the customer's properties yet.
+    const visitCodes = new Set(
+      (services.data ?? []).filter((x) => x.reach === 'area').map((x) => x.code),
+    );
+    const list = properties.data ?? [];
+    const includesVisits = plan.benefits.included.some((i) => visitCodes.has(i.code));
+    if (includesVisits && list.length > 0 && list.every((p) => p.reach && !p.reach.visits)) {
+      const goOn = await dialog.confirm({
+        title: 'Visits don’t reach your properties yet',
+        message:
+          `Our team doesn’t visit the area of ${list.length === 1 ? 'your property' : 'any of your properties'} yet, ` +
+          `so ${plan.name}’s included visits can’t be used there for now. Documents, Pittu and ` +
+          'reminders work as usual — we’ll tell you when we arrive.',
+        icon: 'map',
+        confirmLabel: 'Continue anyway',
+        cancelLabel: 'Not now',
+      });
+      if (!goOn) return;
     }
     const period = `${formatDate(q.starts_at)} – ${formatDate(q.ends_at)}`;
     const upgrade = q.mode === 'upgrade';

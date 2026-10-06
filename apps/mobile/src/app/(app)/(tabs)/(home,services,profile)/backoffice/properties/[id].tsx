@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
 import * as WebBrowser from 'expo-web-browser';
 import { useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   DOCUMENT_STATUS_LABELS,
@@ -11,10 +12,12 @@ import {
   staffCan,
   type DocumentStatus,
   type PropertyDocument,
+  type StaffPropertyReach,
 } from '@propittu/shared';
 import { BoPropertyPittu } from '@/components/BoPittu';
 import { PullRefresh } from '@/components/PullRefresh';
-import { useBoDocumentStatus, useBoProperty } from '@/api/backoffice';
+import { useBoDocumentStatus, useBoProperty, useBoReachException } from '@/api/backoffice';
+import { TextField } from '@/components/Field';
 import { useMe } from '@/api/queries';
 import { openDocument } from '@/api/uploads';
 import { ErrorState, LoadingState } from '@/components/States';
@@ -103,6 +106,8 @@ export default function BackofficePropertyScreen() {
         </View>
       ) : null}
 
+      {data.reach ? <ReachCard propertyId={id} reach={data.reach} /> : null}
+
       {data.pittu ? <BoPropertyPittu propertyId={id} pittu={data.pittu} /> : null}
 
       <View style={styles.section}>
@@ -113,6 +118,81 @@ export default function BackofficePropertyScreen() {
         {data.documents.length === 0 ? <Text style={typography.small}>No documents.</Text> : null}
       </View>
     </ScrollView>
+  );
+}
+
+/** What reaches this property, and the staff "serve it anyway" exception. */
+function ReachCard({ propertyId, reach }: { propertyId: string; reach: StaffPropertyReach }) {
+  const me = useMe();
+  const canEdit = staffCan(me.data?.staff_role, 'services.manage');
+  const change = useBoReachException(propertyId);
+  const [reason, setReason] = useState('');
+  const save = (value: string | null) =>
+    change.mutate(value, {
+      onSuccess: () => setReason(''),
+      onError: (err) => showAlert("Couldn't save", errorMessage(err)),
+    });
+
+  return (
+    <Card style={styles.card}>
+      <View style={styles.row}>
+        <Text style={typography.bodyStrong}>Where we serve</Text>
+        {reach.exception ? <Badge label="Exception" tone="info" /> : null}
+      </View>
+      <KeyValue
+        label="Visits"
+        value={
+          reach.visits
+            ? reach.exception && !reach.area_name
+              ? 'Yes — staff exception'
+              : `Yes — ${reach.area_name ?? 'service area'}`
+            : reach.has_pincode
+              ? 'No — PIN code outside our areas'
+              : 'No — PIN code missing'
+        }
+      />
+      <KeyValue
+        label="Paperwork help"
+        value={
+          reach.paperwork
+            ? `Yes${reach.state ? ` — ${reach.state}` : ''}`
+            : `No${reach.state ? ` — ${reach.state} not active` : ' — state unknown'}`
+        }
+      />
+      {reach.interested ? (
+        <Text style={typography.small}>The customer asked to be told when we arrive.</Text>
+      ) : null}
+      {reach.exception ? (
+        <>
+          <KeyValue label="Exception reason" value={reach.exception_reason} />
+          {canEdit ? (
+            <Button
+              title="Remove exception"
+              variant="secondary"
+              loading={change.isPending}
+              onPress={() => save(null)}
+            />
+          ) : null}
+        </>
+      ) : canEdit && (!reach.visits || !reach.paperwork) ? (
+        <>
+          <TextField
+            label="Serve this property anyway"
+            placeholder="Why — e.g. team visiting the area this month"
+            value={reason}
+            onChangeText={setReason}
+            maxLength={500}
+          />
+          <Button
+            title="Add exception"
+            variant="secondary"
+            loading={change.isPending}
+            disabled={reason.trim().length < 3}
+            onPress={() => save(reason.trim())}
+          />
+        </>
+      ) : null}
+    </Card>
   );
 }
 

@@ -201,7 +201,7 @@ export function PropertyForm({
         </View>
         <TextField
           label="PIN code"
-          optional
+          hint="Tells us which services can reach this property"
           keyboardType="number-pad"
           maxLength={6}
           placeholder="500001"

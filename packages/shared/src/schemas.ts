@@ -105,8 +105,18 @@ const propertyFields = {
 const bothOrNeither = (p: { latitude?: number | null; longitude?: number | null }) =>
   (p.latitude ?? null) === null ? (p.longitude ?? null) === null : (p.longitude ?? null) !== null;
 
+/** New properties need a PIN code: it decides which services reach them. */
 export const createPropertySchema = z
-  .object(propertyFields)
+  .object({
+    ...propertyFields,
+    pincode: z.preprocess(
+      (v) => (v === undefined ? '' : v),
+      z
+        .string({ message: 'Enter the 6-digit PIN code' })
+        .trim()
+        .regex(INDIAN_PINCODE_REGEX, 'Enter the 6-digit PIN code'),
+    ),
+  })
   .refine((p) => p.area_value === null || p.area_unit !== null, {
     message: 'Choose a unit for the area',
     path: ['area_unit'],

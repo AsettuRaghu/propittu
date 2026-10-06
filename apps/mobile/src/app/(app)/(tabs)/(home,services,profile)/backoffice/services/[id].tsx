@@ -4,8 +4,11 @@ import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import {
   SERVICE_FULFILMENT_LABELS,
   SERVICE_FULFILMENTS,
+  SERVICE_REACH_LABELS,
+  SERVICE_REACHES,
   staffCan,
   type ServiceFulfilment,
+  type ServiceReach,
   type StaffService,
 } from '@propittu/shared';
 import { useBoServices, useBoUpdateService } from '@/api/backoffice';
@@ -41,6 +44,7 @@ function ServiceForm({ service }: { service: StaffService }) {
   const [isActive, setIsActive] = useState(service.is_active);
   const [isExtra, setIsExtra] = useState(service.is_extra_available);
   const [fulfilment, setFulfilment] = useState<ServiceFulfilment>(service.fulfilment);
+  const [reach, setReach] = useState<ServiceReach>(service.reach);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -60,6 +64,7 @@ function ServiceForm({ service }: { service: StaffService }) {
         is_active: isActive,
         is_extra_available: isExtra,
         fulfilment,
+        reach,
       },
       {
         onSuccess: () => router.back(),
@@ -124,6 +129,26 @@ function ServiceForm({ service }: { service: StaffService }) {
               ? 'Customer picks a date; staff schedule a visit and finish with a visit report and photos.'
               : 'No date or visit; staff can ask the customer for information and finish with an outcome and files saved to Documents.'}{' '}
             New requests use this; existing ones keep theirs.
+          </Text>
+        </View>
+        <View style={styles.type}>
+          <Text style={typography.overline}>Where we offer it</Text>
+          <Segmented
+            options={SERVICE_REACHES.map((r) => ({
+              value: r,
+              label: r === 'area' ? 'Areas' : r === 'state' ? 'States' : 'Everywhere',
+            }))}
+            value={reach}
+            onChange={(v) => canEdit && setReach(v)}
+          />
+          <Text style={typography.caption}>
+            {SERVICE_REACH_LABELS[reach]}:{' '}
+            {reach === 'area'
+              ? 'only properties whose PIN code is in an active service area.'
+              : reach === 'state'
+                ? 'only properties in an active service state.'
+                : 'any property, wherever it is.'}{' '}
+            Manage areas and states from the Services tab.
           </Text>
         </View>
         <Toggle

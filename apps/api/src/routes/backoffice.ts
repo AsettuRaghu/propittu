@@ -8,6 +8,18 @@ import {
   documentStatusSchema,
   extendPlanSchema,
   releaseSlotSchema,
+  areaPincodesSchema,
+  createAreaSchema,
+  createStateSchema,
+  INDIAN_PINCODE_REGEX,
+  reachExceptionSchema,
+  updateAreaSchema,
+  updateStateSchema,
+  type BackofficeCoverage,
+  type ReachDemand,
+  type ServiceArea,
+  type ServiceState,
+  type StaffPropertyReach,
   reviewDecisionSchema,
   grantPlanSchema,
   LIMIT_LABELS,
@@ -58,6 +70,7 @@ import {
 import { waitUntil } from '@vercel/functions';
 import { isRetryableFailure, processAnalysis, requeueFailedAnalysis } from '../ai/jobs.js';
 import { auth, type AuthContext } from '../auth.js';
+import { loadReach } from '../reach.js';
 import { audit } from '../audit.js';
 import { env } from '../env.js';
 import { HttpError, invalid, must, notFound, ok, uuidParam } from '../errors.js';
@@ -1105,6 +1118,7 @@ backofficeRouter.get('/properties/:id', async (req, res) => {
     photos,
     documents: must<DocumentRow[]>(documents).map(toDocument),
     pittu: await loadPittu(db, id),
+    reach: await loadStaffReach(db, accountId, id),
   };
   ok(res, data);
 });
@@ -1169,7 +1183,7 @@ backofficeRouter.post('/documents/:id/status', allow('documents.review'), async 
  * ================================================================== */
 
 const STAFF_SERVICE_COLUMNS =
-  'id, code, name, category, description, sort_order, price_paise, is_extra_available, fulfilment, is_active';
+  'id, code, name, category, description, sort_order, price_paise, is_extra_available, fulfilment, reach, is_active';
 
 /* GET /backoffice/services — including inactive ones */
 backofficeRouter.get('/services', async (req, res) => {
@@ -1645,3 +1659,197 @@ async function loadPittu(db: SupabaseClient, propertyId: string): Promise<Backof
   };
   return data.review || data.facts.length || Object.keys(data.answers).length ? data : null;
 }
+
+/* ================================================================== *
+ * Where we serve: areas (PIN codes), states, demand, exceptions.
+ * Every change is recorded by the tables' audit triggers.
+ * ================================================================== */
+
+async function loadCoverage(db: SupabaseClient): Promise<BackofficeCoverage> {
+  const [areas, pins, states, demand] = await Promise.all([
+    db.from('service_areas').select('id, name, state, is_active').order('name'),
+    db.from('service_area_pincodes').select('pincode, area_id').order('pincode').limit(10000),
+    db.from('service_states').select('state, pincode_prefixes, is_active').order('state'),
+    db.rpc('reach_demand'),
+  ]);
+  const byArea = new Map<string, string[]>();
+  for (const p of must<{ pincode: string; area_id: string }[]>(pins)) {
+    byArea.set(p.area_id, [...(byArea.get(p.area_id) ?? []), p.pincode]);
+  }
+  return {
+    areas: must<Omit<ServiceArea, 'pincodes'>[]>(areas).map((a) => ({
+      ...a,
+      pincodes: byArea.get(a.id) ?? [],
+    })),
+    states: must<ServiceState[]>(states),
+    demand: must<ReachDemand[]>(demand),
+  };
+}
+
+/* GET /backoffice/coverage */
+backofficeRouter.get('/coverage', async (req, res) => {
+  ok(res, await loadCoverage(auth(req).db));
+});
+
+/* POST /backoffice/areas {name, state} */
+backofficeRouter.post('/areas', allow('services.manage'), async (req, res) => {
+  const { db } = auth(req);
+  const input = createAreaSchema.parse(req.body);
+  const { error } = await db.from('service_areas').insert(input);
+  if (error?.code === '23505')
+    throw new HttpError(409, 'CONFLICT', 'An area with this name exists');
+  must({ error, data: null });
+  ok(res, await loadCoverage(db), 201);
+});
+
+/* PATCH /backoffice/areas/:id {name?, is_active?} */
+backofficeRouter.patch('/areas/:id', allow('services.manage'), async (req, res) => {
+  const { db } = auth(req);
+  const id = uuidParam(req.params.id, 'Area');
+  const input = updateAreaSchema.parse(req.body);
+  const row = must<{ id: string } | null>(
+    await db.from('service_areas').update(input).eq('id', id).select('id').maybeSingle(),
+  );
+  if (!row) throw notFound('Area');
+  ok(res, await loadCoverage(db));
+});
+
+/*
+ * POST /backoffice/areas/:id/pincodes {pincodes} — adds PIN codes. A PIN
+ * already in another area is refused (one PIN, one area) and named.
+ */
+backofficeRouter.post('/areas/:id/pincodes', allow('services.manage'), async (req, res) => {
+  const { db } = auth(req);
+  const id = uuidParam(req.params.id, 'Area');
+  const pincodes = [...new Set(areaPincodesSchema.parse(req.body).pincodes)];
+  const taken = must<{ pincode: string; area_id: string }[]>(
+    await db.from('service_area_pincodes').select('pincode, area_id').in('pincode', pincodes),
+  );
+  const elsewhere = taken.filter((t) => t.area_id !== id).map((t) => t.pincode);
+  if (elsewhere.length) {
+    throw invalid(`Already in another area: ${elsewhere.join(', ')}`, {
+      pincodes: 'Remove these from the other area first',
+    });
+  }
+  const fresh = pincodes.filter((p) => !taken.some((t) => t.pincode === p));
+  if (fresh.length) {
+    must(
+      await db
+        .from('service_area_pincodes')
+        .insert(fresh.map((pincode) => ({ pincode, area_id: id }))),
+    );
+  }
+  ok(res, await loadCoverage(db));
+});
+
+/* DELETE /backoffice/areas/:id/pincodes/:pincode */
+backofficeRouter.delete(
+  '/areas/:id/pincodes/:pincode',
+  allow('services.manage'),
+  async (req, res) => {
+    const { db } = auth(req);
+    const id = uuidParam(req.params.id, 'Area');
+    const pincode = String(req.params.pincode);
+    if (!INDIAN_PINCODE_REGEX.test(pincode)) throw invalid('Enter a valid 6-digit PIN code');
+    must(await db.from('service_area_pincodes').delete().eq('area_id', id).eq('pincode', pincode));
+    ok(res, await loadCoverage(db));
+  },
+);
+
+/* POST /backoffice/states {state, pincode_prefixes} */
+backofficeRouter.post('/states', allow('services.manage'), async (req, res) => {
+  const { db } = auth(req);
+  const input = createStateSchema.parse(req.body);
+  const { error } = await db.from('service_states').insert(input);
+  if (error?.code === '23505') throw new HttpError(409, 'CONFLICT', 'This state is already listed');
+  must({ error, data: null });
+  ok(res, await loadCoverage(db), 201);
+});
+
+/* PATCH /backoffice/states/:state {is_active?, pincode_prefixes?} */
+backofficeRouter.patch('/states/:state', allow('services.manage'), async (req, res) => {
+  const { db } = auth(req);
+  const input = updateStateSchema.parse(req.body);
+  const row = must<{ state: string } | null>(
+    await db
+      .from('service_states')
+      .update(input)
+      .eq('state', String(req.params.state))
+      .select('state')
+      .maybeSingle(),
+  );
+  if (!row) throw notFound('State');
+  ok(res, await loadCoverage(db));
+});
+
+/** Reach of one property for staff (with the exception reason, if any). */
+async function loadStaffReach(
+  db: SupabaseClient,
+  accountId: string,
+  propertyId: string,
+): Promise<StaffPropertyReach | null> {
+  const [reach, exception] = await Promise.all([
+    loadReach(db, accountId),
+    db
+      .from('property_reach_exceptions')
+      .select('reason')
+      .eq('property_id', propertyId)
+      .maybeSingle(),
+  ]);
+  const r = reach.get(propertyId);
+  if (!r) return null;
+  return {
+    ...r,
+    exception_reason: must<{ reason: string } | null>(exception)?.reason ?? null,
+  };
+}
+
+async function propertyAccount(db: SupabaseClient, propertyId: string): Promise<string> {
+  const row = must<{ account_id: string } | null>(
+    await db.from('properties').select('account_id').eq('id', propertyId).maybeSingle(),
+  );
+  if (!row) throw notFound('Property');
+  return row.account_id;
+}
+
+/* POST /backoffice/properties/:id/reach-exception {reason} — serve it anyway */
+backofficeRouter.post(
+  '/properties/:id/reach-exception',
+  allow('services.manage'),
+  async (req, res) => {
+    const ctx = auth(req);
+    const id = uuidParam(req.params.id, 'Property');
+    const { reason } = reachExceptionSchema.parse(req.body);
+    const accountId = await propertyAccount(ctx.db, id);
+    must(
+      await ctx.db
+        .from('property_reach_exceptions')
+        .upsert(
+          { property_id: id, account_id: accountId, reason, created_by: ctx.userId },
+          { onConflict: 'property_id', ignoreDuplicates: true },
+        ),
+    );
+    await staffAudit(ctx, 'staff.property.reach_exception_added', accountId, {
+      type: 'property',
+      id,
+    });
+    ok(res, await loadStaffReach(ctx.db, accountId, id));
+  },
+);
+
+/* DELETE /backoffice/properties/:id/reach-exception */
+backofficeRouter.delete(
+  '/properties/:id/reach-exception',
+  allow('services.manage'),
+  async (req, res) => {
+    const ctx = auth(req);
+    const id = uuidParam(req.params.id, 'Property');
+    const accountId = await propertyAccount(ctx.db, id);
+    must(await ctx.db.from('property_reach_exceptions').delete().eq('property_id', id));
+    await staffAudit(ctx, 'staff.property.reach_exception_removed', accountId, {
+      type: 'property',
+      id,
+    });
+    ok(res, await loadStaffReach(ctx.db, accountId, id));
+  },
+);

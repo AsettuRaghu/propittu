@@ -34,6 +34,9 @@ registration is through.
 
 ## Product follow-ups noted
 
+- Where we serve: tell interested customers when their PIN code is added (needs notifications); use the map pin as a cross-check on wrong PIN codes; per-area service lists, if one area ever offers fewer services.
+- Market value estimate (discussed 6 Oct): design doc pending the owner's answers on area, rate setting, pricing and a valuer partner.
+
 - Document access logging (who opened / downloaded which document) — not recorded today.
 - Service-specific fields (e.g. tax assessment year) on paperwork-help outcomes.
 - Deleting a saved result file from Documents breaks its link on the request (same file).

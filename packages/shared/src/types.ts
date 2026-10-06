@@ -1,5 +1,6 @@
 import type { CompletionItem, PropertyCompletion } from './completion';
 import type { PlanSummary } from './plans';
+import type { PropertyReach, ServiceReach } from './reach';
 import type { ServiceFulfilment } from './services';
 import type {
   AccountRole,
@@ -123,6 +124,8 @@ export interface PropertySummary {
     scheduled_for: string | null;
     preferred_date: string | null;
   } | null;
+  /** Which kinds of service reach this property (by PIN code / state). */
+  reach: PropertyReach | null;
 }
 
 /** Property details screen (§18). */
@@ -133,6 +136,7 @@ export interface PropertyDetail extends Property {
   service_request_count: number;
   /** Profile completion and next actions (M2). */
   completion: PropertyCompletion;
+  reach: PropertyReach | null;
 }
 
 /* ------------------------------------------------------------------ *
@@ -204,6 +208,8 @@ export interface Service {
   is_extra_available: boolean;
   /** How it is delivered: an on-site visit, or paperwork help. */
   fulfilment: ServiceFulfilment;
+  /** Where it can be delivered: service areas, service states, or anywhere. */
+  reach: ServiceReach;
 }
 
 export interface ServiceRequest {

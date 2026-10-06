@@ -103,6 +103,9 @@ insert into public.staff_members (user_id, role)
 values ('55555555-5555-5555-5555-555555555555', 'super_admin');
 select public.start_trial('acc0000a-0000-0000-0000-00000000000a');
 select public.start_trial('acc0000b-0000-0000-0000-00000000000b');
+-- A test visit area so the Hyderabad fixture below can book visits.
+with area as (insert into public.service_areas (name, state) values ('Test Hyderabad', 'Telangana') returning id)
+insert into public.service_area_pincodes (pincode, area_id) select '500032', id from area;
 
 
 -- =====================================================================
@@ -117,9 +120,9 @@ select tst.ok(public.current_account_id() = 'acc0000a-0000-0000-0000-00000000000
   'current_account_id() resolves A to account A');
 select tst.rows('select * from public.accounts', 1, 'A sees only its own account');
 
-insert into public.properties (id, account_id, user_id, property_type, name, city, state, area_value, area_unit)
+insert into public.properties (id, account_id, user_id, property_type, name, city, state, pincode, area_value, area_unit)
 values ('a1a1a1a1-0000-0000-0000-000000000001', 'acc0000a-0000-0000-0000-00000000000a',
-        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'land', 'My Hyderabad Plot', 'Hyderabad', 'Telangana', 2400, 'sqft');
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'land', 'My Hyderabad Plot', 'Hyderabad', 'Telangana', '500032', 2400, 'sqft');
 
 insert into public.property_photos (property_id, account_id, user_id, storage_path, mime_type, file_size, upload_status)
 values ('a1a1a1a1-0000-0000-0000-000000000001', 'acc0000a-0000-0000-0000-00000000000a',
@@ -1298,6 +1301,72 @@ select tst.rejects($$update public.property_reviews set reasons = '{}'$$, 'staff
 select tst.rejects($$update public.property_reviews set status = 'open', reviewed_by = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'$$,
   'a review cannot be recorded in someone else''s name');
 reset role;
+
+-- =====================================================================
+\echo
+\echo '== Where we serve: visits by PIN code, paperwork by state =='
+-- =====================================================================
+
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+insert into public.properties (id, account_id, user_id, property_type, name, state, pincode)
+values ('a1a1a1a1-0000-0000-0000-0000000000f1', 'acc0000a-0000-0000-0000-00000000000a',
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'land', 'Far away plot', 'Odisha', '751001');
+select tst.ok((select not visits and not paperwork and has_pincode from public.property_reach('acc0000a-0000-0000-0000-00000000000a')
+               where property_id = 'a1a1a1a1-0000-0000-0000-0000000000f1'),
+  'a property can be added anywhere; outside our areas nothing on-site or paperwork reaches it');
+select tst.ok((select visits and paperwork and reach_state = 'Telangana' from public.property_reach('acc0000a-0000-0000-0000-00000000000a')
+               where property_id = 'a1a1a1a1-0000-0000-0000-000000000001'),
+  'a PIN code in a service area gets visits; its PIN prefix gives the state for paperwork');
+select tst.ok((select visits from public.property_reach('acc0000a-0000-0000-0000-00000000000a')
+               where property_id = (select id from public.properties where name = 'My Hyderabad Plot' limit 1)) is not null,
+  'reach is listed for every property of the account');
+select tst.rejects($$select public.create_service_request('a1a1a1a1-0000-0000-0000-0000000000f1',
+                     (select id from public.services where code = 'site_inspection'), 'Visit please')$$,
+  'a visit cannot be booked where our team does not go');
+select tst.rejects($$select public.create_service_request('a1a1a1a1-0000-0000-0000-0000000000f1',
+                     (select id from public.services where code = 'property_tax_assistance'), '')$$,
+  'paperwork help cannot be booked in a state we do not cover');
+select tst.rejects($$insert into public.service_area_pincodes (pincode, area_id)
+                     select '751001', id from public.service_areas limit 1$$,
+  'customers cannot change service areas');
+insert into public.reach_interest (property_id, account_id, created_by)
+values ('a1a1a1a1-0000-0000-0000-0000000000f1', 'acc0000a-0000-0000-0000-00000000000a', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.ok((select interested from public.property_reach('acc0000a-0000-0000-0000-00000000000a')
+               where property_id = 'a1a1a1a1-0000-0000-0000-0000000000f1'), 'the customer asks to be told when we arrive');
+select tst.rejects($$select * from public.reach_demand()$$, 'only staff see the demand list');
+
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.rows($$select * from public.property_reach('acc0000a-0000-0000-0000-00000000000a')$$, 0,
+  'B cannot see what reaches A''s properties');
+select tst.rejects($$insert into public.reach_interest (property_id, account_id, created_by)
+                     values ('a1a1a1a1-0000-0000-0000-000000000001', 'acc0000a-0000-0000-0000-00000000000a',
+                             'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb')$$,
+  'B cannot register interest for A''s property');
+
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+select tst.ok((select interested = 1 and properties = 1 from public.reach_demand() where pincode = '751001'),
+  'staff see demand by PIN code, with interested customers');
+select tst.rejects($$insert into public.property_reach_exceptions (property_id, account_id, reason, created_by)
+                     values ('a1a1a1a1-0000-0000-0000-0000000000f1', 'acc0000a-0000-0000-0000-00000000000a',
+                             'Owner is a friend of the team', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')$$,
+  'an exception cannot be recorded in someone else''s name');
+insert into public.property_reach_exceptions (property_id, account_id, reason, created_by)
+values ('a1a1a1a1-0000-0000-0000-0000000000f1', 'acc0000a-0000-0000-0000-00000000000a',
+        'Team travelling there this month', '55555555-5555-5555-5555-555555555555');
+insert into public.service_states (state, pincode_prefixes, is_active) values ('Odisha', '{75,76,77}', false);
+
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.ok(public.create_service_request('a1a1a1a1-0000-0000-0000-0000000000f1',
+                (select id from public.services where code = 'site_inspection'), 'Visit please') is not null,
+  'a staff exception lets that one property book visits');
+select tst.rejects($$insert into public.property_reach_exceptions (property_id, account_id, reason, created_by)
+                     values ('a1a1a1a1-0000-0000-0000-000000000001', 'acc0000a-0000-0000-0000-00000000000a',
+                             'Please serve me', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')$$,
+  'customers cannot grant themselves an exception');
+reset role;
+delete from public.service_requests where property_id = 'a1a1a1a1-0000-0000-0000-0000000000f1';
+delete from public.properties where id = 'a1a1a1a1-0000-0000-0000-0000000000f1';
 
 -- =====================================================================
 \echo

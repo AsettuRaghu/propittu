@@ -59,6 +59,7 @@ const SCREENS: { name: string; options: Record<string, unknown> }[] = [
   { name: 'backoffice/accounts/[id]', options: { title: 'Customer' } },
   { name: 'backoffice/properties/[id]', options: { title: 'Property' } },
   { name: 'backoffice/services/[id]', options: { title: 'Service' } },
+  { name: 'backoffice/areas', options: { title: 'Where we serve' } },
   { name: 'backoffice/tickets/[id]', options: { title: 'Ticket' } },
 ];
 

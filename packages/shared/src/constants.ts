@@ -252,6 +252,8 @@ export const API_ERROR_CODES = [
   // AI (document intelligence)
   'AI_UNAVAILABLE', // switched off, not in the pilot, or over budget
   'AI_LIMIT_REACHED', // daily readings per account used up
+  // Where we serve
+  'NOT_IN_SERVICE_AREA', // the service does not reach this property's location
 ] as const;
 
 /* ------------------------------------------------------------------ *

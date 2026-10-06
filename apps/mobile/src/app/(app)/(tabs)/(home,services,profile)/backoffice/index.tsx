@@ -286,6 +286,19 @@ function Services() {
       ItemSeparatorComponent={() => <View style={{ height: space.sm }} />}
       refreshControl={<PullRefresh onRefresh={() => refetch()} />}
       renderItem={({ item }) => <ServiceRow service={item} />}
+      ListHeaderComponent={
+        <Card
+          onPress={() => router.push('/backoffice/areas')}
+          style={[styles.card, styles.serviceRow, { marginBottom: space.sm }]}
+        >
+          <Icon name="map" size={20} color={colors.primary} />
+          <View style={styles.flex}>
+            <Text style={typography.bodyStrong}>Where we serve</Text>
+            <Text style={typography.small}>Visit areas, PIN codes, states and demand</Text>
+          </View>
+          <Icon name="chevron" size={18} color={colors.textSubtle} />
+        </Card>
+      }
     />
   );
 }

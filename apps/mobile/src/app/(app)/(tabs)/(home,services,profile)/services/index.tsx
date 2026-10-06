@@ -4,12 +4,14 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   formatPrice,
+  REACH_PROBLEM_LABELS,
+  reachProblem,
   SERVICE_CATEGORIES,
   SERVICE_CATEGORY_LABELS,
   type CatalogueService,
 } from '@propittu/shared';
 import { PullRefresh } from '@/components/PullRefresh';
-import { useMe, useServices } from '@/api/queries';
+import { useMe, useProperties, useServices } from '@/api/queries';
 import { Icon } from '@/components/Icon';
 import { LimitedAccessState } from '@/components/PlanGate';
 import { ServiceRequestList } from '@/components/ServiceRequestList';
@@ -56,7 +58,8 @@ export default function ServicesScreen() {
 const book = (service: CatalogueService) =>
   router.push({ pathname: '/services/request', params: { serviceId: service.id } });
 
-function priceLabel(s: CatalogueService): string {
+function priceLabel(s: CatalogueService, outOfReach: boolean): string {
+  if (outOfReach) return REACH_PROBLEM_LABELS.not_in_area;
   if (s.coverage === 'included') return 'Included';
   if (s.coverage === 'unavailable') return 'Not on your plan';
   return s.price_paise !== null ? formatPrice(s.price_paise) : 'On quote';
@@ -64,6 +67,12 @@ function priceLabel(s: CatalogueService): string {
 
 function Catalogue() {
   const { data, isPending, error, refetch } = useServices();
+  const properties = useProperties();
+  // Muted when NONE of the customer's properties can get it (by PIN / state).
+  const outOfReach = (s: CatalogueService) => {
+    const list = properties.data ?? [];
+    return list.length > 0 && list.every((p) => reachProblem(s, p.reach) !== null);
+  };
 
   const { featured, sections } = useMemo(() => {
     const all = data ?? [];
@@ -90,14 +99,14 @@ function Catalogue() {
       showsVerticalScrollIndicator={false}
       refreshControl={<PullRefresh onRefresh={() => refetch()} />}
     >
-      {featured ? <Featured service={featured} /> : null}
+      {featured ? <Featured service={featured} outOfReach={outOfReach(featured)} /> : null}
 
       {sections.map((section) => (
         <View key={section.category} style={styles.section}>
           <Text style={typography.heading}>{section.title}</Text>
           <View style={styles.grid}>
             {section.items.map((s) => (
-              <ServiceTile key={s.id} service={s} />
+              <ServiceTile key={s.id} service={s} outOfReach={outOfReach(s)} />
             ))}
           </View>
         </View>
@@ -112,7 +121,7 @@ function Catalogue() {
   );
 }
 
-function Featured({ service }: { service: CatalogueService }) {
+function Featured({ service, outOfReach }: { service: CatalogueService; outOfReach: boolean }) {
   const included = service.coverage === 'included';
   return (
     <GradientCard colors={gradients.visit} onPress={() => book(service)} style={styles.featured}>
@@ -122,11 +131,13 @@ function Featured({ service }: { service: CatalogueService }) {
         </View>
         <View style={styles.featuredPill}>
           <Text style={styles.featuredPillText}>
-            {included
-              ? `Included · ${service.included_remaining} left`
-              : service.price_paise !== null
-                ? formatPrice(service.price_paise)
-                : 'On quote'}
+            {outOfReach
+              ? REACH_PROBLEM_LABELS.not_in_area
+              : included
+                ? `Included · ${service.included_remaining} left`
+                : service.price_paise !== null
+                  ? formatPrice(service.price_paise)
+                  : 'On quote'}
           </Text>
         </View>
       </View>
@@ -142,9 +153,9 @@ function Featured({ service }: { service: CatalogueService }) {
   );
 }
 
-function ServiceTile({ service }: { service: CatalogueService }) {
+function ServiceTile({ service, outOfReach }: { service: CatalogueService; outOfReach: boolean }) {
   const v = serviceVisual(service.code, service.category);
-  const unavailable = service.coverage === 'unavailable';
+  const unavailable = service.coverage === 'unavailable' || outOfReach;
   return (
     <Pressable
       onPress={() => book(service)}
@@ -170,7 +181,7 @@ function ServiceTile({ service }: { service: CatalogueService }) {
         <Text
           style={[styles.priceText, service.coverage === 'included' && { color: accents.teal.fg }]}
         >
-          {priceLabel(service)}
+          {priceLabel(service, outOfReach)}
         </Text>
       </View>
     </Pressable>

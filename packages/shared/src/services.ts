@@ -20,6 +20,7 @@ import {
 import type { Order } from './billing';
 import type { AccountPlanState } from './plans';
 import type { BackofficePittu } from './pittu';
+import { SERVICE_REACHES, type StaffPropertyReach } from './reach';
 import type {
   Property,
   PropertyDocument,
@@ -325,6 +326,7 @@ export interface BackofficeProperty {
   documents: PropertyDocument[];
   /** Present when the property was added from a deed or answered Pittu's questions. */
   pittu: BackofficePittu | null;
+  reach: StaffPropertyReach | null;
 }
 
 export interface StaffService extends Service {
@@ -406,6 +408,7 @@ const serviceFields = {
   is_active: z.boolean(),
   is_extra_available: z.boolean(),
   fulfilment: z.enum(SERVICE_FULFILMENTS),
+  reach: z.enum(SERVICE_REACHES),
   sort_order: z.number().int().min(0).max(10_000),
 };
 

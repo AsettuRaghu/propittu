@@ -27,6 +27,7 @@ import { HttpError, must, notFound, ok, uuidParam } from '../errors.js';
 import { assertOwnsProperty } from '../ownership.js';
 import { enforceLimit, planOf, requireFeature } from '../plan.js';
 import { removeObjects, signDownloads } from '../storage.js';
+import { loadReach } from '../reach.js';
 import { refreshReview } from './pittu.js';
 import { listReadyPhotos } from './photos.js';
 import { listReadyVideos } from './videos.js';
@@ -154,7 +155,10 @@ propertiesRouter.get('/properties', async (req, res) => {
   }
 
   const coverPaths = rows.flatMap((r) => (r.cover_photo_path ? [r.cover_photo_path] : []));
-  const urls = await signDownloads(db, STORAGE_BUCKETS.photos, coverPaths);
+  const [urls, reach] = await Promise.all([
+    signDownloads(db, STORAGE_BUCKETS.photos, coverPaths),
+    loadReach(db, accountId),
+  ]);
 
   const data: PropertySummary[] = rows.map(({ cover_photo_path, ...r }) => {
     const property = properties.get(r.id);
@@ -171,6 +175,7 @@ propertiesRouter.get('/properties', async (req, res) => {
       completion_percent: completion?.percent ?? 0,
       next_step: completion?.next[0] ?? null,
       active_request: activeRequest.get(r.id) ?? null,
+      reach: reach.get(r.id) ?? null,
     };
   });
 
@@ -468,9 +473,10 @@ propertiesRouter.get('/properties/:id', async (req, res) => {
   );
 
   const property = toProperty(row);
-  const [photos, videos] = await Promise.all([
+  const [photos, videos, reach] = await Promise.all([
     listReadyPhotos(db, accountId, id),
     listReadyVideos(db, accountId, id),
+    loadReach(db, accountId),
   ]);
 
   const data: PropertyDetail = {
@@ -480,9 +486,30 @@ propertiesRouter.get('/properties/:id', async (req, res) => {
     document_count: counts?.document_count ?? 0,
     service_request_count: counts?.service_request_count ?? 0,
     completion: computePropertyCompletion({ property, photoCount: photos.length, documentTypes }),
+    reach: reach.get(id) ?? null,
   };
 
   ok(res, data);
+});
+
+/*
+ * POST /properties/:id/reach-interest — "Tell me when you arrive" for a
+ * property our team cannot visit yet (shows on the staff demand list).
+ */
+propertiesRouter.post('/properties/:id/reach-interest', async (req, res) => {
+  const ctx = auth(req);
+  const id = uuidParam(req.params.id, 'Property');
+  await assertOwnsProperty(ctx.db, ctx.accountId, id);
+  must(
+    await ctx.db
+      .from('reach_interest')
+      .upsert(
+        { property_id: id, account_id: ctx.accountId, created_by: ctx.userId },
+        { onConflict: 'property_id', ignoreDuplicates: true },
+      ),
+  );
+  await audit(ctx, 'property.reach_interest', { type: 'property', id });
+  ok(res, (await loadReach(ctx.db, ctx.accountId)).get(id) ?? null);
 });
 
 /* ------------------------------------------------------------------ *

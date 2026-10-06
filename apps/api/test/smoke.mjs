@@ -288,7 +288,9 @@ const fake = http.createServer((req, res) => {
       }
       // Property slots this term (migration 18): the fake account has 3 properties.
       if (req.url.startsWith('/rest/v1/rpc/property_slots_used')) return json(200, 3);
-      if (req.method === 'GET' && req.url.startsWith('/rest/v1/property_slots')) return json(200, []);
+      if (req.url.startsWith('/rest/v1/rpc/property_reach')) return json(200, []);
+      if (req.method === 'GET' && req.url.startsWith('/rest/v1/property_slots'))
+        return json(200, []);
       if (req.url.startsWith('/rest/v1/backoffice_accounts')) {
         const row = {
           id: ACCOUNT,
@@ -493,7 +495,11 @@ try {
 
   seen.length = 0;
   r = await call('/me', { token: valid });
-  check(r.json?.data?.features?.document_reading === false, 'GET /me: Pittu feature flag is off by default (app shows the normal flow)', r.json?.data?.features);
+  check(
+    r.json?.data?.features?.document_reading === false,
+    'GET /me: Pittu feature flag is off by default (app shows the normal flow)',
+    r.json?.data?.features,
+  );
   check(
     r.status === 200 && r.json.data.id === USER,
     'valid token → GET /me 200 with id from token',
@@ -817,7 +823,7 @@ try {
   r = await call('/properties', {
     token: valid,
     method: 'POST',
-    body: { property_type: 'land', name: 'Fourth plot' },
+    body: { property_type: 'land', name: 'Fourth plot', pincode: '560001' },
   });
   check(
     r.status === 403 &&

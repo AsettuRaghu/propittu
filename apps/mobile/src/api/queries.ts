@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  PropertyReach,
   AccountPlanState,
   CatalogueService,
   CreatePropertyInput,
@@ -212,6 +213,19 @@ export function useCreateServiceRequest() {
       void qc.invalidateQueries({ queryKey: keys.serviceRequests });
       void qc.invalidateQueries({ queryKey: keys.properties });
       void qc.invalidateQueries({ queryKey: keys.me });
+    },
+  });
+}
+
+/** "Tell me when you arrive" for a property our team cannot visit yet. */
+export function useReachInterest(propertyId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      api<PropertyReach | null>(`/properties/${propertyId}/reach-interest`, { method: 'POST' }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.property(propertyId), exact: true });
+      void qc.invalidateQueries({ queryKey: keys.properties, exact: true });
     },
   });
 }

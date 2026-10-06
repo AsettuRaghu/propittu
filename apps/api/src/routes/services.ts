@@ -3,6 +3,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import {
   createServiceRequestSchema,
+  REACH_PROBLEM_TEXT,
+  reachProblem,
   uuidSchema,
   type CatalogueService,
   type Service,
@@ -13,6 +15,7 @@ import { auth } from '../auth.js';
 import { audit } from '../audit.js';
 import { HttpError, invalid, must, notFound, ok, uuidParam } from '../errors.js';
 import { assertOwnsProperty } from '../ownership.js';
+import { loadReach } from '../reach.js';
 import { planOf, type PlanState } from '../plan.js';
 import { orderForRequest } from '../billing/orders.js';
 import {
@@ -35,7 +38,7 @@ import {
 export const servicesRouter = Router();
 
 const SERVICE_COLUMNS =
-  'id, code, name, category, description, sort_order, price_paise, is_extra_available, fulfilment';
+  'id, code, name, category, description, sort_order, price_paise, is_extra_available, fulfilment, reach';
 
 /** Included allowance left per service code for this Account (null = not included). */
 async function allowances(
@@ -152,6 +155,8 @@ servicesRouter.post('/service-requests', async (req, res) => {
       .maybeSingle(),
   );
   if (!service) throw invalid('Choose a service', { service_id: 'Choose a service' });
+  const problem = reachProblem(service, (await loadReach(db, accountId)).get(input.property_id));
+  if (problem) throw new HttpError(403, 'NOT_IN_SERVICE_AREA', REACH_PROBLEM_TEXT[problem]);
   const coverage = withCoverage(service, await allowances(db, accountId, planOf(req))).coverage;
   if (coverage === 'unavailable') {
     throw new HttpError(

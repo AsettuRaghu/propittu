@@ -7,7 +7,9 @@ import {
   isValidAnswer,
   matchBuyerName,
   pittuQuestions,
+  reachProblem,
   reviewReasons,
+  type PropertyReach,
   type PittuContext,
 } from '@propittu/shared';
 
@@ -140,4 +142,23 @@ test('Review list: who goes on it and why', () => {
     ['not_owner'],
     'no account name → no mismatch claim, but family still listed',
   );
+});
+
+test('service reach: visits need a PIN in our areas, paperwork needs a covered state', () => {
+  const base: PropertyReach = {
+    visits: false,
+    paperwork: true,
+    area_name: null,
+    state: 'Telangana',
+    has_pincode: true,
+    exception: false,
+    interested: false,
+  };
+  assert.equal(reachProblem({ reach: 'area' }, base), 'not_in_area');
+  assert.equal(reachProblem({ reach: 'area' }, { ...base, has_pincode: false }), 'no_pincode');
+  assert.equal(reachProblem({ reach: 'state' }, base), null);
+  assert.equal(reachProblem({ reach: 'state' }, { ...base, paperwork: false }), 'not_in_state');
+  assert.equal(reachProblem({ reach: 'everywhere' }, { ...base, paperwork: false }), null);
+  assert.equal(reachProblem({ reach: 'area' }, { ...base, visits: true }), null);
+  assert.equal(reachProblem({ reach: 'area' }, null), null, 'unknown → the server decides');
 });

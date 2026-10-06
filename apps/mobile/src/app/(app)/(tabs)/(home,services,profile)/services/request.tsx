@@ -8,6 +8,9 @@ import {
   PREFERRED_SLOT_HOURS,
   PREFERRED_SLOT_LABELS,
   PREFERRED_SLOTS,
+  REACH_PROBLEM_LABELS,
+  REACH_PROBLEM_TEXT,
+  reachProblem,
   type CatalogueService,
   type PreferredSlot,
   type PropertySummary,
@@ -103,6 +106,8 @@ export default function RequestServiceScreen() {
   }
 
   const onSite = isOnSiteService(service);
+  // Location rule (PIN code / state): the server enforces it too.
+  const blocked = chosenProperty ? reachProblem(service, chosenProperty.reach) : null;
   const v = serviceVisual(service.code, service.category);
 
   const submit = () => {
@@ -113,6 +118,10 @@ export default function RequestServiceScreen() {
     }
     if (!chosenProperty) {
       setProblem('Choose the property this is for.');
+      return;
+    }
+    if (blocked) {
+      setProblem(REACH_PROBLEM_TEXT[blocked]);
       return;
     }
     create.mutate(
@@ -178,14 +187,30 @@ export default function RequestServiceScreen() {
                 key={p.id}
                 property={p}
                 selected={chosenProperty?.id === p.id}
+                note={(() => {
+                  const r = reachProblem(service, p.reach);
+                  return r ? REACH_PROBLEM_LABELS[r] : null;
+                })()}
                 onPress={() => setPropertyId(p.id)}
               />
             ))}
           </ScrollView>
         </View>
+        {blocked && chosenProperty ? (
+          <View style={styles.block}>
+            <Banner tone="info" message={REACH_PROBLEM_TEXT[blocked]} />
+            {blocked === 'no_pincode' ? (
+              <Button
+                title="Add PIN code"
+                variant="secondary"
+                onPress={() => router.push(`/properties/${chosenProperty.id}/edit`)}
+              />
+            ) : null}
+          </View>
+        ) : null}
 
         {/* 3. When (on-site services only) */}
-        {onSite ? (
+        {onSite && !blocked ? (
           <View style={styles.block}>
             <SectionTitle
               title="When suits you?"
@@ -265,7 +290,7 @@ export default function RequestServiceScreen() {
           icon="arrow"
           onPress={submit}
           loading={create.isPending}
-          disabled={!chosenProperty || service.coverage === 'unavailable'}
+          disabled={!chosenProperty || service.coverage === 'unavailable' || !!blocked}
         />
       </Footer>
     </View>
@@ -307,10 +332,13 @@ function ServicePicker({
 function PropertyChoice({
   property,
   selected,
+  note,
   onPress,
 }: {
   property: PropertySummary;
   selected: boolean;
+  /** Why this service can't reach this property, if so. */
+  note: string | null;
   onPress: () => void;
 }) {
   return (
@@ -348,7 +376,11 @@ function PropertyChoice({
       <Text style={styles.propName} numberOfLines={1}>
         {property.name}
       </Text>
-      {property.city ? (
+      {note ? (
+        <Text style={[typography.caption, { color: accents.amber.fg }]} numberOfLines={1}>
+          {note}
+        </Text>
+      ) : property.city ? (
         <Text style={typography.caption} numberOfLines={1}>
           {property.city}
         </Text>

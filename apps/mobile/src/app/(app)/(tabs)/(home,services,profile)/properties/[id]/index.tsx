@@ -14,6 +14,7 @@ import { DocumentSlots } from '@/components/DocumentSlots';
 import { Icon, type IconName } from '@/components/Icon';
 import { PhotoSection, type PhotoSectionHandle } from '@/components/PhotoSection';
 import { PropertyMapCard } from '@/components/PropertyMapCard';
+import { ReachNotice } from '@/components/ReachNotice';
 import { ErrorState, LoadingState } from '@/components/States';
 import { VideoSection } from '@/components/VideoSection';
 import { Badge, Card, IconButton, IconTile, LinkButton, SectionTitle } from '@/components/ui';
@@ -108,6 +109,8 @@ export default function PropertyDetailsScreen() {
           onPress={() => photosRef.current?.add()}
         />
       </View>
+
+      <ReachNotice propertyId={property.id} reach={property.reach} />
 
       {/* Once complete there is nothing to do here — no card. */}
       {property.completion.percent < 100 ? (

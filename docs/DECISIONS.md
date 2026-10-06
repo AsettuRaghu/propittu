@@ -53,6 +53,10 @@ of each section.
 | **Latitude/longitude columns exist but are never filled.** | They're in the §17 model, but no screen uses a map, and a map would mean a Maps API key and extra scope. |
 | **`full_name` exists but there's no screen to edit it.** | §25 says name is optional, and §30/§39 define no edit-profile screen. |
 | **No server-side idempotency keys on create endpoints.** | Buttons disable while a request is in flight, and React Query never retries mutations, which together prevent duplicate submissions (§40). |
+| **Where we serve (2026-10-06, migration 21): a property can be added anywhere; location limits services, never properties.** Each service has a `reach`: `area` (visits: the PIN code must be in an active service area), `state` (paperwork help: the state, taken from the PIN prefix first and the typed state second, must be active) or `everywhere`. Launch coverage is visits across Bengaluru Urban district (111 PIN codes from the India Post directory) and paperwork help in Karnataka and Telangana. Staff manage areas, PIN codes and states in Backoffice → Services → Where we serve, and can mark one property as an exception. `create_service_request()` refuses a service that doesn't reach the property. | Our team can only visit where it exists, and paperwork depends on each state's process. Blocking in the database means no app version can book a visit we can't make. |
+| **PIN code is required for new properties.** Existing ones without it get an "Add the PIN code" prompt. | It decides which services reach the property. |
+| **Plan purchase warns, never blocks, when none of the customer's properties can get visits.** | The customer decides. Documents, Pittu and reminders still work everywhere. |
+| **"Tell me when you arrive" is recorded per property** (`reach_interest`). Staff see properties outside our areas grouped by PIN code, with how many customers asked. | Shows where to expand next. |
 
 ## Known debt before public launch
 

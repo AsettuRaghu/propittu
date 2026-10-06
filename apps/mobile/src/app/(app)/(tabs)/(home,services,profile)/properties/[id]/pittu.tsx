@@ -3,6 +3,7 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
+  reachProblem,
   ALLOWED_DOCUMENT_MIME_TYPES,
   carePlan,
   documentChecklist,
@@ -202,7 +203,11 @@ function Summary({
 }) {
   const property = useProperty(propertyId);
   const services = useServices();
-  const plan = carePlan(state.context, state.answers);
+  // Only services that can reach this property (PIN code / state).
+  const plan = carePlan(state.context, state.answers).filter((item) => {
+    const service = (services.data ?? []).find((s) => s.code === item.service_code);
+    return !service || !reachProblem(service, property.data?.reach);
+  });
   const checklist = documentChecklist(state.context);
   const [off, setOff] = useState<Record<string, boolean>>({});
   const [sending, setSending] = useState(false);
