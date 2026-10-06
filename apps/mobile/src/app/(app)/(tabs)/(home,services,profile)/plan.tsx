@@ -110,32 +110,47 @@ export default function PlanScreen() {
       return;
     }
     const period = `${formatDate(q.starts_at)} – ${formatDate(q.ends_at)}`;
-    const lines =
-      q.mode === 'upgrade'
-        ? [
-            `${plan.name} price: ${formatPrice(q.list_price_paise)}`,
-            `Credit for unused ${q.current_plan_name ?? 'plan'}: − ${formatPrice(q.credit_paise)}`,
-            `${plan.name} starts now: ${period}. Visits you've already used this year still count.`,
-          ]
-        : q.mode === 'renewal'
-          ? [`Adds another term after your current one: ${period}. No days lost.`]
-          : [
-              `Valid ${period}.` +
-                (q.bonus_days > 0
-                  ? ` Includes the ${q.bonus_days} trial day${q.bonus_days === 1 ? '' : 's'} you had left.`
-                  : ''),
-            ];
+    const upgrade = q.mode === 'upgrade';
+    const term = BILLING_PERIOD_LABELS[plan.billing_period];
     const ok = await dialog.confirm({
-      title:
-        q.mode === 'upgrade'
-          ? `Upgrade to ${plan.name}`
-          : q.mode === 'renewal'
-            ? `Renew ${plan.name}`
-            : `Get ${plan.name}`,
-      message: [...lines, 'Pay securely by UPI or card.'].join('\n\n'),
-      confirmLabel: `Pay ${formatPrice(q.amount_paise)}`,
-      cancelLabel: 'Not now',
-      icon: 'card',
+      title: upgrade
+        ? `Upgrade to ${plan.name}`
+        : q.mode === 'renewal'
+          ? `Renew ${plan.name}`
+          : `Welcome to ${plan.name}`,
+      message: upgrade
+        ? 'More room for your properties, starting today.'
+        : q.mode === 'renewal'
+          ? 'Another term, added after your current one — no days lost.'
+          : 'Everything you need to look after your properties.',
+      icon: upgrade ? 'gem' : 'sparkles',
+      accent: PLAN_ACCENT[plan.code] ?? 'indigo',
+      highlights:
+        q.mode === 'renewal' ? undefined : gains(plan.benefits, s.plan?.benefits, upgrade),
+      summary: [
+        { label: `${plan.name} ${term}`, value: formatPrice(q.list_price_paise) },
+        ...(q.credit_paise > 0
+          ? [
+              {
+                label: `Credit for unused ${q.current_plan_name ?? 'plan'}`,
+                value: `− ${formatPrice(q.credit_paise)}`,
+                kind: 'credit' as const,
+              },
+            ]
+          : []),
+        { label: 'You pay today', value: formatPrice(q.amount_paise), kind: 'total' as const },
+      ],
+      note:
+        `Valid ${period}` +
+        (q.bonus_days > 0
+          ? ` · includes your ${q.bonus_days} trial day${q.bonus_days === 1 ? '' : 's'} left`
+          : '') +
+        (upgrade ? ' · visits used this year still count' : '') +
+        ' · secure UPI or card payment',
+      confirmLabel: upgrade
+        ? `Upgrade for ${formatPrice(q.amount_paise)}`
+        : `Pay ${formatPrice(q.amount_paise)}`,
+      cancelLabel: 'Maybe later',
     });
     if (!ok) return;
     checkout.mutate(plan.code, {
@@ -374,6 +389,38 @@ function PaymentRow({ order: o, first }: { order: Order; first: boolean }) {
       </View>
     </Pressable>
   );
+}
+
+/** What a plan adds (vs the current one on an upgrade) — at most four lines. */
+function gains(next: PlanBenefits, cur: PlanBenefits | undefined, upgrade: boolean): string[] {
+  const fmt = (c: LimitCode, v: number) =>
+    c === 'max_storage_mb'
+      ? `${formatStorageMb(v)} storage`
+      : `${v} ${LIMIT_LABELS[c].toLowerCase()}`;
+  const out: string[] = [];
+  // Most persuasive first.
+  const order: LimitCode[] = [
+    'max_properties',
+    'max_storage_mb',
+    'max_documents_per_property',
+    'max_photos_per_property',
+    'max_videos_per_property',
+  ];
+  for (const c of order) {
+    const v = next.limits[c];
+    const was = cur?.limits[c];
+    if (v === undefined || (upgrade && was !== undefined && v <= was)) continue;
+    const from = c === 'max_storage_mb' ? formatStorageMb(was ?? 0) : String(was);
+    out.push(upgrade && was !== undefined ? `${fmt(c, v)}, up from ${from}` : fmt(c, v));
+  }
+  for (const i of next.included) {
+    const was = cur?.included.find((x) => x.code === i.code)?.quantity ?? 0;
+    if (upgrade && i.quantity <= was) continue;
+    out.unshift(
+      `${i.quantity} ${(INCLUDED_SERVICE_LABELS[i.code] ?? i.code).toLowerCase()} a year`,
+    );
+  }
+  return out.slice(0, 4);
 }
 
 /* ---- Usage ---- */

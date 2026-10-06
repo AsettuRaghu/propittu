@@ -10,6 +10,7 @@ import { Button, IconTile } from './ui';
  * Propittu's dialogs — a styled replacement for the system Alert.
  *
  *   await dialog.confirm({ title, message, confirmLabel, tone })  → boolean
+ *     (optional: highlights ✓ list, summary price rows, note, accent)
  *   await dialog.alert({ title, message })                        → void
  *   await dialog.actions({ title, actions: [{ label, value }] })  → value | null
  *   toast('Saved')                                                (auto-hides)
@@ -41,8 +42,22 @@ export interface ActionItem<T> {
   description?: string;
 }
 
+/** A row in a confirm's price summary; `total` is emphasised, `credit` shown in green. */
+export interface SummaryRow {
+  label: string;
+  value: string;
+  kind?: 'item' | 'credit' | 'total';
+}
+
+interface ConfirmExtras {
+  highlights?: string[];
+  summary?: SummaryRow[];
+  note?: string;
+  accent?: Accent;
+}
+
 type Request =
-  | {
+  | ({
       kind: 'confirm';
       title: string;
       message?: string;
@@ -51,7 +66,7 @@ type Request =
       tone: Tone;
       icon?: IconName;
       resolve: (v: boolean) => void;
-    }
+    } & ConfirmExtras)
   | {
       kind: 'alert';
       title: string;
@@ -81,14 +96,16 @@ let showToast: ((t: ToastState) => void) | null = null;
 let toastSeq = 0;
 
 export const dialog = {
-  confirm(opts: {
-    title: string;
-    message?: string;
-    confirmLabel?: string;
-    cancelLabel?: string;
-    tone?: Tone;
-    icon?: IconName;
-  }): Promise<boolean> {
+  confirm(
+    opts: {
+      title: string;
+      message?: string;
+      confirmLabel?: string;
+      cancelLabel?: string;
+      tone?: Tone;
+      icon?: IconName;
+    } & ConfirmExtras,
+  ): Promise<boolean> {
     return new Promise((resolve) => {
       if (!showRequest) return resolve(false);
       showRequest({
@@ -99,6 +116,10 @@ export const dialog = {
         cancelLabel: opts.cancelLabel ?? 'Cancel',
         tone: opts.tone ?? 'primary',
         icon: opts.icon,
+        highlights: opts.highlights,
+        summary: opts.summary,
+        note: opts.note,
+        accent: opts.accent,
         resolve,
       });
     });
@@ -227,7 +248,10 @@ export function DialogHost() {
               <View style={styles.center}>
                 <IconTile
                   icon={request.icon ?? TONE_ICON[request.tone]}
-                  accent={TONE_ACCENT[request.tone]}
+                  accent={
+                    (request.kind === 'confirm' ? request.accent : undefined) ??
+                    TONE_ACCENT[request.tone]
+                  }
                   size={52}
                 />
               </View>
@@ -239,6 +263,59 @@ export function DialogHost() {
               <Text style={[styles.message, request.kind !== 'actions' && styles.centerText]}>
                 {request.message}
               </Text>
+            ) : null}
+
+            {request.kind === 'confirm' && request.highlights?.length ? (
+              <View style={styles.highlights}>
+                {request.highlights.map((h) => (
+                  <View key={h} style={styles.highlight}>
+                    <View
+                      style={[
+                        styles.tick,
+                        { backgroundColor: accents[request.accent ?? 'indigo'].bg },
+                      ]}
+                    >
+                      <Icon
+                        name="check"
+                        size={12}
+                        strokeWidth={3}
+                        color={accents[request.accent ?? 'indigo'].fg}
+                      />
+                    </View>
+                    <Text style={[typography.body, styles.flex]}>{h}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+            {request.kind === 'confirm' && request.summary?.length ? (
+              <View style={styles.summary}>
+                {request.summary.map((r) => (
+                  <View
+                    key={r.label}
+                    style={[styles.summaryRow, r.kind === 'total' && styles.summaryTotal]}
+                  >
+                    <Text
+                      style={[
+                        r.kind === 'total' ? typography.bodyStrong : typography.small,
+                        styles.flex,
+                      ]}
+                    >
+                      {r.label}
+                    </Text>
+                    <Text
+                      style={[
+                        r.kind === 'total' ? styles.totalValue : typography.bodyStrong,
+                        r.kind === 'credit' && { color: accents.teal.fg },
+                      ]}
+                    >
+                      {r.value}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+            {request.kind === 'confirm' && request.note ? (
+              <Text style={[typography.caption, styles.centerText]}>{request.note}</Text>
             ) : null}
 
             {request.kind === 'confirm' ? (
@@ -369,7 +446,24 @@ const styles = StyleSheet.create({
   center: { alignItems: 'center' },
   centerText: { textAlign: 'center' },
   message: { ...typography.body, color: colors.textMuted },
-  buttons: { gap: space.xs, marginTop: space.sm },
+  buttons: { gap: space.xs, marginTop: space.xs },
+  highlights: { gap: 8 },
+  highlight: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  tick: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  summary: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.md,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+  },
+  summaryRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 5, gap: space.md },
+  summaryTotal: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    marginTop: 4,
+    paddingTop: 9,
+  },
+  totalValue: { fontSize: 18, fontWeight: '800', color: colors.text },
   actions: { gap: space.xs, marginTop: space.xs },
   action: {
     flexDirection: 'row',
