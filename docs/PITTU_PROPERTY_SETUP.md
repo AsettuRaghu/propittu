@@ -89,6 +89,20 @@ warmly ("No problem — Propittu can pay it for you on time.").
 Documents checklist on the summary: Sale Deed ✓ · latest Property Tax receipt ·
 Khata certificate — each missing one has an Upload action.
 
+**Wording follows the ownership answer.** Once the customer says how they're
+related to the property, later questions and suggestions refer to the right
+person:
+
+| Relationship | Khata question | Tax question |
+|---|---|---|
+| I'm the owner | "Is the Khata in your name yet?" | "Have you paid this year's property tax?" |
+| Joint owner | "…in all the owners' names yet?" | "Has this year's property tax been paid?" |
+| Family member's / I manage it | "…in {owner}'s name yet?" (owner = deed buyer) | "Has this year's property tax been paid?" |
+| Skipped | "…in the owner's name yet?" | "Has this year's property tax been paid?" |
+
+The same applies to "have you built on it" → "has anything been built on it",
+and to care-plan reasons ("…to get the Khata in {owner}'s name").
+
 Rule order: identity (`owner_relation`) → what it is (`plot_built`) → who uses
 it → when last seen → records (Khata/PTIN) → tax → nice-to-have (photos).
 
