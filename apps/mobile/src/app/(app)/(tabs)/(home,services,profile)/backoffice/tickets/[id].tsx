@@ -9,6 +9,7 @@ import {
 } from '@propittu/shared';
 import { useMe } from '@/api/queries';
 import { useBoReplyTicket, useBoTicket, useBoTicketStatus } from '@/api/support';
+import { uploadAll } from '@/components/AttachmentPicker';
 import { dialog, toast } from '@/components/Dialog';
 import { ErrorState, LoadingState } from '@/components/States';
 import { TicketThread } from '@/components/TicketThread';
@@ -115,7 +116,24 @@ export default function BoTicketScreen() {
           mine="staff"
           sending={reply.isPending}
           closedNote={!canManage ? 'Your staff role can view but not reply to tickets.' : null}
-          onSend={(body) => reply.mutate(body, { onError: fail("Couldn't send") })}
+          onSend={async (body, files) => {
+            try {
+              const detail = await reply.mutateAsync(body);
+              const mineLast = [...detail.messages]
+                .reverse()
+                .find((m) => m.author_type === 'staff');
+              if (files.length && mineLast) {
+                const failed = await uploadAll('backoffice', id, mineLast.id, files);
+                await refetch();
+                if (failed)
+                  toast(`${failed} file${failed === 1 ? '' : 's'} couldn't be uploaded`, 'danger');
+              }
+              return true;
+            } catch (err) {
+              fail("Couldn't send")(err);
+              return false;
+            }
+          }}
         />
       </View>
     </ScrollView>

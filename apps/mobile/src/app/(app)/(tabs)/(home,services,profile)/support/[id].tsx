@@ -2,7 +2,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { TICKET_CATEGORY_LABELS, TICKET_STATUS_LABELS } from '@propittu/shared';
 import { useReplyTicket, useTicket } from '@/api/support';
-import { dialog } from '@/components/Dialog';
+import { uploadAll } from '@/components/AttachmentPicker';
+import { dialog, toast } from '@/components/Dialog';
 import { ErrorState, LoadingState } from '@/components/States';
 import { TicketThread } from '@/components/TicketThread';
 import { Badge, Card, LinkButton } from '@/components/ui';
@@ -64,22 +65,34 @@ export default function TicketScreen() {
       <TicketThread
         messages={t.messages}
         mine="customer"
-        sending={reply.isPending}
+        sending={reply.isPending || isRefetching}
         closedNote={
           t.status === 'closed'
             ? 'This ticket is closed. Raise a new one if you still need help.'
             : null
         }
-        onSend={(body) =>
-          reply.mutate(body, {
-            onError: (err) =>
-              void dialog.alert({
-                title: "Couldn't send",
-                message: errorMessage(err),
-                tone: 'danger',
-              }),
-          })
-        }
+        onSend={async (body, files) => {
+          try {
+            const detail = await reply.mutateAsync(body);
+            const mineLast = [...detail.messages]
+              .reverse()
+              .find((m) => m.author_type === 'customer');
+            if (files.length && mineLast) {
+              const failed = await uploadAll('support', id, mineLast.id, files);
+              await refetch();
+              if (failed)
+                toast(`${failed} file${failed === 1 ? '' : 's'} couldn't be uploaded`, 'danger');
+            }
+            return true;
+          } catch (err) {
+            void dialog.alert({
+              title: "Couldn't send",
+              message: errorMessage(err),
+              tone: 'danger',
+            });
+            return false;
+          }
+        }}
       />
     </ScrollView>
   );

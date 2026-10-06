@@ -10,6 +10,8 @@ import {
 } from '@propittu/shared';
 import { useProperties, useServiceRequests } from '@/api/queries';
 import { useCreateTicket } from '@/api/support';
+import type { LocalFile } from '@/api/uploads';
+import { AttachmentPicker, uploadAll } from '@/components/AttachmentPicker';
 import { toast } from '@/components/Dialog';
 import { TextField } from '@/components/Field';
 import { Footer } from '@/components/Footer';
@@ -41,6 +43,8 @@ export default function NewTicketScreen() {
   const [propertyId, setPropertyId] = useState<string>(params.propertyId ?? NONE);
   const [requestId, setRequestId] = useState<string>(params.requestId ?? NONE);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [files, setFiles] = useState<LocalFile[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   const submit = () => {
     const parsed = createTicketSchema.safeParse({
@@ -56,7 +60,15 @@ export default function NewTicketScreen() {
     }
     setErrors({});
     create.mutate(parsed.data, {
-      onSuccess: (t) => {
+      onSuccess: async (t) => {
+        const first = t.messages[0];
+        if (files.length && first) {
+          setUploading(true);
+          const failed = await uploadAll('support', t.id, first.id, files);
+          setUploading(false);
+          if (failed)
+            toast(`${failed} file${failed === 1 ? '' : 's'} couldn't be uploaded`, 'danger');
+        }
         toast(`Ticket ${t.reference} raised`);
         router.replace(`/support/${t.id}`);
       },
@@ -141,13 +153,24 @@ export default function NewTicketScreen() {
           </View>
         ) : null}
 
-        <Text style={typography.caption}>
-          Attachments aren&apos;t supported yet — describe the problem and we may ask for a photo in
-          the reply.
-        </Text>
+        <View style={styles.block}>
+          <Text style={styles.label}>
+            Photos or files <Text style={typography.caption}>· optional, up to 5</Text>
+          </Text>
+          <AttachmentPicker
+            files={files}
+            onChange={setFiles}
+            disabled={create.isPending || uploading}
+          />
+        </View>
       </ScrollView>
       <Footer>
-        <Button title="Raise ticket" icon="arrow" onPress={submit} loading={create.isPending} />
+        <Button
+          title="Raise ticket"
+          icon="arrow"
+          onPress={submit}
+          loading={create.isPending || uploading}
+        />
       </Footer>
     </View>
   );

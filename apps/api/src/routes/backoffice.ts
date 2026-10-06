@@ -48,7 +48,7 @@ import { HttpError, invalid, must, notFound, ok, uuidParam } from '../errors.js'
 import { describeAccountPlan } from '../plan.js';
 import { ORDER_COLUMNS, orderForRequest, toOrder, type OrderRow } from '../billing/orders.js';
 import { notify } from '../notify.js';
-import { loadMessages, TICKET_COLUMNS } from './support.js';
+import { confirmAttachment, loadMessages, startAttachment, TICKET_COLUMNS } from './support.js';
 import { loadReport, REQUEST_COLUMNS } from '../requests.js';
 import {
   removeObjects,
@@ -941,3 +941,31 @@ backofficeRouter.post('/tickets/:id/status', allow('support.manage'), async (req
   );
   ok(res, await loadTicketDetail(ctx.db, id));
 });
+
+/* POST /backoffice/tickets/:id/attachments/intent — staff attach to their own reply */
+backofficeRouter.post(
+  '/tickets/:id/attachments/intent',
+  allow('support.manage'),
+  async (req, res) => {
+    const ctx = auth(req);
+    const id = uuidParam(req.params.id, 'Ticket');
+    const ticket = await loadTicketDetail(ctx.db, id);
+    ok(
+      res,
+      await startAttachment(ctx.db, ctx.userId, { id, account_id: ticket.account_id }, req.body),
+      201,
+    );
+  },
+);
+
+/* POST /backoffice/tickets/:id/attachments/:attachmentId/confirm */
+backofficeRouter.post(
+  '/tickets/:id/attachments/:attachmentId/confirm',
+  allow('support.manage'),
+  async (req, res) => {
+    const ctx = auth(req);
+    const id = uuidParam(req.params.id, 'Ticket');
+    await loadTicketDetail(ctx.db, id);
+    ok(res, await confirmAttachment(ctx.db, id, uuidParam(req.params.attachmentId, 'Attachment')));
+  },
+);

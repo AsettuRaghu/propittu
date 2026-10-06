@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ALLOWED_DOCUMENT_MIME_TYPES, MAX_DOCUMENT_BYTES } from './constants';
 import { uuidSchema } from './schemas';
 
 /** Help & Support: tickets between customers and the Backoffice. */
@@ -42,12 +43,31 @@ export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
 };
 export const OPEN_TICKET_STATUSES: TicketStatus[] = ['open', 'in_progress', 'waiting_on_customer'];
 
+export interface SupportAttachment {
+  id: string;
+  file_name: string;
+  mime_type: string;
+  file_size: number;
+  /** Short-lived signed URL. */
+  url: string | null;
+}
+
 export interface SupportMessage {
   id: string;
   author_type: 'customer' | 'staff';
   body: string;
   created_at: string;
+  attachments: SupportAttachment[];
 }
+
+export const MAX_ATTACHMENTS_PER_MESSAGE = 5;
+
+export const attachmentIntentSchema = z.object({
+  message_id: uuidSchema,
+  file_name: z.string().trim().min(1).max(255),
+  mime_type: z.enum(ALLOWED_DOCUMENT_MIME_TYPES, { message: 'Use a PDF, JPG or PNG file' }),
+  file_size: z.number().int().positive().max(MAX_DOCUMENT_BYTES, 'Files must be under 10 MB'),
+});
 
 export interface SupportTicket {
   id: string;

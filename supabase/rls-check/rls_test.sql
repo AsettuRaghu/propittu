@@ -819,6 +819,31 @@ select tst.ok((select status from public.support_tickets) = 'open', 'customer re
 select tst.rows('select * from public.support_ticket_messages', 3, 'A sees the whole conversation');
 reset role;
 
+-- Attachments on ticket messages
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+insert into public.support_ticket_attachments (ticket_id, message_id, account_id, uploaded_by, file_name, storage_path, mime_type, file_size, upload_status)
+select m.ticket_id, m.id, m.account_id, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'photo.jpg', 'acc0000a-0000-0000-0000-00000000000a/tickets/' || m.ticket_id || '/a1.jpg', 'image/jpeg', 1000, 'ready'
+from public.support_ticket_messages m where m.author_type = 'customer' order by m.created_at limit 1;
+select tst.rows('select * from public.support_ticket_attachments', 1, 'A attaches a photo to its own message');
+select tst.rejects($$insert into public.support_ticket_attachments (ticket_id, message_id, account_id, uploaded_by, file_name, storage_path, mime_type, file_size)
+                     select m.ticket_id, m.id, m.account_id, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'x.jpg', 'acc0000a-0000-0000-0000-00000000000a/tickets/x/b.jpg', 'image/jpeg', 10
+                     from public.support_ticket_messages m where m.author_type = 'staff' limit 1$$,
+  'A cannot attach to a staff message');
+select tst.rejects($$insert into public.support_ticket_attachments (ticket_id, message_id, account_id, uploaded_by, file_name, storage_path, mime_type, file_size)
+                     select m.ticket_id, m.id, m.account_id, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'x.exe', 'acc0000a-0000-0000-0000-00000000000a/tickets/x/c.exe', 'application/x-msdownload', 10
+                     from public.support_ticket_messages m where m.author_type = 'customer' limit 1$$,
+  'unsupported attachment type rejected');
+select tst.rejects($$insert into public.support_ticket_attachments (ticket_id, message_id, account_id, uploaded_by, file_name, storage_path, mime_type, file_size)
+                     select m.ticket_id, m.id, m.account_id, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'x.jpg', 'acc0000b-0000-0000-0000-00000000000b/tickets/x/d.jpg', 'image/jpeg', 10
+                     from public.support_ticket_messages m where m.author_type = 'customer' limit 1$$,
+  'attachment path must be in the ticket account folder');
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.rows('select * from public.support_ticket_attachments', 0, 'B cannot see A''s attachments');
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+select tst.rows('select * from public.support_ticket_attachments', 1, 'staff can see ticket attachments');
+reset role;
+
 -- =====================================================================
 \echo
 \echo '== Data integrity constraints =='

@@ -21,6 +21,7 @@ import {
   type VideoMimeType,
   type SignedDownload,
   type UploadIntent,
+  type SupportAttachment,
   type VisitMedia,
 } from '@propittu/shared';
 import { ApiError, api } from './client';
@@ -326,4 +327,29 @@ export async function openDocument(
     throw new ApiError(0, 'NETWORK', "We couldn't open this document. Please try again.");
   }
   return { kind: 'external' };
+}
+
+/* ------------------------------------------------------------------ *
+ * Support ticket attachments (customer or staff, onto their own message)
+ * ------------------------------------------------------------------ */
+
+export async function uploadTicketAttachment(
+  scope: 'support' | 'backoffice',
+  ticketId: string,
+  messageId: string,
+  file: LocalFile,
+  onProgress?: ProgressFn,
+): Promise<SupportAttachment> {
+  const base = `/${scope}/tickets/${ticketId}/attachments`;
+  const intent = await api<UploadIntent>(`${base}/intent`, {
+    method: 'POST',
+    body: {
+      message_id: messageId,
+      file_name: file.name,
+      mime_type: file.mimeType,
+      file_size: file.size,
+    },
+  });
+  await putToSignedUrl(intent.upload_url, file, onProgress);
+  return api<SupportAttachment>(`${base}/${intent.id}/confirm`, { method: 'POST' });
 }
