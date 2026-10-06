@@ -4,13 +4,13 @@ import {
   LayoutAnimation,
   Linking,
   Pressable,
-  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { OPEN_TICKET_STATUSES, SUPPORT_EMAIL, TICKET_STATUS_LABELS } from '@propittu/shared';
+import { PullRefresh } from '@/components/PullRefresh';
 import { useTickets } from '@/api/support';
 import { dialog } from '@/components/Dialog';
 import { Icon } from '@/components/Icon';
@@ -68,13 +68,7 @@ export default function SupportScreen() {
     <ScrollView
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl
-          refreshing={tickets.isRefetching}
-          onRefresh={() => void tickets.refetch()}
-          tintColor={colors.primary}
-        />
-      }
+      refreshControl={<PullRefresh onRefresh={() => tickets.refetch()} />}
     >
       <View style={[styles.hero, shadow]}>
         <Text style={typography.heading}>We&apos;re here to help</Text>

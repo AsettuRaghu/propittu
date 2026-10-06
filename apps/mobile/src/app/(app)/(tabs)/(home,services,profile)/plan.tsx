@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   BILLING_PERIOD_LABELS,
   FEATURE_LABELS,
@@ -18,6 +18,7 @@ import {
   type PlanBenefits,
   type PublicPlan,
 } from '@propittu/shared';
+import { PullRefresh } from '@/components/PullRefresh';
 import { fetchPlanQuote, useOrders, usePlanCheckout } from '@/api/billing';
 import { useAccountPlan, usePlans } from '@/api/queries';
 import { dialog } from '@/components/Dialog';
@@ -183,14 +184,8 @@ export default function PlanScreen() {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
       refreshControl={
-        <RefreshControl
-          refreshing={state.isRefetching}
-          onRefresh={() => {
-            void state.refetch();
-            void plans.refetch();
-            void orders.refetch();
-          }}
-          tintColor={colors.primary}
+        <PullRefresh
+          onRefresh={() => Promise.all([state.refetch(), plans.refetch(), orders.refetch()])}
         />
       }
     >

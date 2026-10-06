@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   formatIndianMobile,
   formatPrice,
@@ -18,6 +18,7 @@ import {
   useBoExtendPlan,
   useBoGrantPlan,
 } from '@/api/backoffice';
+import { PullRefresh } from '@/components/PullRefresh';
 import { useMe } from '@/api/queries';
 import { ErrorState, LoadingState } from '@/components/States';
 import { Badge, Banner, Button, Card, KeyValue, SectionTitle } from '@/components/ui';
@@ -31,7 +32,7 @@ import { Icon } from '@/components/Icon';
 /** Backoffice: one customer Account — Plan, usage, why blocked, properties, requests (M9). */
 export default function BackofficeAccountScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { data, isPending, error, refetch, isRefetching } = useBoAccount(id);
+  const { data, isPending, error, refetch } = useBoAccount(id);
   const me = useMe();
   const grant = useBoGrantPlan(id);
   const endPlan = useBoEndPlan(id);
@@ -63,13 +64,7 @@ export default function BackofficeAccountScreen() {
   return (
     <ScrollView
       contentContainerStyle={styles.content}
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefetching}
-          onRefresh={() => void refetch()}
-          tintColor={colors.primary}
-        />
-      }
+      refreshControl={<PullRefresh onRefresh={() => refetch()} />}
     >
       <Card style={styles.card}>
         <View style={styles.row}>

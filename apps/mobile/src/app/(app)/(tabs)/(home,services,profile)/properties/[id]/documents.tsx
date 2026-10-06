@@ -6,7 +6,6 @@ import {
   FlatList,
   Modal,
   Pressable,
-  RefreshControl,
   StyleSheet,
   Text,
   View,
@@ -18,6 +17,7 @@ import {
   formatFileSize,
   type PropertyDocument,
 } from '@propittu/shared';
+import { PullRefresh } from '@/components/PullRefresh';
 import { useDeleteDocument, useDocuments } from '@/api/queries';
 import { openDocument } from '@/api/uploads';
 import { dialog, toast } from '@/components/Dialog';
@@ -39,7 +39,7 @@ const DOC_TONES: Record<PropertyDocument['status'], Tone> = {
 /** A property's documents: view, open, delete (PRODUCT_SPEC.md §8.3, §20). */
 export default function DocumentsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { data, isPending, error, refetch, isRefetching } = useDocuments(id);
+  const { data, isPending, error, refetch } = useDocuments(id);
   const deleteDocument = useDeleteDocument(id);
   const [opening, setOpening] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -102,13 +102,7 @@ export default function DocumentsScreen() {
           keyExtractor={(d) => d.id}
           contentContainerStyle={data.length === 0 ? styles.empty : styles.list}
           ItemSeparatorComponent={() => <View style={{ height: space.sm }} />}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefetching}
-              onRefresh={() => void refetch()}
-              tintColor={colors.primary}
-            />
-          }
+          refreshControl={<PullRefresh onRefresh={() => refetch()} />}
           renderItem={({ item }) => (
             <Card onPress={() => void open(item)} style={styles.row}>
               <IconTile

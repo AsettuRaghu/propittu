@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { TICKET_CATEGORY_LABELS, TICKET_STATUS_LABELS } from '@propittu/shared';
+import { PullRefresh } from '@/components/PullRefresh';
 import { useReplyTicket, useTicket } from '@/api/support';
 import { uploadAll } from '@/components/AttachmentPicker';
 import { dialog, toast } from '@/components/Dialog';
@@ -9,7 +10,7 @@ import { TicketThread } from '@/components/TicketThread';
 import { Badge, Card, LinkButton } from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
-import { colors, space, typography } from '@/theme';
+import { space, typography } from '@/theme';
 import { TICKET_TONES } from '@/lib/icons';
 
 /** One support ticket: status, what it's about, and the conversation. */
@@ -26,13 +27,7 @@ export default function TicketScreen() {
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
       automaticallyAdjustKeyboardInsets
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefetching}
-          onRefresh={() => void refetch()}
-          tintColor={colors.primary}
-        />
-      }
+      refreshControl={<PullRefresh onRefresh={() => refetch()} />}
     >
       <Card style={styles.head}>
         <View style={styles.row}>

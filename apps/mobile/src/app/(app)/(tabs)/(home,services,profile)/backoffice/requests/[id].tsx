@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   formatIndianMobile,
   formatPrice,
@@ -22,6 +22,7 @@ import {
   useBoSaveReport,
   useBoUpdateRequest,
 } from '@/api/backoffice';
+import { PullRefresh } from '@/components/PullRefresh';
 import { useMe } from '@/api/queries';
 import { playVideo, preparePhoto, prepareVideo, uploadVisitMedia } from '@/api/uploads';
 import { DateField, fromIsoDate, toIsoDate } from '@/components/DateField';
@@ -48,7 +49,7 @@ import { Icon } from '@/components/Icon';
  */
 export default function BackofficeRequestScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { data, isPending, error, refetch, isRefetching } = useBoRequest(id);
+  const { data, isPending, error, refetch } = useBoRequest(id);
   const me = useMe();
 
   if (isPending) return <LoadingState />;
@@ -62,13 +63,7 @@ export default function BackofficeRequestScreen() {
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
       automaticallyAdjustKeyboardInsets
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefetching}
-          onRefresh={() => void refetch()}
-          tintColor={colors.primary}
-        />
-      }
+      refreshControl={<PullRefresh onRefresh={() => refetch()} />}
     >
       <Summary request={data} />
       <Steps status={data.status} />

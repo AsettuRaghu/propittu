@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   formatIndianMobile,
   formatPrice,
@@ -14,6 +14,7 @@ import {
   type BackofficeRequest,
   type StaffService,
 } from '@propittu/shared';
+import { PullRefresh } from '@/components/PullRefresh';
 import { useBoPayments } from '@/api/billing';
 import { useBoTickets } from '@/api/support';
 import { useBoAccounts, useBoRequests, useBoServices, type RequestFilter } from '@/api/backoffice';
@@ -84,7 +85,7 @@ const TICKET_FILTERS = [
 
 function Tickets() {
   const [filter, setFilter] = useState('open');
-  const { data, isPending, error, refetch, isRefetching } = useBoTickets(filter);
+  const { data, isPending, error, refetch } = useBoTickets(filter);
   return (
     <View style={styles.flex}>
       <View style={styles.toolbar}>
@@ -100,13 +101,7 @@ function Tickets() {
           keyExtractor={(t) => t.id}
           contentContainerStyle={styles.list}
           ItemSeparatorComponent={() => <View style={{ height: space.sm }} />}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefetching}
-              onRefresh={() => void refetch()}
-              tintColor={colors.primary}
-            />
-          }
+          refreshControl={<PullRefresh onRefresh={() => refetch()} />}
           renderItem={({ item }) => <TicketRow ticket={item} />}
           ListEmptyComponent={<EmptyState icon="support" title="No tickets here" />}
         />
@@ -147,7 +142,7 @@ const FILTERS: { value: RequestFilter; label: string }[] = [
 
 function Requests() {
   const [filter, setFilter] = useState<RequestFilter>('open');
-  const { data, isPending, error, refetch, isRefetching } = useBoRequests(filter);
+  const { data, isPending, error, refetch } = useBoRequests(filter);
 
   return (
     <View style={styles.flex}>
@@ -164,13 +159,7 @@ function Requests() {
           keyExtractor={(r) => r.id}
           contentContainerStyle={styles.list}
           ItemSeparatorComponent={() => <View style={{ height: space.sm }} />}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefetching}
-              onRefresh={() => void refetch()}
-              tintColor={colors.primary}
-            />
-          }
+          refreshControl={<PullRefresh onRefresh={() => refetch()} />}
           renderItem={({ item }) => <RequestRow request={item} />}
           ListEmptyComponent={<EmptyState icon="requests" title="No requests here" />}
         />
@@ -215,7 +204,7 @@ function RequestRow({ request }: { request: BackofficeRequest }) {
 function Accounts() {
   const [input, setInput] = useState('');
   const [q, setQ] = useState('');
-  const { data, isPending, error, refetch, isRefetching } = useBoAccounts(q);
+  const { data, isPending, error, refetch } = useBoAccounts(q);
 
   return (
     <View style={styles.flex}>
@@ -244,13 +233,7 @@ function Accounts() {
           contentContainerStyle={styles.list}
           ItemSeparatorComponent={() => <View style={{ height: space.sm }} />}
           keyboardShouldPersistTaps="handled"
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefetching}
-              onRefresh={() => void refetch()}
-              tintColor={colors.primary}
-            />
-          }
+          refreshControl={<PullRefresh onRefresh={() => refetch()} />}
           renderItem={({ item }) => <AccountRow account={item} />}
           ListEmptyComponent={<EmptyState icon="users" title="No customers found" />}
         />
@@ -284,7 +267,7 @@ function AccountRow({ account }: { account: BackofficeAccount }) {
 /* ------------------------------------------------------------------ */
 
 function Services() {
-  const { data, isPending, error, refetch, isRefetching } = useBoServices();
+  const { data, isPending, error, refetch } = useBoServices();
   if (isPending) return <LoadingState />;
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
   return (
@@ -293,13 +276,7 @@ function Services() {
       keyExtractor={(s) => s.id}
       contentContainerStyle={styles.list}
       ItemSeparatorComponent={() => <View style={{ height: space.sm }} />}
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefetching}
-          onRefresh={() => void refetch()}
-          tintColor={colors.primary}
-        />
-      }
+      refreshControl={<PullRefresh onRefresh={() => refetch()} />}
       renderItem={({ item }) => <ServiceRow service={item} />}
     />
   );
@@ -309,7 +286,7 @@ function Services() {
 
 /** M9 Payments: customer, Plan/Extra, amount, status, date, provider ref, refunds. */
 function Payments() {
-  const { data, isPending, error, refetch, isRefetching } = useBoPayments();
+  const { data, isPending, error, refetch } = useBoPayments();
   if (isPending) return <LoadingState />;
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
   return (
@@ -318,13 +295,7 @@ function Payments() {
       keyExtractor={(o) => o.id}
       contentContainerStyle={styles.list}
       ItemSeparatorComponent={() => <View style={{ height: space.sm }} />}
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefetching}
-          onRefresh={() => void refetch()}
-          tintColor={colors.primary}
-        />
-      }
+      refreshControl={<PullRefresh onRefresh={() => refetch()} />}
       renderItem={({ item }) => <PaymentRow order={item} />}
       ListEmptyComponent={<EmptyState icon="card" title="No payments yet" />}
     />

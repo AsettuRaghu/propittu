@@ -1,7 +1,7 @@
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   formatIndianMobile,
@@ -9,6 +9,7 @@ import {
   STAFF_ROLE_LABELS,
   type Me,
 } from '@propittu/shared';
+import { PullRefresh } from '@/components/PullRefresh';
 import { useMe } from '@/api/queries';
 import { useSession } from '@/auth/SessionProvider';
 import { dialog } from '@/components/Dialog';
@@ -28,7 +29,7 @@ function planBadge(me: Me): { label: string; tone: Tone } {
 
 /** Profile (§25): account at a glance, and the four places people go from here. */
 export default function ProfileScreen() {
-  const { data: me, isPending, error, refetch, isRefetching } = useMe();
+  const { data: me, isPending, error, refetch } = useMe();
   const { signOut } = useSession();
   const [signingOut, setSigningOut] = useState(false);
 
@@ -61,13 +62,7 @@ export default function ProfileScreen() {
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefetching}
-            onRefresh={() => void refetch()}
-            tintColor={colors.primary}
-          />
-        }
+        refreshControl={<PullRefresh onRefresh={() => refetch()} />}
       >
         <Text style={typography.display}>Profile</Text>
 

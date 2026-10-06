@@ -1,4 +1,4 @@
-import type { PropertyCompletion } from './completion';
+import type { CompletionItem, PropertyCompletion } from './completion';
 import type { PlanSummary } from './plans';
 import type {
   AccountRole,
@@ -99,6 +99,18 @@ export interface PropertySummary {
   photo_count: number;
   video_count: number;
   created_at: string;
+  /** Profile completion (M2) and the most useful next step, for Home. */
+  completion_percent: number;
+  next_step: CompletionItem | null;
+  /** The most recent open service request on this property, if any. */
+  active_request: {
+    id: string;
+    reference: string;
+    status: ServiceRequestStatus;
+    service_name: string;
+    scheduled_for: string | null;
+    preferred_date: string | null;
+  } | null;
 }
 
 /** Property details screen (§18). */

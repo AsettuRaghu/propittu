@@ -1,12 +1,13 @@
 import { useRef } from 'react';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   PROPERTY_TYPE_LABELS,
   SERVICE_REQUEST_STATUS_LABELS,
   type CompletionItem,
   type PropertyDetail,
 } from '@propittu/shared';
+import { PullRefresh } from '@/components/PullRefresh';
 import { useProperty, useServiceRequests } from '@/api/queries';
 import { CompletionCard } from '@/components/CompletionCard';
 import { DocumentSlots } from '@/components/DocumentSlots';
@@ -17,13 +18,14 @@ import { ErrorState, LoadingState } from '@/components/States';
 import { VideoSection } from '@/components/VideoSection';
 import { Badge, Card, IconButton, IconTile, LinkButton, SectionTitle } from '@/components/ui';
 import { formatArea, formatDate, formatLocation } from '@/lib/format';
+import { goToCompletionStep } from '@/lib/propertySteps';
 import { PROPERTY_TYPE_ICONS, STATUS_TONES, serviceVisual } from '@/lib/icons';
 import { accents, colors, radius, shadow, space, typography, type Accent } from '@/theme';
 
 /** Property details (§18, M2/M3): map first, everything one tap away. */
 export default function PropertyDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { data: property, isPending, error, refetch, isRefetching } = useProperty(id);
+  const { data: property, isPending, error, refetch } = useProperty(id);
   const photosRef = useRef<PhotoSectionHandle>(null);
 
   if (isPending) return <LoadingState />;
@@ -38,23 +40,9 @@ export default function PropertyDetailsScreen() {
 
   const edit = () => router.push(`/properties/${property.id}/edit`);
 
-  // Next actions from the completion card.
-  const onAction = (item: CompletionItem) => {
-    switch (item.key) {
-      case 'location':
-        return router.push(`/properties/${property.id}/location`);
-      case 'sale_deed':
-      case 'property_tax':
-        return router.push({
-          pathname: '/properties/[id]/add-document',
-          params: { id: property.id, type: item.key },
-        });
-      case 'photo':
-        return photosRef.current?.add();
-      default:
-        return edit();
-    }
-  };
+  // Next actions from the completion card (photos open the picker right here).
+  const onAction = (item: CompletionItem) =>
+    item.key === 'photo' ? photosRef.current?.add() : goToCompletionStep(property.id, item.key);
 
   const location = formatLocation(property);
 
@@ -62,13 +50,7 @@ export default function PropertyDetailsScreen() {
     <ScrollView
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefetching}
-          onRefresh={() => void refetch()}
-          tintColor={colors.primary}
-        />
-      }
+      refreshControl={<PullRefresh onRefresh={() => refetch()} />}
     >
       <Stack.Screen
         options={{
@@ -103,9 +85,8 @@ export default function PropertyDetailsScreen() {
 
       <PropertyMapCard property={property} />
 
-      {/* Quick actions — no scrolling to find Edit */}
+      {/* Quick actions. Edit lives in the header; location in the map card. */}
       <View style={styles.quick}>
-        <Quick icon="edit" label="Edit" accent="indigo" onPress={edit} />
         <Quick
           icon="document"
           label="Documents"
@@ -121,10 +102,10 @@ export default function PropertyDetailsScreen() {
           }
         />
         <Quick
-          icon="pin"
-          label="Location"
+          icon="camera"
+          label="Add photos"
           accent="sky"
-          onPress={() => router.push(`/properties/${property.id}/location`)}
+          onPress={() => photosRef.current?.add()}
         />
       </View>
 

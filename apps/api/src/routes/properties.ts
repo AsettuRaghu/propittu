@@ -2,11 +2,13 @@ import { Router } from 'express';
 import {
   computePropertyCompletion,
   createPropertySchema,
+  OPEN_REQUEST_STATUSES,
   STORAGE_BUCKETS,
   updatePropertySchema,
   type Property,
   type PropertyDetail,
   type PropertySummary,
+  type ServiceRequestStatus,
   type ValueSource,
 } from '@propittu/shared';
 import { auth } from '../auth.js';
@@ -33,7 +35,10 @@ const SUMMARY_COLUMNS =
 
 type PropertyRow = Property;
 
-interface SummaryRow extends Omit<PropertySummary, 'cover_photo_url'> {
+interface SummaryRow extends Omit<
+  PropertySummary,
+  'cover_photo_url' | 'completion_percent' | 'next_step' | 'active_request'
+> {
   cover_photo_path: string | null;
 }
 
@@ -83,21 +88,77 @@ function withProvenance(
 propertiesRouter.get('/properties', async (req, res) => {
   const { db, accountId } = auth(req);
 
-  const rows = must<SummaryRow[]>(
-    await db
+  // Everything Home needs in four parallel reads (no per-property queries).
+  const [summaryRes, propertyRes, documentRes, requestRes] = await Promise.all([
+    db
       .from('property_summaries')
       .select(SUMMARY_COLUMNS)
       .eq('account_id', accountId)
       .order('created_at', { ascending: false }),
-  );
+    db.from('properties').select(PROPERTY_COLUMNS).eq('account_id', accountId),
+    db
+      .from('property_documents')
+      .select('property_id, document_type')
+      .eq('account_id', accountId)
+      .eq('upload_status', 'ready'),
+    db
+      .from('service_requests')
+      .select(
+        'id, reference, status, property_id, scheduled_for, preferred_date, service:services(name)',
+      )
+      .eq('account_id', accountId)
+      .in('status', OPEN_REQUEST_STATUSES)
+      .order('created_at', { ascending: false }),
+  ]);
+  const rows = must<SummaryRow[]>(summaryRes);
+  const properties = new Map(must<PropertyRow[]>(propertyRes).map((p) => [p.id, toProperty(p)]));
+  const docTypes = new Map<string, string[]>();
+  for (const d of must<{ property_id: string; document_type: string }[]>(documentRes)) {
+    docTypes.set(d.property_id, [...(docTypes.get(d.property_id) ?? []), d.document_type]);
+  }
+  const activeRequest = new Map<string, PropertySummary['active_request']>();
+  for (const r of must<
+    {
+      id: string;
+      reference: string;
+      status: ServiceRequestStatus;
+      property_id: string | null;
+      scheduled_for: string | null;
+      preferred_date: string | null;
+      service: { name: string } | null;
+    }[]
+  >(requestRes)) {
+    if (!r.property_id || activeRequest.has(r.property_id)) continue;
+    activeRequest.set(r.property_id, {
+      id: r.id,
+      reference: r.reference,
+      status: r.status,
+      service_name: r.service?.name ?? 'Service',
+      scheduled_for: r.scheduled_for,
+      preferred_date: r.preferred_date,
+    });
+  }
 
   const coverPaths = rows.flatMap((r) => (r.cover_photo_path ? [r.cover_photo_path] : []));
   const urls = await signDownloads(db, STORAGE_BUCKETS.photos, coverPaths);
 
-  const data: PropertySummary[] = rows.map(({ cover_photo_path, ...r }) => ({
-    ...r,
-    cover_photo_url: cover_photo_path ? (urls.get(cover_photo_path) ?? null) : null,
-  }));
+  const data: PropertySummary[] = rows.map(({ cover_photo_path, ...r }) => {
+    const property = properties.get(r.id);
+    const completion = property
+      ? computePropertyCompletion({
+          property,
+          photoCount: r.photo_count,
+          documentTypes: docTypes.get(r.id) ?? [],
+        })
+      : null;
+    return {
+      ...r,
+      cover_photo_url: cover_photo_path ? (urls.get(cover_photo_path) ?? null) : null,
+      completion_percent: completion?.percent ?? 0,
+      next_step: completion?.next[0] ?? null,
+      active_request: activeRequest.get(r.id) ?? null,
+    };
+  });
 
   ok(res, data);
 });

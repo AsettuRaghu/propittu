@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   formatPrice,
@@ -8,6 +8,7 @@ import {
   SERVICE_CATEGORY_LABELS,
   type CatalogueService,
 } from '@propittu/shared';
+import { PullRefresh } from '@/components/PullRefresh';
 import { useMe, useServices } from '@/api/queries';
 import { Icon } from '@/components/Icon';
 import { LimitedAccessState } from '@/components/PlanGate';
@@ -62,7 +63,7 @@ function priceLabel(s: CatalogueService): string {
 }
 
 function Catalogue() {
-  const { data, isPending, error, refetch, isRefetching } = useServices();
+  const { data, isPending, error, refetch } = useServices();
 
   const { featured, sections } = useMemo(() => {
     const all = data ?? [];
@@ -87,13 +88,7 @@ function Catalogue() {
     <ScrollView
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefetching}
-          onRefresh={() => void refetch()}
-          tintColor={colors.primary}
-        />
-      }
+      refreshControl={<PullRefresh onRefresh={() => refetch()} />}
     >
       {featured ? <Featured service={featured} /> : null}
 

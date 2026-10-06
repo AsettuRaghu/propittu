@@ -2,11 +2,12 @@ import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { AppState, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ApiError, setLimitedAccessHandler } from '@/api/client';
 import { SessionProvider, useSession } from '@/auth/SessionProvider';
+import { BrandSplash } from '@/components/BrandSplash';
 import { DialogHost } from '@/components/Dialog';
 import { envProblems } from '@/lib/env';
 import { colors, space, typography } from '@/theme';
@@ -65,6 +66,8 @@ export default function RootLayout() {
  */
 function RootNavigator() {
   const { session, initializing } = useSession();
+  const [splashDone, setSplashDone] = useState(false);
+  const endSplash = useCallback(() => setSplashDone(true), []);
 
   useEffect(() => {
     if (!initializing) void SplashScreen.hideAsync();
@@ -73,29 +76,32 @@ function RootNavigator() {
   if (initializing) return null;
 
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        contentStyle: { backgroundColor: colors.background },
-      }}
-    >
-      <Stack.Protected guard={!!session}>
-        <Stack.Screen name="(app)" />
-      </Stack.Protected>
-      <Stack.Protected guard={!session}>
-        <Stack.Screen name="login" />
-        <Stack.Screen
-          name="verify"
-          options={{
-            headerShown: true,
-            title: '',
-            headerShadowVisible: false,
-            headerStyle: { backgroundColor: colors.background },
-            headerTintColor: colors.text,
-          }}
-        />
-      </Stack.Protected>
-    </Stack>
+    <View style={styles.flex}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: colors.background },
+        }}
+      >
+        <Stack.Protected guard={!!session}>
+          <Stack.Screen name="(app)" />
+        </Stack.Protected>
+        <Stack.Protected guard={!session}>
+          <Stack.Screen name="login" />
+          <Stack.Screen
+            name="verify"
+            options={{
+              headerShown: true,
+              title: '',
+              headerShadowVisible: false,
+              headerStyle: { backgroundColor: colors.background },
+              headerTintColor: colors.text,
+            }}
+          />
+        </Stack.Protected>
+      </Stack>
+      {!splashDone ? <BrandSplash onDone={endSplash} /> : null}
+    </View>
   );
 }
 
@@ -120,6 +126,7 @@ function ConfigError({ missing }: { missing: string[] }) {
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   config: {
     flex: 1,
     justifyContent: 'center',

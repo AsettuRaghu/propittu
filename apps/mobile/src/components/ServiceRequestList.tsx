@@ -1,7 +1,8 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { OPEN_REQUEST_STATUSES } from '@propittu/shared';
+import { PullRefresh } from './PullRefresh';
 import { useServiceRequests } from '@/api/queries';
 import { colors, radius, shadow, space, typography } from '@/theme';
 import { Icon } from './Icon';
@@ -24,7 +25,7 @@ export function ServiceRequestList({
   propertyId?: string;
   showCta?: boolean;
 }) {
-  const { data, isPending, error, refetch, isRefetching } = useServiceRequests(propertyId);
+  const { data, isPending, error, refetch } = useServiceRequests(propertyId);
   const [tab, setTab] = useState<Tab>('active');
   const [range, setRange] = useState<Range>('all');
   const [since, setSince] = useState<number | null>(null);
@@ -101,13 +102,7 @@ export function ServiceRequestList({
       contentContainerStyle={styles.list}
       ItemSeparatorComponent={() => <View style={{ height: space.sm }} />}
       showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefetching}
-          onRefresh={() => void refetch()}
-          tintColor={colors.primary}
-        />
-      }
+      refreshControl={<PullRefresh onRefresh={() => refetch()} />}
       renderItem={({ item }) => (
         <ServiceRequestCard request={item} onPress={() => router.push(`/requests/${item.id}`)} />
       )}

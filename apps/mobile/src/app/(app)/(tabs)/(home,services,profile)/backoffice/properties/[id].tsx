@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import * as WebBrowser from 'expo-web-browser';
 import { useLocalSearchParams } from 'expo-router';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   DOCUMENT_STATUS_LABELS,
   DOCUMENT_STATUSES,
@@ -12,6 +12,7 @@ import {
   type DocumentStatus,
   type PropertyDocument,
 } from '@propittu/shared';
+import { PullRefresh } from '@/components/PullRefresh';
 import { useBoDocumentStatus, useBoProperty } from '@/api/backoffice';
 import { useMe } from '@/api/queries';
 import { openDocument } from '@/api/uploads';
@@ -20,7 +21,7 @@ import { Badge, Button, Card, Chips, KeyValue, SectionTitle, type Tone } from '@
 import { errorMessage } from '@/lib/errors';
 import { formatArea, formatDate } from '@/lib/format';
 import { signedImage } from '@/lib/image';
-import { colors, radius, space, typography } from '@/theme';
+import { radius, space, typography } from '@/theme';
 import { showAlert } from '@/lib/alert';
 
 const DOC_TONES: Record<DocumentStatus, Tone> = {
@@ -33,7 +34,7 @@ const DOC_TONES: Record<DocumentStatus, Tone> = {
 /** Backoffice: a customer's property, photos and document review (M3/M9). */
 export default function BackofficePropertyScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { data, isPending, error, refetch, isRefetching } = useBoProperty(id);
+  const { data, isPending, error, refetch } = useBoProperty(id);
   const me = useMe();
 
   if (isPending) return <LoadingState />;
@@ -48,13 +49,7 @@ export default function BackofficePropertyScreen() {
   return (
     <ScrollView
       contentContainerStyle={styles.content}
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefetching}
-          onRefresh={() => void refetch()}
-          tintColor={colors.primary}
-        />
-      }
+      refreshControl={<PullRefresh onRefresh={() => refetch()} />}
     >
       <Card style={styles.card}>
         <Text style={typography.heading}>{property.name}</Text>

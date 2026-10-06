@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   formatIndianMobile,
   staffCan,
@@ -7,6 +7,7 @@ import {
   TICKET_STATUS_LABELS,
   TICKET_STATUSES,
 } from '@propittu/shared';
+import { PullRefresh } from '@/components/PullRefresh';
 import { useMe } from '@/api/queries';
 import { useBoReplyTicket, useBoTicket, useBoTicketStatus } from '@/api/support';
 import { uploadAll } from '@/components/AttachmentPicker';
@@ -17,12 +18,12 @@ import { Badge, Card, Chips, ListGroup, ListRow, SectionTitle } from '@/componen
 import { errorMessage } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
 import { TICKET_TONES } from '@/lib/icons';
-import { colors, space, typography } from '@/theme';
+import { space, typography } from '@/theme';
 
 /** Backoffice: one support ticket with the customer's context. */
 export default function BoTicketScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { data: t, isPending, error, refetch, isRefetching } = useBoTicket(id);
+  const { data: t, isPending, error, refetch } = useBoTicket(id);
   const me = useMe();
   const reply = useBoReplyTicket(id);
   const setStatus = useBoTicketStatus(id);
@@ -38,13 +39,7 @@ export default function BoTicketScreen() {
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
       automaticallyAdjustKeyboardInsets
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefetching}
-          onRefresh={() => void refetch()}
-          tintColor={colors.primary}
-        />
-      }
+      refreshControl={<PullRefresh onRefresh={() => refetch()} />}
     >
       <Card style={styles.head}>
         <View style={styles.row}>

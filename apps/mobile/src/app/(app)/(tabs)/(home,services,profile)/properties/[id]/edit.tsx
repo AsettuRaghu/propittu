@@ -14,7 +14,7 @@ import {
   type PropertyFormValues,
 } from '@/components/PropertyForm';
 import { ErrorState, LoadingState } from '@/components/States';
-import { Banner, Button, ListGroup, ListRow } from '@/components/ui';
+import { Banner, Button } from '@/components/ui';
 import { errorMessage, fieldErrors } from '@/lib/errors';
 import { space } from '@/theme';
 
@@ -119,16 +119,6 @@ function EditForm({ property }: { property: PropertyDetail }) {
         >
           <DocumentSlots propertyId={property.id} />
         </FormSection>
-
-        <ListGroup>
-          <ListRow
-            icon="pin"
-            accent="teal"
-            title="Location on the map"
-            subtitle={property.latitude !== null ? 'Pinned · tap to adjust' : 'Not pinned yet'}
-            onPress={() => router.push(`/properties/${property.id}/location`)}
-          />
-        </ListGroup>
 
         <Button
           title="Delete property"

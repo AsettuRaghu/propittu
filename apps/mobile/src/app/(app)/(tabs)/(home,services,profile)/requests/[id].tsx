@@ -1,11 +1,12 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   formatPrice,
   PREFERRED_SLOT_LABELS,
   SERVICE_REQUEST_STATUS_LABELS,
   type ServiceRequestDetail,
 } from '@propittu/shared';
+import { PullRefresh } from '@/components/PullRefresh';
 import { useServiceCheckout } from '@/api/billing';
 import { useCancelServiceRequest, useServiceRequest } from '@/api/queries';
 import { dialog, toast } from '@/components/Dialog';
@@ -24,7 +25,7 @@ import { accents, colors, space, typography } from '@/theme';
  */
 export default function ServiceRequestScreen() {
   const { id, submitted } = useLocalSearchParams<{ id: string; submitted?: string }>();
-  const { data: request, isPending, error, refetch, isRefetching } = useServiceRequest(id);
+  const { data: request, isPending, error, refetch } = useServiceRequest(id);
   const cancel = useCancelServiceRequest(id);
 
   if (isPending) return <LoadingState />;
@@ -53,13 +54,7 @@ export default function ServiceRequestScreen() {
     <ScrollView
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefetching}
-          onRefresh={() => void refetch()}
-          tintColor={colors.primary}
-        />
-      }
+      refreshControl={<PullRefresh onRefresh={() => refetch()} />}
     >
       {submitted === '1' ? (
         <View style={[styles.submitted, { backgroundColor: accents.teal.bg }]}>
