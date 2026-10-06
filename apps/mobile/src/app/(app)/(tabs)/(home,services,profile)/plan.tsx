@@ -523,7 +523,7 @@ function UsageTab({
           icon="gem"
           accent="violet"
           title="Need more room?"
-          text="Plus: 5 properties, 2 GB and 2 visits a year."
+          text="Plus: up to 10 properties, more storage and 2 visits a year."
           cta="Upgrade"
           onPress={onUpgrade}
         />
