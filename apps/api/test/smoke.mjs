@@ -490,6 +490,7 @@ try {
 
   seen.length = 0;
   r = await call('/me', { token: valid });
+  check(r.json?.data?.features?.document_reading === false, 'GET /me: Pittu feature flag is off by default (app shows the normal flow)', r.json?.data?.features);
   check(
     r.status === 200 && r.json.data.id === USER,
     'valid token → GET /me 200 with id from token',

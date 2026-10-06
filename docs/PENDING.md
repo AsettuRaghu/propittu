@@ -13,6 +13,12 @@ registration is through.
 | 4 | **Legal page details** | Company legal name + address, grievance officer, refund policy, court city; lawyer review; move to propittu.com. Pages live at `/legal/privacy`, `/legal/terms`, `/legal/delete-account`. | Placeholders marked “[to be confirmed]”. |
 | 5 | **Support phone** | A customer-care number (shown in Help & Support when `EXPO_PUBLIC_SUPPORT_PHONE` is set). | Hidden until available. |
 
+## Dates to remember
+
+| When | What |
+|---|---|
+| **by 29 Oct 2026** | Replace the Anthropic **production** API key (`propittu-production`, created 6 Oct 2026, 30-day expiry → ~5 Nov). Console → API Keys → create new → paste into Vercel `ANTHROPIC_API_KEY` (Production, Sensitive) → redeploy → delete the old key. Until replaced, Pittu stops reading (nothing else is affected). |
+
 ## Go-live setup (5.B.4)
 
 - Razorpay live keys (after their KYC).

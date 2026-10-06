@@ -56,6 +56,14 @@ export interface Me {
   staff_role: StaffRole | null;
   /** Plan/Trial status (M5/M6); access = limited means Limited Access. */
   plan: PlanSummary;
+  /**
+   * Optional features switched on for this account. When a feature is off
+   * the app simply shows the normal flow — it never mentions the feature.
+   */
+  features: {
+    /** Pittu reads uploaded sale deeds (AI). */
+    document_reading: boolean;
+  };
 }
 
 /* ------------------------------------------------------------------ *
