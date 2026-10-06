@@ -97,8 +97,9 @@ export async function loadPlanState(db: SupabaseClient, accountId: string): Prom
     };
   }
 
+  // A Trial given or extended by staff is still a Trial.
   const status: PlanStatus =
-    current.source === 'trial'
+    current.source === 'trial' || current.plan_version.plan.code === 'trial'
       ? 'trialing'
       : current.cancel_at_period_end
         ? 'cancelling'

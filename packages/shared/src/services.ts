@@ -274,3 +274,8 @@ export const grantPlanSchema = z.object({
   plan_code: z.string().regex(/^[a-z][a-z0-9_]*$/),
   days: z.number().int().min(1).max(3660).optional(),
 });
+
+/** POST /backoffice/accounts/:id/plan/extend — add days to what is in force. */
+export const extendPlanSchema = z.object({
+  days: z.number().int().min(1).max(365),
+});

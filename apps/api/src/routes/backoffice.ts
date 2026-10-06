@@ -6,6 +6,7 @@ import {
   accountStatusSchema,
   createServiceSchema,
   documentStatusSchema,
+  extendPlanSchema,
   grantPlanSchema,
   LIMIT_LABELS,
   OPEN_REQUEST_STATUSES,
@@ -252,6 +253,37 @@ backofficeRouter.post('/accounts/:accountId/plan/end', allow('plans.manage'), as
   });
   ok(res, await describeAccountPlan(ctx.db, accountId));
 });
+
+/*
+ * POST /backoffice/accounts/:accountId/plan/extend {days} — adds days to
+ * what is in force (a paid period stays paid; anything queued moves too).
+ */
+backofficeRouter.post(
+  '/accounts/:accountId/plan/extend',
+  allow('plans.manage'),
+  async (req, res) => {
+    const ctx = auth(req);
+    const accountId = uuidParam(req.params.accountId, 'Account');
+    const { days } = extendPlanSchema.parse(req.body);
+    await loadAccount(ctx.db, accountId);
+    const { data, error } = await ctx.db.rpc('staff_extend_plan', {
+      p_account: accountId,
+      p_days: days,
+    });
+    if (error?.code === 'P0002') {
+      throw new HttpError(409, 'CONFLICT', 'There is no plan in force — give a plan instead.');
+    }
+    const planId = must<string>({ data, error });
+    await staffAudit(
+      ctx,
+      'staff.plan.extended',
+      accountId,
+      { type: 'account_plan', id: planId },
+      { days },
+    );
+    ok(res, await describeAccountPlan(ctx.db, accountId));
+  },
+);
 
 /*
  * POST /backoffice/accounts/:accountId/plan {plan_code, days?} — grants a

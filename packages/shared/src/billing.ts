@@ -13,6 +13,21 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   cancelled: 'Not completed',
 };
 
+/**
+ * What the customer sees: an unpaid order that is no longer being paid
+ * (abandoned, failed, or replaced by a newer checkout) is "failed".
+ */
+export const ORDER_DISPLAY_STATUSES = ['paid', 'refunded', 'processing', 'failed'] as const;
+export type OrderDisplayStatus = (typeof ORDER_DISPLAY_STATUSES)[number];
+export const ORDER_DISPLAY_LABELS: Record<OrderDisplayStatus, string> = {
+  paid: 'Paid',
+  refunded: 'Refunded',
+  processing: 'Processing',
+  failed: 'Not completed',
+};
+/** A pending checkout older than this is treated as not completed. */
+export const CHECKOUT_STALE_MINUTES = 30;
+
 export const PAYMENT_STATUSES = ['created', 'captured', 'failed'] as const;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
@@ -24,6 +39,13 @@ export interface Order {
   amount_paise: number;
   currency: 'INR';
   status: OrderStatus;
+  display_status: OrderDisplayStatus;
+  /** Catalogue price before any upgrade credit (equals amount when no credit). */
+  list_price_paise: number;
+  /** Credit for the unused part of the previous paid Plan (upgrade). */
+  credit_paise: number;
+  /** The Plan period this order granted (paid Plan orders). */
+  period: { starts_at: string; ends_at: string } | null;
   paid_at: string | null;
   created_at: string;
   service_request_id: string | null;
@@ -47,6 +69,25 @@ export interface CheckoutSession {
 export interface BackofficeOrder extends Order {
   account_id: string;
   customer_phone: string | null;
+}
+
+/** What buying a Plan now would do — shown before paying (GET /billing/quote). */
+export interface PlanQuote {
+  mode: 'new' | 'renewal' | 'upgrade' | 'downgrade';
+  plan_code: string;
+  plan_name: string;
+  list_price_paise: number;
+  credit_paise: number;
+  amount_paise: number;
+  /** Unused Trial days added to the paid term. */
+  bonus_days: number;
+  starts_at: string;
+  ends_at: string;
+  current_plan_code: string | null;
+  current_plan_name: string | null;
+  current_ends_at: string | null;
+  /** Set when this change is not allowed now (e.g. a mid-term downgrade). */
+  blocked_reason: string | null;
 }
 
 export const planCheckoutSchema = z.object({

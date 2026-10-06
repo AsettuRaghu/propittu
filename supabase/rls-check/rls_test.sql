@@ -777,6 +777,81 @@ reset role;
 
 -- =====================================================================
 \echo
+\echo '== Plan changes: trial carry-over, proration, staff add days =='
+-- =====================================================================
+
+-- B went Trial → Plus with ~30 Trial days left: they are kept.
+select tst.ok((select ends_at > now() + interval '394 days' from public.account_plans
+               where account_id = 'acc0000b-0000-0000-0000-00000000000b' and source = 'payment'),
+  'Trial → paid: the unused Trial days are added to the paid term');
+
+set role authenticated;
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.ok((select public.plan_quote('basic')->>'mode') = 'downgrade'
+               and (select public.plan_quote('basic')->>'blocked_reason') like 'You can move to Basic when%',
+  'a mid-term downgrade is quoted as blocked');
+select tst.rejects($$select public.create_plan_order('basic')$$, 'a mid-term downgrade cannot be ordered');
+reset role;
+
+-- Make B a paid Basic customer half-way through the year, one visit used.
+update public.account_plans
+set plan_version_id = (select pv.id from public.plan_versions pv join public.plans p on p.id = pv.plan_id
+                       where p.code = 'basic' and pv.is_current),
+    starts_at = now() - interval '182 days', ends_at = now() + interval '183 days'
+where account_id = 'acc0000b-0000-0000-0000-00000000000b' and source = 'payment';
+update public.account_plans set starts_at = now() - interval '200 days', ends_at = now() - interval '182 days'
+where account_id = 'acc0000b-0000-0000-0000-00000000000b' and source = 'trial';
+insert into public.usage_records (account_id, kind, code, quantity, created_at)
+values ('acc0000b-0000-0000-0000-00000000000b', 'included_service', 'property_visit', 1, now() - interval '30 days');
+
+set role authenticated;
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.ok((select (q->>'mode') = 'upgrade' and (q->>'list_price_paise')::int = 149900
+                      and abs((q->>'credit_paise')::int - 25019) < 200
+                      and (q->>'amount_paise')::int = 149900 - (q->>'credit_paise')::int
+               from (select public.plan_quote('plus') q) x),
+  'upgrade Basic → Plus mid-term: unused Basic is credited (prorated)');
+select public.create_plan_order('plus');
+select tst.ok((select amount_paise < 149900 and list_price_paise = 149900 and credit_paise > 0
+                      and description like '%upgrade from Basic%'
+               from public.orders where status = 'pending'),
+  'the upgrade order is priced net of the credit');
+reset role;
+set role service_role;
+select tst.ok(public.record_payment_event('razorpay', 'evt_up', 'payment.captured',
+  (select id from public.orders where account_id = 'acc0000b-0000-0000-0000-00000000000b' and status = 'pending'),
+  'pay_up', (select amount_paise from public.orders where account_id = 'acc0000b-0000-0000-0000-00000000000b' and status = 'pending'), 'INR')
+  = 'plan_activated', 'B pays the upgrade');
+reset role;
+set role authenticated;
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.ok((select p.code from public.account_plans ap join public.plan_versions pv on pv.id = ap.plan_version_id
+               join public.plans p on p.id = pv.plan_id
+               where ap.starts_at <= now() and ap.ends_at > now() order by ap.starts_at desc limit 1) = 'plus',
+  'upgrade: Plus is in force immediately');
+select tst.ok((select count(*) from public.account_plans ap join public.plan_versions pv on pv.id = ap.plan_version_id
+               join public.plans p on p.id = pv.plan_id where p.code = 'basic' and ap.ends_at > now()) = 0,
+  'upgrade: the Basic period is ended');
+select tst.ok(public.included_remaining('acc0000b-0000-0000-0000-00000000000b', 'property_visit') = 1,
+  'upgrade: visits already used this year still count (2 on Plus − 1 used)');
+select tst.rejects($$select public.staff_extend_plan('acc0000b-0000-0000-0000-00000000000b', 7)$$,
+  'a customer cannot add days');
+
+-- Staff add days: extends what is in force, keeps the paid period.
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+create temp table before_extend as
+  select id, ends_at from public.account_plans
+  where account_id = 'acc0000b-0000-0000-0000-00000000000b' and ends_at > now();
+select public.staff_extend_plan('acc0000b-0000-0000-0000-00000000000b', 7);
+select tst.ok((select bool_and(ap.ends_at = b.ends_at + interval '7 days')
+               from public.account_plans ap join before_extend b using (id)),
+  'staff add 7 days: the paid Plus period runs 7 days longer (not replaced)');
+select tst.rejects($$select public.staff_extend_plan('acc0000b-0000-0000-0000-00000000000b', 0)$$,
+  'adding 0 days is rejected');
+reset role;
+
+-- =====================================================================
+\echo
 \echo '== Help & Support: tickets =='
 -- =====================================================================
 

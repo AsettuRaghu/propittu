@@ -4,14 +4,20 @@ import {
   formatIndianMobile,
   formatPrice,
   formatStorageMb,
-  ORDER_STATUS_LABELS,
+  ORDER_DISPLAY_LABELS,
   INCLUDED_SERVICE_LABELS,
   PLAN_STATUS_LABELS,
   PROPERTY_TYPE_LABELS,
   SERVICE_REQUEST_STATUS_LABELS,
   staffCan,
 } from '@propittu/shared';
-import { useBoAccount, useBoAccountStatus, useBoEndPlan, useBoGrantPlan } from '@/api/backoffice';
+import {
+  useBoAccount,
+  useBoAccountStatus,
+  useBoEndPlan,
+  useBoExtendPlan,
+  useBoGrantPlan,
+} from '@/api/backoffice';
 import { useMe } from '@/api/queries';
 import { ErrorState, LoadingState } from '@/components/States';
 import { Badge, Banner, Button, Card, KeyValue, SectionTitle } from '@/components/ui';
@@ -29,6 +35,7 @@ export default function BackofficeAccountScreen() {
   const me = useMe();
   const grant = useBoGrantPlan(id);
   const endPlan = useBoEndPlan(id);
+  const extend = useBoExtendPlan(id);
   const setStatus = useBoAccountStatus(id);
 
   if (isPending) return <LoadingState />;
@@ -47,7 +54,7 @@ export default function BackofficeAccountScreen() {
   const grantPlan = (code: string, label: string, days?: number) =>
     confirm(
       `Give ${label}?`,
-      `Starts now${days ? ` for ${days} days` : ''} and replaces the current plan. Recorded in the audit log.`,
+      `Starts now${days ? ` for ${days} days` : ''} and replaces the current plan (a paid period is ended, not refunded). To give extra time instead, use “Add 7 days”. Recorded in the audit log.`,
       () => grant.mutate({ plan_code: code, days }, { onError: fail("Couldn't change the plan") }),
     );
 
@@ -121,12 +128,20 @@ export default function BackofficeAccountScreen() {
                 onPress={() => grantPlan('plus', 'Plus')}
                 disabled={grant.isPending}
               />
-              <Button
-                title="Extend trial 7 days"
-                variant="secondary"
-                onPress={() => grantPlan('trial', 'a 7-day trial', 7)}
-                disabled={grant.isPending}
-              />
+              {plan.current ? (
+                <Button
+                  title="Add 7 days"
+                  variant="secondary"
+                  loading={extend.isPending}
+                  onPress={() =>
+                    confirm(
+                      'Add 7 days?',
+                      `The current ${plan.plan?.name ?? 'plan'} runs 7 days longer (until ${formatDate(new Date(new Date(plan.current?.ends_at ?? 0).getTime() + 7 * 86_400_000).toISOString())}). Recorded in the audit log.`,
+                      () => extend.mutate(7, { onError: fail("Couldn't add days") }),
+                    )
+                  }
+                />
+              ) : null}
               {plan.current ? (
                 <Button
                   title="End plan now"
@@ -209,8 +224,14 @@ export default function BackofficeAccountScreen() {
               </Text>
             </View>
             <Badge
-              label={ORDER_STATUS_LABELS[o.status]}
-              tone={o.status === 'paid' ? 'success' : 'warning'}
+              label={ORDER_DISPLAY_LABELS[o.display_status]}
+              tone={
+                o.display_status === 'paid'
+                  ? 'success'
+                  : o.display_status === 'processing'
+                    ? 'warning'
+                    : 'neutral'
+              }
             />
           </Card>
         ))}

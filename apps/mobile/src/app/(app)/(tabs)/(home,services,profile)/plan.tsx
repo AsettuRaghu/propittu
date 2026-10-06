@@ -9,15 +9,16 @@ import {
   INCLUDED_SERVICE_LABELS,
   LIMIT_CODES,
   LIMIT_LABELS,
-  ORDER_STATUS_LABELS,
+  ORDER_DISPLAY_LABELS,
   PLAN_STATUS_LABELS,
   SUPPORT_EMAIL,
   type AccountPlanState,
   type LimitCode,
+  type Order,
   type PlanBenefits,
   type PublicPlan,
 } from '@propittu/shared';
-import { useOrders, usePlanCheckout } from '@/api/billing';
+import { fetchPlanQuote, useOrders, usePlanCheckout } from '@/api/billing';
 import { useAccountPlan, useCancelPlan, usePlans } from '@/api/queries';
 import { dialog, toast } from '@/components/Dialog';
 import { Icon, type IconName } from '@/components/Icon';
@@ -47,6 +48,9 @@ import {
 
 type Tab = 'usage' | 'plans' | 'payments';
 
+/** How a plan card relates to what the customer has now. */
+type CardState = 'choose' | 'current' | 'upgrade' | 'later';
+
 const PLAN_ACCENT: Record<string, Accent> = { trial: 'teal', basic: 'sky', plus: 'violet' };
 const PLAN_GRADIENT: Record<string, readonly [string, string]> = {
   trial: gradients.trial,
@@ -72,18 +76,66 @@ export default function PlanScreen() {
   const s = state.data;
   const code = s.plan?.code ?? null;
 
-  const choose = async (plan: PublicPlan, renewing: boolean) => {
+  const paidPlan = !!s.plan && s.plan.price_paise > 0;
+  const currentPrice = paidPlan ? (s.plan?.price_paise ?? 0) : 0;
+  const topCode = plans.data?.reduce<PublicPlan | null>(
+    (top, p) => (!top || p.price_paise > top.price_paise ? p : top),
+    null,
+  )?.code;
+  const cardState = (p: PublicPlan): CardState =>
+    !paidPlan
+      ? 'choose'
+      : p.code === code
+        ? 'current'
+        : p.price_paise > currentPrice
+          ? 'upgrade'
+          : 'later';
+
+  const choose = async (plan: PublicPlan) => {
+    let q;
+    try {
+      q = await fetchPlanQuote(plan.code);
+    } catch (err) {
+      void dialog.alert({
+        title: "Couldn't load the price",
+        message: errorMessage(err),
+        tone: 'danger',
+      });
+      return;
+    }
+    if (q.blocked_reason) {
+      void dialog.alert({
+        title: `${plan.name} isn't available yet`,
+        message: q.blocked_reason,
+        icon: 'clock',
+      });
+      return;
+    }
+    const period = `${formatDate(q.starts_at)} – ${formatDate(q.ends_at)}`;
+    const lines =
+      q.mode === 'upgrade'
+        ? [
+            `${plan.name} price: ${formatPrice(q.list_price_paise)}`,
+            `Credit for unused ${q.current_plan_name ?? 'plan'}: − ${formatPrice(q.credit_paise)}`,
+            `${plan.name} starts now: ${period}. Visits you've already used this year still count.`,
+          ]
+        : q.mode === 'renewal'
+          ? [`Adds another term after your current one: ${period}. No days lost.`]
+          : [
+              `Valid ${period}.` +
+                (q.bonus_days > 0
+                  ? ` Includes the ${q.bonus_days} trial day${q.bonus_days === 1 ? '' : 's'} you had left.`
+                  : ''),
+            ];
     const ok = await dialog.confirm({
-      title: `${renewing ? 'Renew' : 'Get'} ${plan.name}`,
-      message:
-        `${formatPrice(plan.price_paise)} ${BILLING_PERIOD_LABELS[plan.billing_period]}. ` +
-        (renewing
-          ? 'The new period starts when the current one ends — no days lost. '
-          : s.status === 'trialing'
-            ? 'It starts right away and replaces your free trial. '
-            : 'It starts right away. ') +
-        'Pay securely by UPI or card.',
-      confirmLabel: `Pay ${formatPrice(plan.price_paise)}`,
+      title:
+        q.mode === 'upgrade'
+          ? `Upgrade to ${plan.name}`
+          : q.mode === 'renewal'
+            ? `Renew ${plan.name}`
+            : `Get ${plan.name}`,
+      message: [...lines, 'Pay securely by UPI or card.'].join('\n\n'),
+      confirmLabel: `Pay ${formatPrice(q.amount_paise)}`,
       cancelLabel: 'Not now',
       icon: 'card',
     });
@@ -145,7 +197,7 @@ export default function PlanScreen() {
         />
       }
     >
-      <CurrentPlan state={s} onAction={() => setTab('plans')} />
+      <CurrentPlan state={s} onTop={!!code && code === topCode} onAction={() => setTab('plans')} />
 
       {s.over_limit.length > 0 ? (
         <Banner
@@ -167,7 +219,7 @@ export default function PlanScreen() {
       />
 
       {tab === 'usage' ? (
-        <UsageTab state={s} onUpgrade={() => setTab('plans')} />
+        <UsageTab state={s} onTop={!!code && code === topCode} onUpgrade={() => setTab('plans')} />
       ) : tab === 'plans' ? (
         plans.isPending ? (
           <LoadingState />
@@ -175,20 +227,18 @@ export default function PlanScreen() {
           <ErrorState error={plans.error} onRetry={() => void plans.refetch()} />
         ) : (
           <View style={styles.list}>
-            {plans.data.map((p) => {
-              const current = code === p.code && s.status !== 'trialing';
-              return (
-                <PlanCard
-                  key={p.code}
-                  plan={p}
-                  current={current}
-                  popular={p.code === 'plus'}
-                  busy={checkout.isPending && checkout.variables === p.code}
-                  disabled={checkout.isPending}
-                  onChoose={() => void choose(p, current)}
-                />
-              );
-            })}
+            {plans.data.map((p) => (
+              <PlanCard
+                key={p.code}
+                plan={p}
+                state={cardState(p)}
+                laterDate={s.current ? formatDate(s.current.ends_at) : null}
+                popular={!paidPlan && p.code === topCode}
+                busy={checkout.isPending && checkout.variables === p.code}
+                disabled={checkout.isPending}
+                onChoose={() => void choose(p)}
+              />
+            ))}
             {s.current && s.current.source !== 'trial' && !s.current.cancel_at_period_end ? (
               <View style={styles.center}>
                 <LinkButton title="Cancel plan" tone="muted" onPress={() => void confirmCancel()} />
@@ -198,47 +248,8 @@ export default function PlanScreen() {
         )
       ) : orders.isPending ? (
         <LoadingState />
-      ) : !orders.data || orders.data.length === 0 ? (
-        <View style={styles.empty}>
-          <EmptyState
-            icon="receipt"
-            accent="sky"
-            title="No payments yet"
-            message="Plan and service payments will appear here with receipts."
-          />
-        </View>
       ) : (
-        <Card style={styles.history}>
-          {orders.data.map((o, i) => (
-            <Pressable
-              key={o.id}
-              onPress={() => router.push(`/receipts/${o.id}`)}
-              accessibilityRole="button"
-              style={({ pressed }) => [
-                styles.payment,
-                i > 0 && styles.paymentBorder,
-                pressed && { opacity: 0.7 },
-              ]}
-            >
-              <IconTile icon="receipt" accent={o.status === 'paid' ? 'teal' : 'amber'} size={30} />
-              <View style={styles.flex}>
-                <Text style={typography.bodyStrong} numberOfLines={1}>
-                  {o.description}
-                </Text>
-                <Text style={typography.caption} numberOfLines={1}>
-                  {formatDate(o.paid_at ?? o.created_at)} · {o.reference}
-                </Text>
-              </View>
-              <View style={styles.amount}>
-                <Text style={typography.bodyStrong}>{formatPrice(o.amount_paise)}</Text>
-                <Badge
-                  label={ORDER_STATUS_LABELS[o.status]}
-                  tone={o.status === 'paid' ? 'success' : 'warning'}
-                />
-              </View>
-            </Pressable>
-          ))}
-        </Card>
+        <Payments orders={orders.data ?? []} />
       )}
 
       <View style={styles.secure}>
@@ -251,17 +262,20 @@ export default function PlanScreen() {
 
 /* ---- Current plan: compact, with the one action that matters ---- */
 
-function CurrentPlan({ state: s, onAction }: { state: AccountPlanState; onAction: () => void }) {
+function CurrentPlan({
+  state: s,
+  onTop,
+  onAction,
+}: {
+  state: AccountPlanState;
+  onTop: boolean;
+  onAction: () => void;
+}) {
   const code = s.plan?.code ?? '';
   const paid = s.plan && s.plan.price_paise > 0;
-  const cta =
-    s.status === 'expired'
-      ? 'Choose a plan'
-      : s.status === 'trialing'
-        ? 'Choose a plan'
-        : code === 'plus'
-          ? 'Renew'
-          : 'Upgrade';
+  const trial = s.status === 'trialing';
+  // No "Upgrade" on the top plan — renewing early is the only thing to do.
+  const cta = s.status === 'expired' || trial ? 'Choose a plan' : onTop ? 'Renew early' : 'Upgrade';
   return (
     <GradientCard colors={PLAN_GRADIENT[code] ?? gradients.limited} style={styles.hero}>
       <View style={styles.heroRow}>
@@ -275,14 +289,22 @@ function CurrentPlan({ state: s, onAction }: { state: AccountPlanState; onAction
           <Text style={styles.heroPillText}>{PLAN_STATUS_LABELS[s.status]}</Text>
         </View>
       </View>
-      <Text style={styles.heroLine}>
-        {paid
-          ? `${formatPrice(s.plan?.price_paise ?? 0)} ${BILLING_PERIOD_LABELS[s.plan?.billing_period ?? 'year']} · `
-          : ''}
-        {s.current
-          ? `${s.current.cancel_at_period_end || s.status === 'trialing' ? 'Ends' : 'Renews'} ${formatDate(s.current.ends_at)} · ${s.current.days_left} days left`
-          : 'Your data is safe — choose a plan to carry on'}
-      </Text>
+      {s.current ? (
+        <>
+          <Text style={styles.heroLine}>
+            {paid
+              ? `${formatPrice(s.plan?.price_paise ?? 0)} ${BILLING_PERIOD_LABELS[s.plan?.billing_period ?? 'year']} · `
+              : ''}
+            {formatDate(s.current.starts_at)} – {formatDate(s.current.ends_at)}
+          </Text>
+          <Text style={styles.heroLine}>
+            {trial ? 'Trial ends' : 'Valid till'} {formatDate(s.current.ends_at)} ·{' '}
+            {s.current.days_left} day{s.current.days_left === 1 ? '' : 's'} left
+          </Text>
+        </>
+      ) : (
+        <Text style={styles.heroLine}>Your data is safe — choose a plan to carry on</Text>
+      )}
       <Pressable
         onPress={onAction}
         accessibilityRole="button"
@@ -294,9 +316,106 @@ function CurrentPlan({ state: s, onAction }: { state: AccountPlanState; onAction
   );
 }
 
+/* ---- Payments: completed first; attempts that didn't go through, muted ---- */
+
+function Payments({ orders }: { orders: Order[] }) {
+  const done = orders.filter((o) => o.display_status !== 'failed');
+  const failed = orders.filter((o) => o.display_status === 'failed').slice(0, 10);
+  if (orders.length === 0) {
+    return (
+      <View style={styles.empty}>
+        <EmptyState
+          icon="receipt"
+          accent="sky"
+          title="No payments yet"
+          message="Plan and service payments will appear here with receipts."
+        />
+      </View>
+    );
+  }
+  return (
+    <View style={styles.list}>
+      {done.length > 0 ? (
+        <Card style={styles.history}>
+          {done.map((o, i) => (
+            <PaymentRow key={o.id} order={o} first={i === 0} />
+          ))}
+        </Card>
+      ) : (
+        <Text style={[typography.small, styles.centerText]}>No completed payments yet.</Text>
+      )}
+      {failed.length > 0 ? (
+        <>
+          <Text style={typography.overline}>Not completed</Text>
+          <Card style={[styles.history, styles.muted]}>
+            {failed.map((o, i) => (
+              <PaymentRow key={o.id} order={o} first={i === 0} />
+            ))}
+          </Card>
+          <Text style={typography.caption}>
+            These payments were started but not finished. You were not charged.
+          </Text>
+        </>
+      ) : null}
+    </View>
+  );
+}
+
+function PaymentRow({ order: o, first }: { order: Order; first: boolean }) {
+  const st = o.display_status;
+  const tone = st === 'paid' ? 'success' : st === 'processing' ? 'warning' : 'neutral';
+  return (
+    <Pressable
+      onPress={() => router.push(`/receipts/${o.id}`)}
+      accessibilityRole="button"
+      style={({ pressed }) => [
+        styles.payment,
+        !first && styles.paymentBorder,
+        pressed && { opacity: 0.7 },
+      ]}
+    >
+      <IconTile
+        icon="receipt"
+        accent={st === 'paid' ? 'teal' : st === 'processing' ? 'amber' : 'slate'}
+        size={30}
+      />
+      <View style={styles.flex}>
+        <Text style={typography.bodyStrong} numberOfLines={1}>
+          {o.description}
+        </Text>
+        <Text style={typography.caption} numberOfLines={1}>
+          {o.period
+            ? `${formatDate(o.period.starts_at)} – ${formatDate(o.period.ends_at)}`
+            : formatDate(o.paid_at ?? o.created_at)}{' '}
+          · {o.reference}
+        </Text>
+        {o.credit_paise > 0 ? (
+          <Text style={typography.caption} numberOfLines={1}>
+            {formatPrice(o.credit_paise)} credit applied
+          </Text>
+        ) : null}
+      </View>
+      <View style={styles.amount}>
+        <Text style={[typography.bodyStrong, st === 'failed' && styles.struck]}>
+          {formatPrice(o.amount_paise)}
+        </Text>
+        <Badge label={ORDER_DISPLAY_LABELS[st]} tone={tone} />
+      </View>
+    </Pressable>
+  );
+}
+
 /* ---- Usage ---- */
 
-function UsageTab({ state: s, onUpgrade }: { state: AccountPlanState; onUpgrade: () => void }) {
+function UsageTab({
+  state: s,
+  onTop,
+  onUpgrade,
+}: {
+  state: AccountPlanState;
+  onTop: boolean;
+  onUpgrade: () => void;
+}) {
   const l = s.plan?.benefits.limits ?? {};
   const u = s.usage;
   const visits = u.included.find((i) => i.code === 'property_visit');
@@ -386,7 +505,7 @@ function UsageTab({ state: s, onUpgrade }: { state: AccountPlanState; onUpgrade:
           onPress={() => router.push('/services')}
         />
       )}
-      {s.plan?.code !== 'plus' ? (
+      {!onTop && s.status !== 'trialing' ? (
         <Nudge
           icon="gem"
           accent="violet"
@@ -503,28 +622,41 @@ function Nudge({
 
 function PlanCard({
   plan,
-  current,
+  state,
+  laterDate,
   popular,
   busy,
   disabled,
   onChoose,
 }: {
   plan: PublicPlan;
-  current: boolean;
+  state: CardState;
+  laterDate: string | null;
   popular: boolean;
   busy: boolean;
   disabled: boolean;
   onChoose: () => void;
 }) {
   const a = accents[PLAN_ACCENT[plan.code] ?? 'slate'];
+  const current = state === 'current';
+  const later = state === 'later';
+  const label = busy
+    ? 'Opening payment…'
+    : current
+      ? 'Renew'
+      : state === 'upgrade'
+        ? `Upgrade to ${plan.name}`
+        : later
+          ? `Available after ${laterDate ?? 'your plan ends'}`
+          : `Choose ${plan.name}`;
   return (
-    <View style={[styles.planCard, shadow, popular && { borderColor: a.fg }]}>
+    <View style={[styles.planCard, shadow, current && { borderColor: a.fg }]}>
       <View style={styles.planHead}>
         <View style={styles.flex}>
           <View style={styles.planNameRow}>
             <Text style={typography.title}>{plan.name}</Text>
+            {current ? <Badge label="Your plan" tone="success" icon="check" /> : null}
             {popular ? <Badge label="Most popular" tone="brand" icon="sparkles" /> : null}
-            {current ? <Badge label="Current" tone="success" /> : null}
           </View>
           {plan.description ? (
             <Text style={typography.small} numberOfLines={2}>
@@ -538,18 +670,25 @@ function PlanCard({
         </Text>
       </View>
       <BenefitList benefits={plan.benefits} color={a.fg} />
+      {state === 'upgrade' ? (
+        <Text style={typography.caption}>
+          Pay only the difference — unused days on your current plan are credited.
+        </Text>
+      ) : null}
       <Pressable
         onPress={onChoose}
-        disabled={disabled}
+        disabled={disabled || later}
         accessibilityRole="button"
         style={({ pressed }) => [
           styles.cta,
-          { backgroundColor: current ? a.bg : a.fg },
+          { backgroundColor: current || later ? a.bg : a.fg },
           (pressed || disabled) && { opacity: 0.8 },
         ]}
       >
-        <Text style={[styles.ctaText, current && { color: a.fg }]}>
-          {busy ? 'Opening payment…' : current ? 'Renew' : `Choose ${plan.name}`}
+        <Text
+          style={[styles.ctaText, (current || later) && { color: a.fg }, later && styles.ctaLater]}
+        >
+          {label}
         </Text>
       </Pressable>
     </View>
@@ -669,6 +808,10 @@ const styles = StyleSheet.create({
   payment: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 10 },
   paymentBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
   amount: { alignItems: 'flex-end', gap: 3 },
+  muted: { opacity: 0.75 },
+  struck: { color: colors.textSubtle, textDecorationLine: 'line-through' },
+  centerText: { textAlign: 'center' },
+  ctaLater: { fontSize: 13, fontWeight: '700' },
   secure: {
     flexDirection: 'row',
     alignItems: 'center',

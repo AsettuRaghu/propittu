@@ -150,6 +150,19 @@ export function useBoGrantPlan(accountId: string) {
   });
 }
 
+/** Adds days to whatever is in force (a paid plan stays paid). */
+export function useBoExtendPlan(accountId: string) {
+  const refresh = useRefresh();
+  return useMutation({
+    mutationFn: (days: number) =>
+      api<AccountPlanState>(`/backoffice/accounts/${accountId}/plan/extend`, {
+        method: 'POST',
+        body: { days },
+      }),
+    onSuccess: refresh,
+  });
+}
+
 export function useBoEndPlan(accountId: string) {
   const refresh = useRefresh();
   return useMutation({

@@ -4,7 +4,7 @@ import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'rea
 import {
   formatIndianMobile,
   formatPrice,
-  ORDER_STATUS_LABELS,
+  ORDER_DISPLAY_LABELS,
   SERVICE_REQUEST_STATUS_LABELS,
   TICKET_CATEGORY_LABELS,
   TICKET_STATUS_LABELS,
@@ -340,8 +340,14 @@ function PaymentRow({ order }: { order: BackofficeOrder }) {
       <View style={styles.row}>
         <Text style={typography.bodyStrong}>{formatPrice(order.amount_paise)}</Text>
         <Badge
-          label={ORDER_STATUS_LABELS[order.status]}
-          tone={order.status === 'paid' ? 'success' : 'warning'}
+          label={ORDER_DISPLAY_LABELS[order.display_status]}
+          tone={
+            order.display_status === 'paid'
+              ? 'success'
+              : order.display_status === 'processing'
+                ? 'warning'
+                : 'neutral'
+          }
         />
       </View>
       <Text style={typography.small}>{order.description}</Text>

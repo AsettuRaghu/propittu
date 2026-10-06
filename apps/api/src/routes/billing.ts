@@ -1,5 +1,10 @@
 import { Router } from 'express';
-import { planCheckoutSchema, type CheckoutSession, type Order } from '@propittu/shared';
+import {
+  planCheckoutSchema,
+  type CheckoutSession,
+  type Order,
+  type PlanQuote,
+} from '@propittu/shared';
 import { auth, type AuthContext } from '../auth.js';
 import { audit } from '../audit.js';
 import {
@@ -16,12 +21,13 @@ import {
   type OrderRow,
 } from '../billing/orders.js';
 import { publicApiUrl } from '../env.js';
-import { must, ok, uuidParam } from '../errors.js';
+import { HttpError, must, ok, uuidParam } from '../errors.js';
 
 /**
  * Payments for the signed-in customer (M7). Mounted BEFORE the Limited
  * Access gate: an expired customer must be able to pay to continue.
  *
+ *   GET  /billing/quote?plan_code=                → price, upgrade credit, new period
  *   POST /billing/checkout {plan_code}            → order + hosted payment page
  *   POST /billing/service-requests/:id/checkout   → same, for an Extra Service
  *   GET  /billing/orders, GET /billing/orders/:id
@@ -78,11 +84,24 @@ async function startCheckout(ctx: AuthContext, orderId: string): Promise<Checkou
   };
 }
 
-/* POST /billing/checkout {plan_code} — buy or renew a Plan */
+async function quote(ctx: AuthContext, planCode: string): Promise<PlanQuote> {
+  return must<PlanQuote>(await ctx.db.rpc('plan_quote', { p_plan_code: planCode }));
+}
+
+/* GET /billing/quote?plan_code= — what buying this Plan now costs and grants */
+billingRouter.get('/billing/quote', async (req, res) => {
+  const ctx = auth(req);
+  const { plan_code } = planCheckoutSchema.parse(req.query);
+  ok(res, await quote(ctx, plan_code));
+});
+
+/* POST /billing/checkout {plan_code} — buy, renew or upgrade a Plan */
 billingRouter.post('/billing/checkout', async (req, res) => {
   const ctx = auth(req);
   const { plan_code } = planCheckoutSchema.parse(req.body);
   assertPaymentsReady();
+  const q = await quote(ctx, plan_code);
+  if (q.blocked_reason) throw new HttpError(409, 'CONFLICT', q.blocked_reason);
   const orderId = must<string>(await ctx.db.rpc('create_plan_order', { p_plan_code: plan_code }));
   ok(res, await startCheckout(ctx, orderId), 201);
 });
@@ -96,7 +115,7 @@ billingRouter.post('/billing/service-requests/:id/checkout', async (req, res) =>
   ok(res, await startCheckout(ctx, orderId), 201);
 });
 
-/* GET /billing/orders — this Account's payment history */
+/* GET /billing/orders — this Account's payment history (incl. attempts that did not complete) */
 billingRouter.get('/billing/orders', async (req, res) => {
   const { db, accountId } = auth(req);
   const rows = must<OrderRow[]>(
@@ -104,7 +123,6 @@ billingRouter.get('/billing/orders', async (req, res) => {
       .from('orders')
       .select(ORDER_COLUMNS)
       .eq('account_id', accountId)
-      .neq('status', 'cancelled')
       .order('created_at', { ascending: false })
       .limit(50),
   );

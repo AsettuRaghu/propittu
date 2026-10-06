@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as WebBrowser from 'expo-web-browser';
 import { AppState, Platform } from 'react-native';
-import type { BackofficeOrder, CheckoutSession, Order } from '@propittu/shared';
+import type { BackofficeOrder, CheckoutSession, Order, PlanQuote } from '@propittu/shared';
 import { api } from './client';
 
 /**
@@ -25,6 +25,10 @@ export const useBoPayments = () =>
     queryFn: () => api<BackofficeOrder[]>('/backoffice/payments'),
     staleTime: 0,
   });
+
+/** Price, upgrade credit and the period buying this plan now would give. */
+export const fetchPlanQuote = (planCode: string) =>
+  api<PlanQuote>(`/billing/quote?plan_code=${encodeURIComponent(planCode)}`);
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { formatPrice, ORDER_STATUS_LABELS, SUPPORT_EMAIL } from '@propittu/shared';
+import { formatPrice, ORDER_DISPLAY_LABELS, SUPPORT_EMAIL } from '@propittu/shared';
 import { useOrder } from '@/api/support';
 import { Icon } from '@/components/Icon';
 import { ErrorState, LoadingState } from '@/components/States';
@@ -16,10 +16,17 @@ export default function ReceiptScreen() {
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
 
   const paid = o.status === 'paid';
+  const failed = o.display_status === 'failed';
   const rows: [string, string | null][] = [
     ['For', o.description],
     ['Order', o.reference],
-    ['Date', formatDate(o.paid_at ?? o.created_at)],
+    [paid ? 'Paid on' : 'Started on', formatDate(o.paid_at ?? o.created_at)],
+    [
+      'Plan valid',
+      o.period ? `${formatDate(o.period.starts_at)} – ${formatDate(o.period.ends_at)}` : null,
+    ],
+    ['Plan price', o.credit_paise > 0 ? formatPrice(o.list_price_paise) : null],
+    ['Credit for unused plan', o.credit_paise > 0 ? `− ${formatPrice(o.credit_paise)}` : null],
     ['Paid with', o.payment?.method ? o.payment.method.toUpperCase() : null],
     ['Payment reference', o.payment?.provider_payment_ref ?? null],
     ['Refunded', o.refunded_paise > 0 ? formatPrice(o.refunded_paise) : null],
@@ -28,15 +35,34 @@ export default function ReceiptScreen() {
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <Card style={styles.card}>
-        <View style={[styles.icon, { backgroundColor: paid ? accents.teal.bg : accents.amber.bg }]}>
+        <View
+          style={[
+            styles.icon,
+            {
+              backgroundColor: paid
+                ? accents.teal.bg
+                : failed
+                  ? accents.slate.bg
+                  : accents.amber.bg,
+            },
+          ]}
+        >
           <Icon
-            name={paid ? 'success' : 'clock'}
+            name={paid ? 'success' : failed ? 'close' : 'clock'}
             size={26}
-            color={paid ? accents.teal.fg : accents.amber.fg}
+            color={paid ? accents.teal.fg : failed ? accents.slate.fg : accents.amber.fg}
           />
         </View>
         <Text style={styles.amount}>{formatPrice(o.amount_paise)}</Text>
-        <Badge label={ORDER_STATUS_LABELS[o.status]} tone={paid ? 'success' : 'warning'} />
+        <Badge
+          label={ORDER_DISPLAY_LABELS[o.display_status]}
+          tone={paid ? 'success' : failed ? 'neutral' : 'warning'}
+        />
+        {failed ? (
+          <Text style={[typography.small, styles.note]}>
+            This payment was not completed and you were not charged.
+          </Text>
+        ) : null}
         <View style={styles.rows}>
           {rows
             .filter((r): r is [string, string] => !!r[1])
