@@ -88,16 +88,8 @@ function RootNavigator() {
         </Stack.Protected>
         <Stack.Protected guard={!session}>
           <Stack.Screen name="login" />
-          <Stack.Screen
-            name="verify"
-            options={{
-              headerShown: true,
-              title: '',
-              headerShadowVisible: false,
-              headerStyle: { backgroundColor: colors.background },
-              headerTintColor: colors.text,
-            }}
-          />
+          {/* No header: the screen has its own small back arrow. */}
+          <Stack.Screen name="verify" />
         </Stack.Protected>
       </Stack>
       {!splashDone ? <BrandSplash onDone={endSplash} /> : null}

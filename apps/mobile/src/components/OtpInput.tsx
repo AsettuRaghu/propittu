@@ -36,10 +36,11 @@ export function OtpInput({
       <TextInput
         ref={inputRef}
         value={value}
-        onChangeText={(t) => onChange(t.replace(/\D/g, '').slice(0, OTP_LENGTH))}
+        // Never disabled: an editable=false input drops the keyboard (e.g. after a
+        // wrong code). While verifying, typing is simply ignored.
+        onChangeText={(t) => !disabled && onChange(t.replace(/\D/g, '').slice(0, OTP_LENGTH))}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        editable={!disabled}
         keyboardType="number-pad"
         textContentType="oneTimeCode"
         autoComplete="sms-otp"

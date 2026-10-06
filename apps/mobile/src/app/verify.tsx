@@ -1,6 +1,8 @@
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Icon } from '@/components/Icon';
 import {
   OTP_EXPIRY_SECONDS,
   OTP_LENGTH,
@@ -99,48 +101,61 @@ export default function VerifyScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <View style={styles.header}>
-        <Text style={typography.title}>Verify your mobile number</Text>
-        <View style={styles.sentTo}>
-          <Text style={typography.small}>OTP sent to {formatIndianMobile(phone)}</Text>
-          <Pressable onPress={() => router.back()} hitSlop={8} accessibilityRole="link">
-            <Text style={styles.link}>Change</Text>
-          </Pressable>
+    <SafeAreaView style={styles.safe}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Back to change the number"
+          style={styles.back}
+        >
+          <Icon name="back" size={22} color={colors.text} />
+        </Pressable>
+        <View style={styles.header}>
+          <Text style={typography.title}>Verify your mobile number</Text>
+          <View style={styles.sentTo}>
+            <Text style={typography.small}>OTP sent to {formatIndianMobile(phone)}</Text>
+            <Pressable onPress={() => router.back()} hitSlop={8} accessibilityRole="link">
+              <Text style={styles.link}>Change</Text>
+            </Pressable>
+          </View>
         </View>
-      </View>
 
-      <OtpInput value={code} onChange={onChange} error={!!error} disabled={verifying} />
+        <OtpInput value={code} onChange={onChange} error={!!error} disabled={verifying} />
 
-      {error ? <Banner message={error} tone="danger" /> : null}
-      {info ? <Banner message={info} tone="success" /> : null}
+        {error ? <Banner message={error} tone="danger" /> : null}
+        {info ? <Banner message={info} tone="success" /> : null}
 
-      <View style={styles.resend}>
-        <Text style={typography.small}>Didn&apos;t receive it?</Text>
-        {cooldown > 0 ? (
-          <Text style={styles.cooldown}>Resend OTP in 0:{String(cooldown).padStart(2, '0')}</Text>
-        ) : (
-          <Pressable onPress={resend} disabled={resending} hitSlop={8} accessibilityRole="button">
-            <Text style={styles.link}>{resending ? 'Sending…' : 'Resend OTP'}</Text>
-          </Pressable>
-        )}
-      </View>
+        <View style={styles.resend}>
+          <Text style={typography.small}>Didn&apos;t receive it?</Text>
+          {cooldown > 0 ? (
+            <Text style={styles.cooldown}>Resend OTP in 0:{String(cooldown).padStart(2, '0')}</Text>
+          ) : (
+            <Pressable onPress={resend} disabled={resending} hitSlop={8} accessibilityRole="button">
+              <Text style={styles.link}>{resending ? 'Sending…' : 'Resend OTP'}</Text>
+            </Pressable>
+          )}
+        </View>
 
-      <Button
-        title="Verify"
-        onPress={() => void verify(code)}
-        loading={verifying}
-        disabled={code.length !== OTP_LENGTH}
-      />
-    </KeyboardAvoidingView>
+        <Button
+          title="Verify"
+          onPress={() => void verify(code)}
+          loading={verifying}
+          disabled={code.length !== OTP_LENGTH}
+        />
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: space.xl, gap: space.xl, backgroundColor: colors.background },
+  safe: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, padding: space.xl, paddingTop: space.sm, gap: space.xl },
+  back: { alignSelf: 'flex-start', padding: 4, marginLeft: -4 },
   header: { gap: space.sm },
   sentTo: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   link: { fontSize: 14, fontWeight: '600', color: colors.primary },

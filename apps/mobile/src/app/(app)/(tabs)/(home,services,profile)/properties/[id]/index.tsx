@@ -109,7 +109,10 @@ export default function PropertyDetailsScreen() {
         />
       </View>
 
-      <CompletionCard completion={property.completion} onAction={onAction} />
+      {/* Once complete there is nothing to do here — no card. */}
+      {property.completion.percent < 100 ? (
+        <CompletionCard completion={property.completion} onAction={onAction} />
+      ) : null}
 
       <Facts property={property} />
 

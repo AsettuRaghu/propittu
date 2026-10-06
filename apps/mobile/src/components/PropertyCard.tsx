@@ -124,12 +124,6 @@ export function PropertyCard({
           <Stat icon="document" value={p.document_count} label="Docs" />
           <Stat icon="image" value={p.photo_count} label="Photos" />
           <Stat icon="requests" value={p.service_request_count} label="Requests" />
-          {complete ? (
-            <View style={styles.complete}>
-              <Icon name="verified" size={13} color={accents.teal.fg} />
-              <Text style={styles.completeText}>Complete</Text>
-            </View>
-          ) : null}
         </View>
       </View>
     </Pressable>
@@ -240,8 +234,6 @@ const styles = StyleSheet.create({
   stats: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
   stat: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   statValue: { fontSize: 13, fontWeight: '800', color: colors.text },
-  complete: { flexDirection: 'row', alignItems: 'center', gap: 3, marginLeft: 'auto' },
-  completeText: { fontSize: 12, fontWeight: '700', color: accents.teal.fg },
   bone: { backgroundColor: colors.surfaceMuted },
   boneLine: { height: 10, borderRadius: 5, backgroundColor: colors.surfaceMuted },
 });

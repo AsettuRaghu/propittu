@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -13,8 +13,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { COUNTRY_CALLING_CODE, phoneLocalSchema, toE164 } from '@propittu/shared';
 import { useSession } from '@/auth/SessionProvider';
 import { Icon } from '@/components/Icon';
-import { Banner, Button, GradientCard } from '@/components/ui';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Banner, Button } from '@/components/ui';
 import { authErrorMessage } from '@/lib/errors';
+import { useSplashDone } from '@/lib/splash';
 import { supabase } from '@/lib/supabase';
 import { colors, gradients, radius, shadow, space, typography } from '@/theme';
 
@@ -27,6 +29,15 @@ export default function LoginScreen() {
   const [phone, setPhone] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const inputRef = useRef<TextInput>(null);
+  const splashDone = useSplashDone();
+
+  // Raise the keyboard only once the welcome splash is gone.
+  useEffect(() => {
+    if (!splashDone) return;
+    const t = setTimeout(() => inputRef.current?.focus(), 250);
+    return () => clearTimeout(t);
+  }, [splashDone]);
 
   const onChange = (text: string) => {
     // Accept pasted "+91 98765 43210" / "098765…" by keeping the last 10 digits.
@@ -70,9 +81,14 @@ export default function LoginScreen() {
       >
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.brand}>
-            <GradientCard colors={gradients.brand} style={styles.logo}>
+            <LinearGradient
+              colors={gradients.brand}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.logo}
+            >
               <Icon name="home" size={30} color="#FFFFFF" strokeWidth={2.2} />
-            </GradientCard>
+            </LinearGradient>
             <Text style={styles.wordmark}>Propittu</Text>
             <Text style={styles.tagline}>Everything about your property, in one place.</Text>
           </View>
@@ -88,6 +104,7 @@ export default function LoginScreen() {
                 <Text style={styles.prefixText}>{COUNTRY_CALLING_CODE}</Text>
               </View>
               <TextInput
+                ref={inputRef}
                 value={phone}
                 onChangeText={onChange}
                 onSubmitEditing={sendOtp}
@@ -98,7 +115,6 @@ export default function LoginScreen() {
                 autoComplete="tel"
                 // Room for a pasted "+91 98765 43210"; onChange keeps the last 10 digits.
                 maxLength={20}
-                autoFocus
                 editable={!sending}
                 accessibilityLabel="Mobile number"
                 style={styles.phoneInput}
@@ -125,18 +141,17 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
   content: { flexGrow: 1, padding: space.xl, justifyContent: 'center', gap: space.xxl },
-  brand: { gap: space.sm, alignItems: 'flex-start' },
+  brand: { gap: space.sm, alignItems: 'center' },
   logo: {
     width: 60,
     height: 60,
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 0,
     marginBottom: space.sm,
   },
   wordmark: { fontSize: 34, fontWeight: '800', color: colors.primary, letterSpacing: -0.5 },
-  tagline: { ...typography.body, color: colors.textMuted },
+  tagline: { ...typography.body, color: colors.textMuted, textAlign: 'center' },
   form: {
     gap: space.md,
     backgroundColor: colors.surface,
