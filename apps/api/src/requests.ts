@@ -14,7 +14,7 @@ import { signDownloads } from './storage.js';
  */
 
 export const REQUEST_COLUMNS =
-  'id, reference, status, description, coverage, price_paise, preferred_date, scheduled_for, ' +
+  'id, reference, status, description, coverage, price_paise, preferred_date, preferred_slot, scheduled_for, ' +
   'status_note, confirmed_at, completed_at, cancelled_at, cancelled_by, created_at, updated_at, ' +
   'service:services(id, code, name, category), ' +
   'property:properties(id, name, city)';

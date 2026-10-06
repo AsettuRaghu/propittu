@@ -1,8 +1,7 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   formatIndianMobile,
   formatPrice,
@@ -35,6 +34,8 @@ import { formatDate } from '@/lib/format';
 import { STATUS_TONES } from '@/lib/icons';
 import { pickPhotos, pickVideo } from '@/lib/pickPhotos';
 import { colors, radius, space, typography } from '@/theme';
+import { showAlert } from '@/lib/alert';
+import { Icon } from '@/components/Icon';
 
 /**
  * Backoffice: one service request (M4/M9), as a guided flow — one next step
@@ -122,14 +123,14 @@ function Summary({ request }: { request: BackofficeRequestDetail }) {
         <Button
           title={request.customer_phone ? formatIndianMobile(request.customer_phone) : 'Customer'}
           variant="secondary"
-          icon="person-outline"
+          icon="user"
           onPress={() => router.push(`/backoffice/accounts/${request.account_id}`)}
         />
         {request.property ? (
           <Button
             title={request.property.name}
             variant="secondary"
-            icon="home-outline"
+            icon="home"
             onPress={() => router.push(`/backoffice/properties/${request.property?.id}`)}
           />
         ) : null}
@@ -188,7 +189,7 @@ function Steps({ status }: { status: ServiceRequestStatus }) {
           <View key={s.label} style={styles.step}>
             <View style={[styles.dot, done && styles.dotDone, active && styles.dotActive]}>
               {done ? (
-                <Ionicons name="checkmark" size={14} color={colors.onPrimary} />
+                <Icon name="check" size={14} color={colors.onPrimary} />
               ) : (
                 <Text style={[styles.dotNumber, active && styles.dotNumberActive]}>{i + 1}</Text>
               )}
@@ -301,7 +302,7 @@ function CompleteStep({ request }: { request: BackofficeRequestDetail }) {
   const hasReport = !!request.report;
 
   const complete = () =>
-    Alert.alert(
+    showAlert(
       hasReport ? 'Complete and publish the report?' : 'Complete without a report?',
       hasReport
         ? 'The customer will see the report and photos. After this the report can no longer be changed.'
@@ -341,7 +342,7 @@ function CompleteStep({ request }: { request: BackofficeRequestDetail }) {
 function CancelRequest({ request }: { request: BackofficeRequestDetail }) {
   const update = useBoUpdateRequest(request.id);
   const cancel = () =>
-    Alert.alert(
+    showAlert(
       'Cancel this request?',
       request.coverage === 'included' && request.status !== 'requested'
         ? 'The included visit is returned to the customer’s allowance.'
@@ -354,7 +355,7 @@ function CancelRequest({ request }: { request: BackofficeRequestDetail }) {
           onPress: () =>
             update.mutate(
               { status: 'cancelled', note: null },
-              { onError: (err) => Alert.alert("Couldn't cancel", errorMessage(err)) },
+              { onError: (err) => showAlert("Couldn't cancel", errorMessage(err)) },
             ),
         },
       ],
@@ -399,7 +400,7 @@ function ReportEditor({ request }: { request: BackofficeRequestDetail }) {
       { visited_at: toIsoDate(visitedAt), condition, observations, issues, recommendations },
       {
         onSuccess: () =>
-          Alert.alert(
+          showAlert(
             'Draft saved',
             'Only staff can see it for now. Add photos, then complete the request to publish it.',
           ),
@@ -450,7 +451,7 @@ function ReportEditor({ request }: { request: BackofficeRequestDetail }) {
   };
 
   const mediaActions = (m: VisitMedia) =>
-    Alert.alert(m.kind === 'video' ? 'Video' : 'Photo', undefined, [
+    showAlert(m.kind === 'video' ? 'Video' : 'Photo', undefined, [
       {
         text: 'Open',
         onPress: () => {
@@ -465,7 +466,7 @@ function ReportEditor({ request }: { request: BackofficeRequestDetail }) {
         style: 'destructive',
         onPress: () =>
           deleteMedia.mutate(m.id, {
-            onError: (err) => Alert.alert("Couldn't delete", errorMessage(err)),
+            onError: (err) => showAlert("Couldn't delete", errorMessage(err)),
           }),
       },
       { text: 'Cancel', style: 'cancel' },
@@ -535,18 +536,8 @@ function ReportEditor({ request }: { request: BackofficeRequestDetail }) {
         </View>
       ) : (
         <View style={styles.links}>
-          <Button
-            title="Add photos"
-            variant="secondary"
-            icon="images-outline"
-            onPress={addPhotos}
-          />
-          <Button
-            title="Add video"
-            variant="secondary"
-            icon="videocam-outline"
-            onPress={addVideo}
-          />
+          <Button title="Add photos" variant="secondary" icon="images" onPress={addPhotos} />
+          <Button title="Add video" variant="secondary" icon="video" onPress={addVideo} />
         </View>
       )}
       {report && report.media.length > 0 ? (

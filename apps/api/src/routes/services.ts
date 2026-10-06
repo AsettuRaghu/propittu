@@ -156,6 +156,7 @@ servicesRouter.post('/service-requests', async (req, res) => {
       p_service: input.service_id,
       p_description: input.description,
       p_preferred_date: input.preferred_date ?? null,
+      p_preferred_slot: input.preferred_slot ?? null,
     }),
   );
 

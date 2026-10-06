@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
@@ -20,6 +19,7 @@ import { Badge, Button, Card, Chips } from '@/components/ui';
 import { formatDate } from '@/lib/format';
 import { STATUS_TONES } from '@/lib/icons';
 import { colors, radius, space, typography } from '@/theme';
+import { Icon } from '@/components/Icon';
 
 type Tab = 'requests' | 'accounts' | 'payments' | 'services';
 
@@ -103,7 +103,7 @@ function Requests() {
             />
           }
           renderItem={({ item }) => <RequestRow request={item} />}
-          ListEmptyComponent={<EmptyState icon="file-tray-outline" title="No requests here" />}
+          ListEmptyComponent={<EmptyState icon="requests" title="No requests here" />}
         />
       )}
     </View>
@@ -183,7 +183,7 @@ function Accounts() {
             />
           }
           renderItem={({ item }) => <AccountRow account={item} />}
-          ListEmptyComponent={<EmptyState icon="people-outline" title="No customers found" />}
+          ListEmptyComponent={<EmptyState icon="users" title="No customers found" />}
         />
       )}
     </View>
@@ -257,7 +257,7 @@ function Payments() {
         />
       }
       renderItem={({ item }) => <PaymentRow order={item} />}
-      ListEmptyComponent={<EmptyState icon="card-outline" title="No payments yet" />}
+      ListEmptyComponent={<EmptyState icon="card" title="No payments yet" />}
     />
   );
 }
@@ -305,7 +305,7 @@ function ServiceRow({ service }: { service: StaffService }) {
         </Text>
       </View>
       {!service.is_active ? <Badge label="Inactive" /> : null}
-      <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
+      <Icon name="chevron" size={18} color={colors.textSubtle} />
     </Card>
   );
 }

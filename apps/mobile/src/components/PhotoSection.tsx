@@ -1,7 +1,6 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MAX_PHOTOS_PER_PROPERTY, type PropertyPhoto } from '@propittu/shared';
 import { useDeletePhoto, useInvalidateProperty } from '@/api/queries';
@@ -9,7 +8,9 @@ import { preparePhoto, uploadPhoto } from '@/api/uploads';
 import { errorMessage } from '@/lib/errors';
 import { signedImage } from '@/lib/image';
 import { pickPhotos } from '@/lib/pickPhotos';
-import { colors, radius, space, typography } from '@/theme';
+import { accents, colors, radius, space, typography } from '@/theme';
+import { dialog, toast } from './Dialog';
+import { Icon } from './Icon';
 import { Banner, Button, ProgressBar } from './ui';
 
 /** Property photo gallery with add, view and delete (PRODUCT_SPEC.md §8.2, §19). */
@@ -58,19 +59,25 @@ export function PhotoSection({
     }
   };
 
-  const confirmDelete = (photo: PropertyPhoto) => {
-    Alert.alert('Delete this photo?', 'This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () =>
-          deletePhoto.mutate(photo.id, {
-            onSuccess: () => setViewing(null),
-            onError: (err) => Alert.alert("Couldn't delete the photo", errorMessage(err)),
-          }),
-      },
-    ]);
+  const confirmDelete = async (photo: PropertyPhoto) => {
+    setViewing(null);
+    const ok = await dialog.confirm({
+      title: 'Delete this photo?',
+      message: 'This cannot be undone.',
+      confirmLabel: 'Delete photo',
+      tone: 'danger',
+      icon: 'delete',
+    });
+    if (!ok) return;
+    deletePhoto.mutate(photo.id, {
+      onSuccess: () => toast('Photo deleted'),
+      onError: (err) =>
+        void dialog.alert({
+          title: "Couldn't delete the photo",
+          message: errorMessage(err),
+          tone: 'danger',
+        }),
+    });
   };
 
   return (
@@ -79,7 +86,7 @@ export function PhotoSection({
 
       {photos.length === 0 && !upload ? (
         <Pressable onPress={addPhotos} style={styles.emptyTile} accessibilityRole="button">
-          <Ionicons name="camera-outline" size={28} color={colors.primary} />
+          <Icon name="camera" size={26} color={accents.sky.fg} />
           <Text style={styles.emptyText}>Add photos of this property</Text>
         </Pressable>
       ) : (
@@ -104,7 +111,7 @@ export function PhotoSection({
                 />
               ) : (
                 <View style={[styles.thumb, styles.thumbMissing]}>
-                  <Ionicons name="image-outline" size={24} color={colors.textSubtle} />
+                  <Icon name="image" size={24} color={colors.textSubtle} />
                 </View>
               )}
             </Pressable>
@@ -123,7 +130,7 @@ export function PhotoSection({
               accessibilityRole="button"
               accessibilityLabel="Add photos"
             >
-              <Ionicons name="add" size={28} color={colors.primary} />
+              <Icon name="add" size={26} color={accents.sky.fg} />
             </Pressable>
           ) : null}
         </ScrollView>
@@ -138,7 +145,7 @@ export function PhotoSection({
         <SafeAreaView style={styles.viewer}>
           <View style={styles.viewerBar}>
             <Pressable onPress={() => setViewing(null)} hitSlop={12} accessibilityLabel="Close">
-              <Ionicons name="close" size={28} color="#FFFFFF" />
+              <Icon name="close" size={26} color="#FFFFFF" />
             </Pressable>
           </View>
           {viewing?.url ? (
@@ -152,9 +159,9 @@ export function PhotoSection({
             <Button
               title="Delete photo"
               variant="danger"
-              icon="trash-outline"
+              icon="delete"
               loading={deletePhoto.isPending}
-              onPress={() => viewing && confirmDelete(viewing)}
+              onPress={() => viewing && void confirmDelete(viewing)}
             />
           </View>
         </SafeAreaView>
@@ -183,8 +190,8 @@ const styles = StyleSheet.create({
   addTile: {
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft,
+    borderColor: accents.sky.fg,
+    backgroundColor: accents.sky.bg,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -193,13 +200,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft,
+    borderColor: accents.sky.fg,
+    backgroundColor: accents.sky.bg,
     alignItems: 'center',
     justifyContent: 'center',
     gap: space.xs,
   },
-  emptyText: { fontSize: 14, fontWeight: '600', color: colors.primary },
+  emptyText: { fontSize: 14, fontWeight: '700', color: accents.sky.fg },
   viewer: { flex: 1, backgroundColor: '#000000' },
   viewerBar: { flexDirection: 'row', justifyContent: 'flex-end', padding: space.lg },
   viewerImage: { flex: 1 },

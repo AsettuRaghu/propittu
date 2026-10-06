@@ -1,5 +1,6 @@
-import { Ionicons } from '@expo/vector-icons';
-import type { ComponentProps, ReactNode } from 'react';
+import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
+import type { ReactNode } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -9,21 +10,71 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { colors, radius, space, typography } from '@/theme';
+import Svg, { Circle } from 'react-native-svg';
+import {
+  accents,
+  colors,
+  gradients,
+  radius,
+  shadow,
+  space,
+  typography,
+  type Accent,
+} from '@/theme';
+import { Icon, type IconName } from './Icon';
 
-type IconName = ComponentProps<typeof Ionicons>['name'];
+export type { IconName };
+
+const tap = () => void Haptics.selectionAsync().catch(() => undefined);
 
 /* ------------------------------------------------------------------ *
- * Button — disables itself while `loading`, which is what prevents
- * duplicate submissions across the app (PRODUCT_SPEC.md §40).
+ * Button — disables itself while `loading`, which prevents duplicate
+ * submissions across the app (PRODUCT_SPEC.md §40).
  * ------------------------------------------------------------------ */
 
-type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
+type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+
+const buttonVariants: Record<
+  ButtonVariant,
+  { bg: string; pressed: string; border: string; text: string }
+> = {
+  primary: {
+    bg: colors.primary,
+    pressed: colors.primaryPressed,
+    border: colors.primary,
+    text: colors.onPrimary,
+  },
+  secondary: {
+    bg: colors.primarySoft,
+    pressed: '#E0E3FF',
+    border: colors.primarySoft,
+    text: colors.primary,
+  },
+  outline: {
+    bg: colors.surface,
+    pressed: colors.surfaceMuted,
+    border: colors.border,
+    text: colors.text,
+  },
+  ghost: {
+    bg: 'transparent',
+    pressed: colors.primarySoft,
+    border: 'transparent',
+    text: colors.primary,
+  },
+  danger: {
+    bg: colors.dangerSoft,
+    pressed: '#FBDCDC',
+    border: colors.dangerSoft,
+    text: colors.danger,
+  },
+};
 
 export function Button({
   title,
   onPress,
   variant = 'primary',
+  size = 'md',
   loading = false,
   disabled = false,
   icon,
@@ -32,6 +83,7 @@ export function Button({
   title: string;
   onPress: () => void;
   variant?: ButtonVariant;
+  size?: 'md' | 'sm';
   loading?: boolean;
   disabled?: boolean;
   icon?: IconName;
@@ -44,10 +96,14 @@ export function Button({
       accessibilityRole="button"
       accessibilityState={{ disabled: inactive, busy: loading }}
       disabled={inactive}
-      onPress={onPress}
+      onPress={() => {
+        tap();
+        onPress();
+      }}
       style={({ pressed }) => [
         styles.button,
-        { backgroundColor: pressed ? v.pressed : v.background, borderColor: v.border },
+        size === 'sm' && styles.buttonSm,
+        { backgroundColor: pressed ? v.pressed : v.bg, borderColor: v.border },
         inactive && styles.buttonInactive,
         style,
       ]}
@@ -56,84 +112,288 @@ export function Button({
         <ActivityIndicator color={v.text} />
       ) : (
         <View style={styles.buttonContent}>
-          {icon ? <Ionicons name={icon} size={18} color={v.text} /> : null}
-          <Text style={[styles.buttonText, { color: v.text }]}>{title}</Text>
+          {icon ? <Icon name={icon} size={size === 'sm' ? 16 : 18} color={v.text} /> : null}
+          <Text
+            style={[styles.buttonText, size === 'sm' && styles.buttonTextSm, { color: v.text }]}
+            numberOfLines={1}
+          >
+            {title}
+          </Text>
         </View>
       )}
     </Pressable>
   );
 }
 
-const buttonVariants: Record<
-  ButtonVariant,
-  { background: string; pressed: string; border: string; text: string }
-> = {
-  primary: {
-    background: colors.primary,
-    pressed: colors.primaryPressed,
-    border: colors.primary,
-    text: colors.onPrimary,
-  },
-  secondary: {
-    background: colors.surface,
-    pressed: colors.surfaceMuted,
-    border: colors.borderStrong,
-    text: colors.text,
-  },
-  ghost: {
-    background: 'transparent',
-    pressed: colors.primarySoft,
-    border: 'transparent',
-    text: colors.primary,
-  },
-  danger: {
-    background: colors.surface,
-    pressed: colors.dangerSoft,
-    border: colors.danger,
-    text: colors.danger,
-  },
-};
+/** A small text-style action ("See all", "Change"). */
+export function LinkButton({
+  title,
+  onPress,
+  tone = 'primary',
+  icon,
+}: {
+  title: string;
+  onPress: () => void;
+  tone?: 'primary' | 'danger' | 'muted';
+  icon?: IconName;
+}) {
+  const color =
+    tone === 'danger' ? colors.danger : tone === 'muted' ? colors.textMuted : colors.primary;
+  return (
+    <Pressable onPress={onPress} hitSlop={10} accessibilityRole="button" style={styles.link}>
+      {icon ? <Icon name={icon} size={15} color={color} /> : null}
+      <Text style={[styles.linkText, { color }]}>{title}</Text>
+    </Pressable>
+  );
+}
+
+/** Round icon-only button (header actions, FAB). */
+export function IconButton({
+  icon,
+  onPress,
+  label,
+  variant = 'soft',
+  size = 40,
+}: {
+  icon: IconName;
+  onPress: () => void;
+  label: string;
+  variant?: 'soft' | 'solid' | 'plain';
+  size?: number;
+}) {
+  const bg =
+    variant === 'solid' ? colors.primary : variant === 'soft' ? colors.primarySoft : 'transparent';
+  const fg = variant === 'solid' ? colors.onPrimary : colors.primary;
+  return (
+    <Pressable
+      onPress={() => {
+        tap();
+        onPress();
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      hitSlop={8}
+      style={({ pressed }) => [
+        { width: size, height: size, borderRadius: size / 2, backgroundColor: bg },
+        styles.iconButton,
+        pressed && { opacity: 0.75 },
+      ]}
+    >
+      <Icon name={icon} size={Math.round(size * 0.5)} color={fg} />
+    </Pressable>
+  );
+}
 
 /* ------------------------------------------------------------------ *
- * Layout and content
+ * Surfaces
  * ------------------------------------------------------------------ */
 
 export function Card({
   children,
   onPress,
   style,
+  flat = false,
 }: {
   children: ReactNode;
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
+  flat?: boolean;
 }) {
-  if (!onPress) return <View style={[styles.card, style]}>{children}</View>;
+  const base = [styles.card, !flat && shadow];
+  if (!onPress) return <View style={[base, style]}>{children}</View>;
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed, style]}
+      style={({ pressed }) => [base, pressed && styles.cardPressed, style]}
     >
       {children}
     </Pressable>
   );
 }
 
-export function SectionTitle({ title, action }: { title: string; action?: ReactNode }) {
+/** A card painted with one of the brand gradients — for a few heroes only. */
+export function GradientCard({
+  children,
+  colors: palette = gradients.brand,
+  onPress,
+  style,
+}: {
+  children: ReactNode;
+  colors?: readonly [string, string];
+  onPress?: () => void;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const body = (
+    <LinearGradient
+      colors={palette}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={[styles.gradient, style]}
+    >
+      {children}
+    </LinearGradient>
+  );
+  if (!onPress) return body;
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      style={({ pressed }) => pressed && { opacity: 0.92 }}
+    >
+      {body}
+    </Pressable>
+  );
+}
+
+/** Rounded square with a soft tint — the app's signature icon treatment. */
+export function IconTile({
+  icon,
+  accent = 'indigo',
+  size = 40,
+  solid = false,
+}: {
+  icon: IconName;
+  accent?: Accent;
+  size?: number;
+  solid?: boolean;
+}) {
+  const a = accents[accent];
+  return (
+    <View
+      style={[
+        styles.iconTile,
+        {
+          width: size,
+          height: size,
+          borderRadius: Math.round(size * 0.32),
+          backgroundColor: solid ? a.fg : a.bg,
+        },
+      ]}
+    >
+      <Icon name={icon} size={Math.round(size * 0.5)} color={solid ? '#FFFFFF' : a.fg} />
+    </View>
+  );
+}
+
+/** Section heading with an optional right-hand action. */
+export function SectionTitle({
+  title,
+  action,
+  subtitle,
+}: {
+  title: string;
+  action?: ReactNode;
+  subtitle?: string;
+}) {
   return (
     <View style={styles.sectionTitle}>
-      <Text style={typography.overline}>{title}</Text>
+      <View style={styles.flex}>
+        <Text style={typography.heading} numberOfLines={1}>
+          {title}
+        </Text>
+        {subtitle ? (
+          <Text style={typography.small} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
       {action}
     </View>
   );
 }
 
-export function KeyValue({ label, value }: { label: string; value: string | null | undefined }) {
+/** Settings-style row: icon tile, title/subtitle, accessory. */
+export function ListRow({
+  icon,
+  accent = 'indigo',
+  title,
+  subtitle,
+  value,
+  onPress,
+  destructive = false,
+  right,
+  showChevron = true,
+}: {
+  icon?: IconName;
+  accent?: Accent;
+  title: string;
+  subtitle?: string | null;
+  value?: string | null;
+  onPress?: () => void;
+  destructive?: boolean;
+  right?: ReactNode;
+  showChevron?: boolean;
+}) {
+  const content = (
+    <>
+      {icon ? <IconTile icon={icon} accent={destructive ? 'coral' : accent} size={36} /> : null}
+      <View style={styles.flex}>
+        <Text
+          style={[typography.bodyStrong, destructive && { color: colors.danger }]}
+          numberOfLines={1}
+        >
+          {title}
+        </Text>
+        {subtitle ? (
+          <Text style={typography.small} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+      {value ? (
+        <Text style={[typography.small, styles.rowValue]} numberOfLines={1}>
+          {value}
+        </Text>
+      ) : null}
+      {right}
+      {onPress && showChevron ? <Icon name="chevron" size={18} color={colors.textSubtle} /> : null}
+    </>
+  );
+  if (!onPress) return <View style={styles.listRow}>{content}</View>;
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      style={({ pressed }) => [styles.listRow, pressed && styles.listRowPressed]}
+    >
+      {content}
+    </Pressable>
+  );
+}
+
+/** Groups ListRows inside one card with hairline separators. */
+export function ListGroup({ children }: { children: ReactNode }) {
+  const items = (Array.isArray(children) ? children : [children]).filter(Boolean);
+  return (
+    <View style={[styles.listGroup, shadow]}>
+      {items.map((child, i) => (
+        <View key={i}>
+          {i > 0 ? <View style={styles.listDivider} /> : null}
+          {child}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+export function KeyValue({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: string | null | undefined;
+  icon?: IconName;
+}) {
   if (!value) return null;
   return (
     <View style={styles.keyValue}>
-      <Text style={typography.overline}>{label}</Text>
-      <Text style={typography.body}>{value}</Text>
+      {icon ? <Icon name={icon} size={16} color={colors.textSubtle} /> : null}
+      <View style={styles.flex}>
+        <Text style={typography.caption}>{label}</Text>
+        <Text style={typography.body}>{value}</Text>
+      </View>
     </View>
   );
 }
@@ -146,7 +406,7 @@ export function Divider() {
  * Status
  * ------------------------------------------------------------------ */
 
-export type Tone = 'neutral' | 'info' | 'warning' | 'success' | 'danger';
+export type Tone = 'neutral' | 'info' | 'warning' | 'success' | 'danger' | 'brand';
 
 const toneColors: Record<Tone, { fg: string; bg: string }> = {
   neutral: { fg: colors.textMuted, bg: colors.surfaceMuted },
@@ -154,47 +414,143 @@ const toneColors: Record<Tone, { fg: string; bg: string }> = {
   warning: { fg: colors.warning, bg: colors.warningSoft },
   success: { fg: colors.success, bg: colors.successSoft },
   danger: { fg: colors.danger, bg: colors.dangerSoft },
+  brand: { fg: colors.primary, bg: colors.primarySoft },
 };
 
-export function Badge({ label, tone = 'neutral' }: { label: string; tone?: Tone }) {
+const toneIcons: Record<Tone, IconName> = {
+  neutral: 'info',
+  info: 'info',
+  warning: 'warning',
+  success: 'success',
+  danger: 'error',
+  brand: 'sparkles',
+};
+
+export function Badge({
+  label,
+  tone = 'neutral',
+  icon,
+}: {
+  label: string;
+  tone?: Tone;
+  icon?: IconName;
+}) {
   const c = toneColors[tone];
   return (
     <View style={[styles.badge, { backgroundColor: c.bg }]}>
-      <Text style={[styles.badgeText, { color: c.fg }]}>{label}</Text>
+      {icon ? <Icon name={icon} size={12} color={c.fg} strokeWidth={2.5} /> : null}
+      <Text style={[styles.badgeText, { color: c.fg }]} numberOfLines={1}>
+        {label}
+      </Text>
     </View>
   );
 }
 
-const bannerIcons: Record<Tone, IconName> = {
-  neutral: 'information-circle-outline',
-  info: 'information-circle-outline',
-  warning: 'warning-outline',
-  success: 'checkmark-circle-outline',
-  danger: 'alert-circle-outline',
-};
-
-export function Banner({ message, tone = 'danger' }: { message: string; tone?: Tone }) {
+/** Inline message. With `action`, the whole banner is tappable and says what happens. */
+export function Banner({
+  message,
+  tone = 'danger',
+  title,
+  action,
+  onPress,
+  icon,
+}: {
+  message: string;
+  tone?: Tone;
+  title?: string;
+  action?: string;
+  onPress?: () => void;
+  icon?: IconName;
+}) {
   const c = toneColors[tone];
-  return (
-    <View
-      accessibilityRole="alert"
-      style={[styles.banner, { backgroundColor: c.bg, borderColor: c.fg }]}
-    >
-      <Ionicons name={bannerIcons[tone]} size={20} color={c.fg} />
-      <Text style={[styles.bannerText, { color: c.fg }]}>{message}</Text>
+  const body = (
+    <View style={[styles.banner, { backgroundColor: c.bg }]} accessibilityRole="alert">
+      <Icon name={icon ?? toneIcons[tone]} size={18} color={c.fg} />
+      <View style={styles.flex}>
+        {title ? <Text style={[styles.bannerTitle, { color: c.fg }]}>{title}</Text> : null}
+        <Text style={[styles.bannerText, { color: tone === 'neutral' ? colors.text : c.fg }]}>
+          {message}
+        </Text>
+      </View>
+      {action ? (
+        <View style={[styles.bannerAction, { borderColor: c.fg }]}>
+          <Text style={[styles.bannerActionText, { color: c.fg }]}>{action}</Text>
+        </View>
+      ) : null}
     </View>
+  );
+  if (!onPress) return body;
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      style={({ pressed }) => pressed && { opacity: 0.85 }}
+    >
+      {body}
+    </Pressable>
   );
 }
 
-export function ProgressBar({ progress }: { progress: number }) {
+export function ProgressBar({
+  progress,
+  color = colors.primary,
+  track = colors.surfaceMuted,
+  height = 8,
+}: {
+  progress: number;
+  color?: string;
+  track?: string;
+  height?: number;
+}) {
   const pct = Math.round(Math.min(1, Math.max(0, progress)) * 100);
   return (
     <View
-      style={styles.progressTrack}
+      style={[styles.progressTrack, { height, backgroundColor: track }]}
       accessibilityRole="progressbar"
       accessibilityValue={{ min: 0, max: 100, now: pct }}
     >
-      <View style={[styles.progressFill, { width: `${pct}%` }]} />
+      <View style={[styles.progressFill, { width: `${pct}%`, backgroundColor: color }]} />
+    </View>
+  );
+}
+
+/** Circular progress (profile completion, days left). */
+export function ProgressRing({
+  progress,
+  size = 56,
+  stroke = 6,
+  color = colors.primary,
+  track = colors.surfaceMuted,
+  children,
+}: {
+  progress: number;
+  size?: number;
+  stroke?: number;
+  color?: string;
+  track?: string;
+  children?: ReactNode;
+}) {
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const p = Math.min(1, Math.max(0, progress));
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
+        <Circle cx={size / 2} cy={size / 2} r={r} stroke={track} strokeWidth={stroke} fill="none" />
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          stroke={color}
+          strokeWidth={stroke}
+          fill="none"
+          strokeDasharray={`${c} ${c}`}
+          strokeDashoffset={c * (1 - p)}
+          strokeLinecap="round"
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        />
+      </Svg>
+      {children}
     </View>
   );
 }
@@ -210,7 +566,7 @@ export interface Option<T extends string> {
   icon?: IconName;
 }
 
-/** Compact wrap of selectable chips — for short lists such as area units. */
+/** Compact wrap of selectable chips — short lists such as area units. */
 export function Chips<T extends string>({
   options,
   value,
@@ -229,9 +585,15 @@ export function Chips<T extends string>({
             key={o.value}
             accessibilityRole="radio"
             accessibilityState={{ selected }}
-            onPress={() => onChange(o.value)}
+            onPress={() => {
+              tap();
+              onChange(o.value);
+            }}
             style={[styles.chip, selected && styles.chipSelected]}
           >
+            {o.icon ? (
+              <Icon name={o.icon} size={15} color={selected ? colors.primary : colors.textMuted} />
+            ) : null}
             <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{o.label}</Text>
           </Pressable>
         );
@@ -240,7 +602,7 @@ export function Chips<T extends string>({
   );
 }
 
-/** Full-width selectable rows — for longer lists or options with descriptions. */
+/** Full-width selectable rows — longer lists or options with descriptions. */
 export function OptionList<T extends string>({
   options,
   value,
@@ -259,7 +621,10 @@ export function OptionList<T extends string>({
             key={o.value}
             accessibilityRole="radio"
             accessibilityState={{ selected }}
-            onPress={() => onChange(o.value)}
+            onPress={() => {
+              tap();
+              onChange(o.value);
+            }}
             style={({ pressed }) => [
               styles.option,
               selected && styles.optionSelected,
@@ -267,23 +632,52 @@ export function OptionList<T extends string>({
             ]}
           >
             {o.icon ? (
-              <Ionicons
-                name={o.icon}
-                size={22}
-                color={selected ? colors.primary : colors.textMuted}
-              />
+              <IconTile icon={o.icon} size={36} accent={selected ? 'indigo' : 'slate'} />
             ) : null}
-            <View style={styles.optionBody}>
+            <View style={styles.flex}>
               <Text style={[typography.bodyStrong, selected && { color: colors.primary }]}>
                 {o.label}
               </Text>
               {o.description ? <Text style={typography.small}>{o.description}</Text> : null}
             </View>
-            <Ionicons
-              name={selected ? 'radio-button-on' : 'radio-button-off'}
-              size={22}
-              color={selected ? colors.primary : colors.borderStrong}
-            />
+            <View style={[styles.radio, selected && styles.radioOn]}>
+              {selected ? (
+                <Icon name="check" size={14} color={colors.onPrimary} strokeWidth={3} />
+              ) : null}
+            </View>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/** iOS-style segmented control. */
+export function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: readonly { value: T; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <View style={styles.segments} accessibilityRole="tablist">
+      {options.map((o) => {
+        const active = o.value === value;
+        return (
+          <Pressable
+            key={o.value}
+            onPress={() => {
+              tap();
+              onChange(o.value);
+            }}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            style={[styles.segment, active && [styles.segmentActive, shadow]]}
+          >
+            <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{o.label}</Text>
           </Pressable>
         );
       })}
@@ -292,6 +686,8 @@ export function OptionList<T extends string>({
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1, minWidth: 0 },
+
   button: {
     minHeight: 50,
     borderRadius: radius.md,
@@ -300,78 +696,127 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  buttonInactive: { opacity: 0.55 },
+  buttonSm: { minHeight: 38, paddingHorizontal: space.md, borderRadius: radius.sm },
+  buttonInactive: { opacity: 0.5 },
   buttonContent: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  buttonText: { fontSize: 16, fontWeight: '600' },
+  buttonText: { fontSize: 16, fontWeight: '700', letterSpacing: -0.1 },
+  buttonTextSm: { fontSize: 14 },
+  link: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  linkText: { fontSize: 14, fontWeight: '600' },
+  iconButton: { alignItems: 'center', justifyContent: 'center' },
 
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
     padding: space.lg,
   },
-  cardPressed: { backgroundColor: colors.surfaceMuted },
+  cardPressed: { opacity: 0.88 },
+  gradient: { borderRadius: radius.lg, padding: space.lg, overflow: 'hidden' },
+  iconTile: { alignItems: 'center', justifyContent: 'center' },
 
   sectionTitle: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: space.md,
     marginBottom: space.sm,
   },
-  keyValue: { gap: 2 },
-  divider: { height: 1, backgroundColor: colors.border, marginVertical: space.lg },
+  listGroup: { backgroundColor: colors.surface, borderRadius: radius.lg, overflow: 'hidden' },
+  listRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
+    minHeight: 60,
+  },
+  listRowPressed: { backgroundColor: colors.surfaceMuted },
+  listDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 64 },
+  rowValue: { maxWidth: '45%' },
+  keyValue: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start' },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+    marginVertical: space.md,
+  },
 
   badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     alignSelf: 'flex-start',
     paddingHorizontal: space.sm,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: radius.pill,
   },
-  badgeText: { fontSize: 12, fontWeight: '600' },
+  badgeText: { fontSize: 12, fontWeight: '700' },
 
   banner: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: space.sm,
+    alignItems: 'center',
+    gap: space.md,
     padding: space.md,
     borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
   },
-  bannerText: { flex: 1, fontSize: 14, lineHeight: 20 },
-
-  progressTrack: {
-    height: 8,
+  bannerTitle: { fontSize: 14, fontWeight: '700', marginBottom: 1 },
+  bannerText: { fontSize: 13, lineHeight: 18 },
+  bannerAction: {
+    borderWidth: 1,
     borderRadius: radius.pill,
-    backgroundColor: colors.surfaceMuted,
-    overflow: 'hidden',
+    paddingHorizontal: space.md,
+    paddingVertical: 6,
   },
-  progressFill: { height: '100%', backgroundColor: colors.primary },
+  bannerActionText: { fontSize: 13, fontWeight: '700' },
+
+  progressTrack: { borderRadius: radius.pill, overflow: 'hidden' },
+  progressFill: { height: '100%', borderRadius: radius.pill },
 
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingHorizontal: space.md,
-    paddingVertical: space.sm,
+    paddingVertical: 9,
     borderRadius: radius.pill,
+    backgroundColor: colors.surfaceMuted,
     borderWidth: 1,
-    borderColor: colors.borderStrong,
-    backgroundColor: colors.surface,
+    borderColor: colors.surfaceMuted,
   },
   chipSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
-  chipText: { fontSize: 14, color: colors.text },
-  chipTextSelected: { color: colors.primary, fontWeight: '600' },
+  chipText: { fontSize: 14, fontWeight: '500', color: colors.text },
+  chipTextSelected: { color: colors.primary, fontWeight: '700' },
 
   optionList: { gap: space.sm },
   option: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
-    padding: space.lg,
+    padding: space.md,
     borderRadius: radius.md,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
   optionSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
-  optionBody: { flex: 1, gap: 2 },
+  radio: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: colors.borderStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+
+  segments: {
+    flexDirection: 'row',
+    padding: 4,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceMuted,
+  },
+  segment: { flex: 1, paddingVertical: 9, borderRadius: radius.sm, alignItems: 'center' },
+  segmentActive: { backgroundColor: colors.surface },
+  segmentText: { fontSize: 14, fontWeight: '600', color: colors.textMuted },
+  segmentTextActive: { color: colors.text },
 });

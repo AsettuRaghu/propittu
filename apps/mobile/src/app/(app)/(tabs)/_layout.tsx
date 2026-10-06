@@ -1,6 +1,7 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import { colors } from '@/theme';
+import { StyleSheet, View } from 'react-native';
+import { Icon, type IconName } from '@/components/Icon';
+import { colors, radius } from '@/theme';
 
 /**
  * Three tabs rather than §39's suggested four: §15's Home already IS the
@@ -11,6 +12,19 @@ import { colors } from '@/theme';
  * folder), so the tab bar stays visible everywhere. Tapping the tab you are
  * already in returns to its first screen.
  */
+function TabIcon({ name, focused }: { name: IconName; focused: boolean }) {
+  return (
+    <View style={[styles.icon, focused && styles.iconFocused]}>
+      <Icon
+        name={name}
+        size={22}
+        color={focused ? colors.primary : colors.textSubtle}
+        strokeWidth={focused ? 2.4 : 2}
+      />
+    </View>
+  );
+}
+
 export default function TabsLayout() {
   return (
     <Tabs
@@ -18,7 +32,12 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textSubtle,
-        tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },
+        tabBarStyle: {
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
+          borderTopWidth: StyleSheet.hairlineWidth,
+        },
         sceneStyle: { backgroundColor: colors.background },
       }}
     >
@@ -26,29 +45,34 @@ export default function TabsLayout() {
         name="(home)"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" color={color} size={size} />
-          ),
+          tabBarIcon: ({ focused }) => <TabIcon name="home" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="(services)"
         options={{
           title: 'Services',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="construct-outline" color={color} size={size} />
-          ),
+          tabBarIcon: ({ focused }) => <TabIcon name="services" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="(profile)"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-circle-outline" color={color} size={size} />
-          ),
+          tabBarIcon: ({ focused }) => <TabIcon name="user" focused={focused} />,
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  icon: {
+    width: 44,
+    height: 28,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconFocused: { backgroundColor: colors.primarySoft },
+});

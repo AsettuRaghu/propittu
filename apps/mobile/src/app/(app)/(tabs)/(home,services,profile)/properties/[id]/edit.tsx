@@ -1,17 +1,20 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import type { PropertyDetail } from '@propittu/shared';
 import { useDeleteProperty, useProperty, useUpdateProperty } from '@/api/queries';
+import { dialog, toast } from '@/components/Dialog';
+import { DocumentSlots } from '@/components/DocumentSlots';
 import { Footer } from '@/components/Footer';
 import {
+  FormSection,
   PropertyForm,
   propertyToForm,
   validatePropertyForm,
   type PropertyFormValues,
 } from '@/components/PropertyForm';
 import { ErrorState, LoadingState } from '@/components/States';
-import { Banner, Button, Divider } from '@/components/ui';
+import { Banner, Button, ListGroup, ListRow } from '@/components/ui';
 import { errorMessage, fieldErrors } from '@/lib/errors';
 import { space } from '@/theme';
 
@@ -50,7 +53,10 @@ function EditForm({ property }: { property: PropertyDetail }) {
     setFormError(null);
     // The full object is sent, so clearing an optional field really clears it.
     update.mutate(validation.data, {
-      onSuccess: () => router.back(),
+      onSuccess: () => {
+        toast('Changes saved');
+        router.back();
+      },
       onError: (err) => {
         setErrors(fieldErrors(err));
         setFormError(errorMessage(err, "Couldn't save your changes. Please try again."));
@@ -59,30 +65,34 @@ function EditForm({ property }: { property: PropertyDetail }) {
     });
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     const files = property.photos.length + property.document_count;
-    Alert.alert(
-      `Delete "${property.name}"?`,
-      [
+    const ok = await dialog.confirm({
+      title: `Delete "${property.name}"?`,
+      message: [
         files > 0 ? 'Its photos and documents will be permanently deleted.' : null,
         property.service_request_count > 0 ? 'Your service request history will be kept.' : null,
         'This cannot be undone.',
       ]
         .filter(Boolean)
         .join(' '),
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () =>
-            remove.mutate(property.id, {
-              onSuccess: () => router.dismissTo('/'),
-              onError: (err) => Alert.alert("Couldn't delete the property", errorMessage(err)),
-            }),
-        },
-      ],
-    );
+      confirmLabel: 'Delete property',
+      tone: 'danger',
+      icon: 'delete',
+    });
+    if (!ok) return;
+    remove.mutate(property.id, {
+      onSuccess: () => {
+        toast('Property deleted');
+        router.dismissTo('/');
+      },
+      onError: (err) =>
+        void dialog.alert({
+          title: "Couldn't delete the property",
+          message: errorMessage(err),
+          tone: 'danger',
+        }),
+    });
   };
 
   const busy = update.isPending || remove.isPending;
@@ -97,12 +107,31 @@ function EditForm({ property }: { property: PropertyDetail }) {
       >
         {formError ? <Banner message={formError} /> : null}
         <PropertyForm values={values} errors={errors} onChange={onChange} />
-        <Divider />
+
+        <FormSection
+          icon="document"
+          accent="amber"
+          title="Documents"
+          subtitle="Upload a document straight into its type."
+        >
+          <DocumentSlots propertyId={property.id} />
+        </FormSection>
+
+        <ListGroup>
+          <ListRow
+            icon="pin"
+            accent="teal"
+            title="Location on the map"
+            subtitle={property.latitude !== null ? 'Pinned · tap to adjust' : 'Not pinned yet'}
+            onPress={() => router.push(`/properties/${property.id}/location`)}
+          />
+        </ListGroup>
+
         <Button
           title="Delete property"
           variant="danger"
-          icon="trash-outline"
-          onPress={confirmDelete}
+          icon="delete"
+          onPress={() => void confirmDelete()}
           loading={remove.isPending}
           disabled={busy}
         />
@@ -116,5 +145,5 @@ function EditForm({ property }: { property: PropertyDetail }) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  content: { padding: space.lg, gap: space.xl, paddingBottom: space.xxl },
+  content: { padding: space.lg, paddingTop: space.xs, gap: space.lg, paddingBottom: space.xxl },
 });

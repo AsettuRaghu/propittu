@@ -195,6 +195,8 @@ export interface ServiceRequest {
   price_paise: number | null;
   /** Customer's preferred date (YYYY-MM-DD), optional. */
   preferred_date: string | null;
+  /** Customer's preferred time of day. */
+  preferred_slot: 'morning' | 'afternoon' | 'evening' | null;
   scheduled_for: string | null;
   /** Latest customer-visible note from staff. */
   status_note: string | null;

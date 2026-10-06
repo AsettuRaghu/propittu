@@ -1,5 +1,5 @@
-import { Ionicons } from '@expo/vector-icons';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import type { ReactNode } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   AREA_UNITS,
   AREA_UNIT_LABELS,
@@ -12,19 +12,17 @@ import {
   type Property,
   type PropertyType,
 } from '@propittu/shared';
-import { PROPERTY_TYPE_ICONS } from '@/lib/icons';
-import { colors, radius, space, typography } from '@/theme';
+import { PROPERTY_TYPE_ACCENTS, PROPERTY_TYPE_ICONS } from '@/lib/icons';
+import { accents, colors, radius, shadow, space, typography, type Accent } from '@/theme';
 import { TextField } from './Field';
-import { Chips, SectionTitle } from './ui';
+import { Icon, type IconName } from './Icon';
+import { IconTile } from './ui';
 
 /**
- * Add / Edit property form (PRODUCT_SPEC.md §16).
- *
- * The four steps in §16 are presented as sections of ONE scrolling form
- * rather than a four-screen wizard: same information, a third of the
- * code, and no draft state carried between screens (docs/DECISIONS.md).
- * Only type and name are required — "Only essential information should
- * be mandatory" and identifiers are never forced (§16 Step 3).
+ * Add / Edit property form (PRODUCT_SPEC.md §16): one scrolling form in
+ * clear cards — type, name & address, size, land records, notes. Only type
+ * and name are required ("Only essential information should be
+ * mandatory"); identifiers are never forced (§16 Step 3).
  */
 
 export interface PropertyFormValues {
@@ -89,6 +87,40 @@ export function validatePropertyForm(
     : { data: null, errors: toFieldErrors(result.error) };
 }
 
+/** A titled card used by the property form (and the screens around it). */
+export function FormSection({
+  icon,
+  accent = 'indigo',
+  title,
+  subtitle,
+  children,
+}: {
+  icon: IconName;
+  accent?: Accent;
+  title: string;
+  subtitle?: string;
+  children: ReactNode;
+}) {
+  return (
+    <View style={[styles.section, shadow]}>
+      <View style={styles.sectionHeader}>
+        <IconTile icon={icon} accent={accent} size={34} />
+        <View style={styles.flex}>
+          <Text style={typography.heading} numberOfLines={1}>
+            {title}
+          </Text>
+          {subtitle ? (
+            <Text style={typography.small} numberOfLines={2}>
+              {subtitle}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+      {children}
+    </View>
+  );
+}
+
 export function PropertyForm({
   values,
   errors,
@@ -106,44 +138,49 @@ export function PropertyForm({
 
   return (
     <View style={styles.form}>
-      {/* Step 1 — Property type */}
-      <View style={styles.section}>
-        <SectionTitle title="Property type" />
+      <FormSection icon="home" title="What kind of property?">
         <View style={styles.typeGrid}>
           {PROPERTY_TYPES.map((t) => {
             const selected = values.property_type === t;
+            const accent = accents[PROPERTY_TYPE_ACCENTS[t]];
             return (
               <Pressable
                 key={t}
                 accessibilityRole="radio"
                 accessibilityState={{ selected }}
                 onPress={() => onChange({ property_type: t })}
-                style={[styles.typeTile, selected && styles.typeTileSelected]}
+                style={[
+                  styles.typeTile,
+                  selected && { borderColor: accent.fg, backgroundColor: accent.bg },
+                ]}
               >
-                <Ionicons
+                <Icon
                   name={PROPERTY_TYPE_ICONS[t]}
                   size={24}
-                  color={selected ? colors.primary : colors.textMuted}
+                  color={selected ? accent.fg : colors.textMuted}
                 />
                 <Text
-                  style={[styles.typeLabel, selected && styles.typeLabelSelected]}
-                  numberOfLines={2}
+                  style={[styles.typeLabel, selected && { color: accent.fg }]}
+                  numberOfLines={1}
                 >
-                  {PROPERTY_TYPE_LABELS[t]}
+                  {PROPERTY_TYPE_LABELS[t].split(' / ')[0]}
                 </Text>
+                {selected ? (
+                  <View style={[styles.tick, { backgroundColor: accent.fg }]}>
+                    <Icon name="check" size={10} color="#FFFFFF" strokeWidth={3.5} />
+                  </View>
+                ) : null}
               </Pressable>
             );
           })}
         </View>
         {errors.property_type ? <Text style={styles.error}>{errors.property_type}</Text> : null}
-      </View>
+      </FormSection>
 
-      {/* Step 2 — Basic information */}
-      <View style={styles.section}>
-        <SectionTitle title="Basic information" />
+      <FormSection icon="pin" accent="teal" title="Name & address">
         <TextField
           label="Property name"
-          placeholder="e.g. My Hyderabad Plot"
+          placeholder="e.g. Hyderabad plot"
           autoCapitalize="words"
           maxLength={120}
           {...field('name')}
@@ -170,6 +207,9 @@ export function PropertyForm({
           placeholder="500001"
           {...field('pincode')}
         />
+      </FormSection>
+
+      <FormSection icon="area" accent="sky" title="Size">
         <TextField
           label="Area"
           optional
@@ -177,56 +217,107 @@ export function PropertyForm({
           placeholder="2400"
           {...field('area_value')}
         />
-        <Chips
-          options={AREA_UNITS.map((u) => ({ value: u, label: AREA_UNIT_LABELS[u] }))}
-          value={values.area_unit}
-          onChange={(u) => onChange({ area_unit: u })}
-        />
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.units}
+        >
+          {AREA_UNITS.map((u) => {
+            const selected = values.area_unit === u;
+            return (
+              <Pressable
+                key={u}
+                onPress={() => onChange({ area_unit: u })}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+                style={[styles.unit, selected && styles.unitSelected]}
+              >
+                <Text style={[styles.unitText, selected && styles.unitTextSelected]}>
+                  {AREA_UNIT_LABELS[u]}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
         {errors.area_unit ? <Text style={styles.error}>{errors.area_unit}</Text> : null}
+      </FormSection>
+
+      <FormSection
+        icon="deed"
+        accent="amber"
+        title="Land records"
+        subtitle="Optional — add whichever identifiers apply."
+      >
+        <TextField label="Survey number" optional {...field('survey_number')} />
+        <TextField label="Plot / property number" optional {...field('property_number')} />
+        <TextField label="Khata / property ID" optional {...field('khata_number')} />
+      </FormSection>
+
+      <FormSection icon="document" accent="slate" title="Notes">
         <TextField
-          label="Notes"
+          label="Anything worth remembering"
           optional
           multiline
           maxLength={2000}
-          placeholder="Anything worth remembering about this property"
+          placeholder="e.g. Gate key with neighbour, boundary stones on the east side"
           {...field('notes')}
         />
-      </View>
-
-      {/* Step 3 — Property identification */}
-      <View style={styles.section}>
-        <SectionTitle title="Property identification" />
-        <Text style={typography.small}>
-          Optional. Different properties use different identifiers — add whatever applies.
-        </Text>
-        <TextField label="Survey Number" optional {...field('survey_number')} />
-        <TextField label="Plot Number / Property Number" optional {...field('property_number')} />
-        <TextField label="Khata / Property ID" optional {...field('khata_number')} />
-      </View>
+      </FormSection>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  form: { gap: space.xl },
-  section: { gap: space.md },
+  form: { gap: space.lg },
+  section: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: space.lg,
+    gap: space.md,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    marginBottom: space.xs,
+  },
   row: { flexDirection: 'row', gap: space.md },
-  flex: { flex: 1 },
+  flex: { flex: 1, minWidth: 0 },
   typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   typeTile: {
-    width: '48.5%',
+    width: '31.5%',
     flexGrow: 1,
-    minHeight: 76,
-    padding: space.md,
-    gap: space.xs,
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: space.md,
+    paddingHorizontal: space.xs,
     borderRadius: radius.md,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
     backgroundColor: colors.surface,
+  },
+  typeLabel: { fontSize: 13, fontWeight: '700', color: colors.text },
+  tick: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  typeTileSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
-  typeLabel: { fontSize: 14, fontWeight: '500', color: colors.text },
-  typeLabelSelected: { color: colors.primary, fontWeight: '600' },
-  error: { fontSize: 13, color: colors.danger },
+  units: { gap: space.sm },
+  unit: {
+    paddingHorizontal: space.md,
+    paddingVertical: 9,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 1.5,
+    borderColor: colors.surfaceMuted,
+  },
+  unitSelected: { borderColor: accents.sky.fg, backgroundColor: accents.sky.bg },
+  unitText: { fontSize: 14, fontWeight: '600', color: colors.text },
+  unitTextSelected: { color: accents.sky.fg, fontWeight: '800' },
+  error: { fontSize: 13, color: colors.danger, fontWeight: '600' },
 });

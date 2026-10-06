@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import { Stack, router } from 'expo-router';
@@ -8,16 +7,18 @@ import { MAX_PHOTOS_AT_CREATION } from '@propittu/shared';
 import { useCreateProperty, useInvalidateProperty } from '@/api/queries';
 import { preparePhoto, uploadPhoto } from '@/api/uploads';
 import { Footer } from '@/components/Footer';
+import { Icon } from '@/components/Icon';
 import {
+  FormSection,
   PropertyForm,
   emptyPropertyForm,
   validatePropertyForm,
   type PropertyFormValues,
 } from '@/components/PropertyForm';
-import { Banner, Button, ProgressBar, SectionTitle } from '@/components/ui';
+import { Banner, Button, ProgressBar } from '@/components/ui';
 import { errorMessage, fieldErrors } from '@/lib/errors';
 import { pickPhotos } from '@/lib/pickPhotos';
-import { colors, radius, space, typography } from '@/theme';
+import { accents, colors, radius, space, typography } from '@/theme';
 
 type Phase =
   | { kind: 'idle' }
@@ -115,11 +116,12 @@ export default function AddPropertyScreen() {
         <PropertyForm values={values} errors={errors} onChange={onChange} />
 
         {/* Step 4 — Photos */}
-        <View style={styles.section}>
-          <SectionTitle title="Photos" />
-          <Text style={typography.small}>
-            Optional. Add up to {MAX_PHOTOS_AT_CREATION} now — you can add more later.
-          </Text>
+        <FormSection
+          icon="camera"
+          accent="sky"
+          title="Photos"
+          subtitle={`Optional · up to ${MAX_PHOTOS_AT_CREATION} now, more later`}
+        >
           <View style={styles.photoGrid}>
             {photos.map((p, i) => (
               <View key={p.uri} style={styles.photo}>
@@ -132,7 +134,7 @@ export default function AddPropertyScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={`Remove photo ${i + 1}`}
                   >
-                    <Ionicons name="close" size={14} color={colors.onPrimary} />
+                    <Icon name="close" size={13} color={colors.onPrimary} strokeWidth={3} />
                   </Pressable>
                 ) : null}
               </View>
@@ -144,12 +146,12 @@ export default function AddPropertyScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Add photos"
               >
-                <Ionicons name="camera-outline" size={24} color={colors.primary} />
+                <Icon name="camera" size={22} color={accents.sky.fg} />
                 <Text style={styles.addPhotoText}>Add</Text>
               </Pressable>
             ) : null}
           </View>
-        </View>
+        </FormSection>
       </ScrollView>
 
       {/* Step 5 — Save */}
@@ -170,8 +172,7 @@ export default function AddPropertyScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  content: { padding: space.lg, gap: space.xl, paddingBottom: space.xxl },
-  section: { gap: space.md },
+  content: { padding: space.lg, paddingTop: space.xs, gap: space.lg, paddingBottom: space.xxl },
   photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   photo: { width: 96, height: 96, borderRadius: radius.md, overflow: 'hidden' },
   photoImage: { width: '100%', height: '100%' },
@@ -189,12 +190,12 @@ const styles = StyleSheet.create({
   addPhoto: {
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft,
+    borderColor: accents.sky.fg,
+    backgroundColor: accents.sky.bg,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
   },
-  addPhotoText: { fontSize: 13, fontWeight: '600', color: colors.primary },
+  addPhotoText: { fontSize: 13, fontWeight: '700', color: accents.sky.fg },
   progress: { gap: space.xs },
 });

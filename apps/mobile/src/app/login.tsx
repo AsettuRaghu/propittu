@@ -12,10 +12,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COUNTRY_CALLING_CODE, phoneLocalSchema, toE164 } from '@propittu/shared';
 import { useSession } from '@/auth/SessionProvider';
-import { Banner, Button } from '@/components/ui';
+import { Icon } from '@/components/Icon';
+import { Banner, Button, GradientCard } from '@/components/ui';
 import { authErrorMessage } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
-import { colors, radius, space, typography } from '@/theme';
+import { colors, gradients, radius, shadow, space, typography } from '@/theme';
 
 /**
  * Login — Indian mobile number only (PRODUCT_SPEC.md §10, §13).
@@ -69,11 +70,14 @@ export default function LoginScreen() {
       >
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.brand}>
+            <GradientCard colors={gradients.brand} style={styles.logo}>
+              <Icon name="home" size={30} color="#FFFFFF" strokeWidth={2.2} />
+            </GradientCard>
             <Text style={styles.wordmark}>Propittu</Text>
             <Text style={styles.tagline}>Everything about your property, in one place.</Text>
           </View>
 
-          <View style={styles.form}>
+          <View style={[styles.form, shadow]}>
             {notice ? <Banner message={notice} tone="warning" /> : null}
 
             <Text style={typography.heading}>Enter your mobile number</Text>
@@ -121,16 +125,30 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
   content: { flexGrow: 1, padding: space.xl, justifyContent: 'center', gap: space.xxl },
-  brand: { gap: space.sm },
+  brand: { gap: space.sm, alignItems: 'flex-start' },
+  logo: {
+    width: 60,
+    height: 60,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 0,
+    marginBottom: space.sm,
+  },
   wordmark: { fontSize: 34, fontWeight: '800', color: colors.primary, letterSpacing: -0.5 },
   tagline: { ...typography.body, color: colors.textMuted },
-  form: { gap: space.md },
+  form: {
+    gap: space.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: space.xl,
+  },
   phoneRow: {
     flexDirection: 'row',
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
+    borderWidth: 1.5,
+    borderColor: colors.surfaceMuted,
     borderRadius: radius.md,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceMuted,
     overflow: 'hidden',
     marginTop: space.sm,
   },
@@ -138,7 +156,6 @@ const styles = StyleSheet.create({
   prefix: {
     justifyContent: 'center',
     paddingHorizontal: space.lg,
-    backgroundColor: colors.surfaceMuted,
     borderRightWidth: 1,
     borderRightColor: colors.border,
   },

@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import * as WebBrowser from 'expo-web-browser';
 import { useLocalSearchParams } from 'expo-router';
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   DOCUMENT_STATUS_LABELS,
   DOCUMENT_STATUSES,
@@ -21,6 +21,7 @@ import { errorMessage } from '@/lib/errors';
 import { formatArea, formatDate } from '@/lib/format';
 import { signedImage } from '@/lib/image';
 import { colors, radius, space, typography } from '@/theme';
+import { showAlert } from '@/lib/alert';
 
 const DOC_TONES: Record<DocumentStatus, Tone> = {
   uploaded: 'neutral',
@@ -74,7 +75,7 @@ export default function BackofficePropertyScreen() {
           <Button
             title="Open in Maps"
             variant="secondary"
-            icon="map-outline"
+            icon="map"
             onPress={() =>
               void WebBrowser.openBrowserAsync(
                 `https://maps.google.com/?q=${property.latitude},${property.longitude}`,
@@ -125,7 +126,7 @@ function DocumentRow({ document, canReview }: { document: PropertyDocument; canR
       .then((result) => {
         if (result.kind === 'image') void WebBrowser.openBrowserAsync(result.url);
       })
-      .catch((err) => Alert.alert("Couldn't open the document", errorMessage(err)));
+      .catch((err) => showAlert("Couldn't open the document", errorMessage(err)));
 
   return (
     <Card style={styles.card}>
@@ -140,12 +141,7 @@ function DocumentRow({ document, canReview }: { document: PropertyDocument; canR
         {formatDate(document.created_at)}
       </Text>
       {document.description ? <Text style={typography.small}>{document.description}</Text> : null}
-      <Button
-        title="Open"
-        variant="secondary"
-        icon="document-outline"
-        onPress={() => void open()}
-      />
+      <Button title="Open" variant="secondary" icon="document" onPress={() => void open()} />
       {canReview ? (
         <Chips
           options={DOCUMENT_STATUSES.map((s) => ({ value: s, label: DOCUMENT_STATUS_LABELS[s] }))}
@@ -153,7 +149,7 @@ function DocumentRow({ document, canReview }: { document: PropertyDocument; canR
           onChange={(status) =>
             setStatus.mutate(
               { id: document.id, status },
-              { onError: (err) => Alert.alert("Couldn't update", errorMessage(err)) },
+              { onError: (err) => showAlert("Couldn't update", errorMessage(err)) },
             )
           }
         />

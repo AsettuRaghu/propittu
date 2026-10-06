@@ -2,13 +2,20 @@ import * as Location from 'expo-location';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker, type LatLng, type Region } from 'react-native-maps';
 import { useProperty, useUpdateProperty } from '@/api/queries';
-import { Footer } from '@/components/Footer';
+import { toast } from '@/components/Dialog';
+import { Icon } from '@/components/Icon';
 import { ErrorState, LoadingState } from '@/components/States';
-import { Banner, Button } from '@/components/ui';
+import { Banner, Button, IconButton } from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
-import { colors, space, typography } from '@/theme';
+import { accents, colors, radius, shadowStrong, space, typography } from '@/theme';
+
+/** The phone's geocoder can stall; never keep the owner waiting on it. */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([p, new Promise<null>((r) => setTimeout(() => r(null), ms))]);
+}
 
 /** Whole-India view when nothing better is known. */
 const INDIA: Region = { latitude: 21.0, longitude: 78.9, latitudeDelta: 22, longitudeDelta: 22 };
@@ -31,6 +38,8 @@ export default function PropertyLocationScreen() {
   const [pin, setPin] = useState<LatLng | null>(null);
   const [locating, setLocating] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [satellite, setSatellite] = useState(false);
+  const insets = useSafeAreaInsets();
 
   // Work out where to start: saved pin → geocoded address → all of India.
   useEffect(() => {
@@ -55,7 +64,8 @@ export default function PropertyLocationScreen() {
         .filter(Boolean)
         .join(', ');
       try {
-        const [hit] = query ? await Location.geocodeAsync(query) : [];
+        const hits = query ? await withTimeout(Location.geocodeAsync(query), 6000) : null;
+        const hit = hits?.[0];
         if (hit && !cancelled) {
           const approx = { latitude: hit.latitude, longitude: hit.longitude };
           setPin(approx);
@@ -99,7 +109,12 @@ export default function PropertyLocationScreen() {
     if (!pin) return;
     update.mutate(
       { latitude: Number(pin.latitude.toFixed(6)), longitude: Number(pin.longitude.toFixed(6)) },
-      { onSuccess: () => router.back() },
+      {
+        onSuccess: () => {
+          toast('Location saved');
+          router.back();
+        },
+      },
     );
   };
 
@@ -122,6 +137,7 @@ export default function PropertyLocationScreen() {
         initialRegion={initial.region}
         onPress={(e) => setPin(e.nativeEvent.coordinate)}
         showsUserLocation
+        mapType={satellite ? 'hybrid' : 'standard'}
       >
         {pin ? (
           <Marker
@@ -134,51 +150,77 @@ export default function PropertyLocationScreen() {
         ) : null}
       </MapView>
 
-      <View style={styles.hint} pointerEvents="none">
-        <Text style={[typography.small, styles.hintText]}>{hint}</Text>
+      {/* Floating map controls */}
+      <View style={styles.controls}>
+        <View style={[styles.controlBg, shadowStrong]}>
+          <IconButton
+            icon={satellite ? 'map' : 'satellite'}
+            label={satellite ? 'Map view' : 'Satellite view'}
+            variant="plain"
+            onPress={() => setSatellite((v) => !v)}
+          />
+        </View>
+        <View style={[styles.controlBg, shadowStrong]}>
+          {locating ? (
+            <ActivityIndicator style={styles.controlSpinner} color={colors.primary} />
+          ) : (
+            <IconButton
+              icon="locate"
+              label="Use my current location"
+              variant="plain"
+              onPress={useMyLocation}
+            />
+          )}
+        </View>
       </View>
 
-      <Footer>
+      {/* Bottom sheet: hint + confirm */}
+      <View
+        style={[styles.sheet, shadowStrong, { paddingBottom: Math.max(insets.bottom, space.lg) }]}
+      >
+        <View style={styles.hintRow}>
+          <View style={styles.hintIcon}>
+            <Icon name="pin" size={18} color={accents.teal.fg} />
+          </View>
+          <Text style={[typography.small, styles.flex]}>{hint}</Text>
+        </View>
         {message ? <Banner message={message} tone="warning" /> : null}
         {update.error ? <Banner message={errorMessage(update.error)} /> : null}
-        {pin ? (
-          <Text style={typography.caption}>
-            {pin.latitude.toFixed(5)}, {pin.longitude.toFixed(5)}
-          </Text>
-        ) : null}
         <Button
-          title="Use my current location"
-          variant="secondary"
-          icon="locate-outline"
-          onPress={useMyLocation}
-          loading={locating}
-        />
-        <Button
-          title="Confirm location"
-          icon="checkmark"
+          title={pin ? 'Confirm location' : 'Tap the map to place the pin'}
+          icon={pin ? 'check' : 'pin'}
           onPress={save}
           loading={update.isPending}
           disabled={!pin}
         />
-      </Footer>
-      {locating ? <ActivityIndicator style={styles.spinner} color={colors.primary} /> : null}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  hint: {
+  controls: { position: 'absolute', top: space.md, right: space.md, gap: space.sm },
+  controlBg: { backgroundColor: colors.surface, borderRadius: radius.pill },
+  controlSpinner: { width: 40, height: 40 },
+  sheet: {
     position: 'absolute',
-    top: space.md,
-    left: space.md,
-    right: space.md,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: colors.surface,
-    borderRadius: 12,
-    padding: space.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    padding: space.lg,
+    gap: space.md,
   },
-  hintText: { color: colors.text },
-  spinner: { position: 'absolute', top: '45%', alignSelf: 'center' },
+  hintRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  hintIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: accents.teal.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

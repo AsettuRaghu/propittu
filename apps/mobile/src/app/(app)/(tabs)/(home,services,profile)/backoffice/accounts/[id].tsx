@@ -1,6 +1,5 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   formatIndianMobile,
   formatPrice,
@@ -20,6 +19,8 @@ import { errorMessage } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
 import { STATUS_TONES } from '@/lib/icons';
 import { colors, space, typography } from '@/theme';
+import { showAlert } from '@/lib/alert';
+import { Icon } from '@/components/Icon';
 
 /** Backoffice: one customer Account — Plan, usage, why blocked, properties, requests (M9). */
 export default function BackofficeAccountScreen() {
@@ -35,10 +36,10 @@ export default function BackofficeAccountScreen() {
 
   const { account, plan } = data;
   const role = me.data?.staff_role;
-  const fail = (title: string) => (err: unknown) => Alert.alert(title, errorMessage(err));
+  const fail = (title: string) => (err: unknown) => showAlert(title, errorMessage(err));
 
   const confirm = (title: string, message: string, action: () => void, destructive = false) =>
-    Alert.alert(title, message, [
+    showAlert(title, message, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Confirm', style: destructive ? 'destructive' : 'default', onPress: action },
     ]);
@@ -185,7 +186,7 @@ export default function BackofficeAccountScreen() {
                 {p.city ? ` · ${p.city}` : ''} · {p.document_count} docs · {p.photo_count} photos
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
+            <Icon name="chevron" size={18} color={colors.textSubtle} />
           </Card>
         ))}
         {data.properties.length === 0 ? (

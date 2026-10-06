@@ -203,10 +203,11 @@ export const createServiceRequestSchema = z.object({
   property_id: uuidSchema,
   service_id: uuidSchema,
   description: z
-    .string({ message: 'Tell us what you need' })
+    .string()
     .trim()
-    .min(1, 'Tell us what you need')
-    .max(2000, 'Keep the description under 2000 characters'),
+    .max(2000, 'Keep the description under 2000 characters')
+    .default(''),
+  preferred_slot: z.enum(['morning', 'afternoon', 'evening']).nullable().optional(),
   preferred_date: z.preprocess(
     (v) => (v === '' || v === undefined ? null : v),
     z.iso.date({ message: 'Choose a valid date' }).nullable(),

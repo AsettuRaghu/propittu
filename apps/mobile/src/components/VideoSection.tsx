@@ -1,12 +1,13 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MAX_VIDEOS_PER_PROPERTY, formatFileSize, type PropertyVideo } from '@propittu/shared';
 import { useDeleteVideo, useInvalidateProperty } from '@/api/queries';
 import { playVideo, prepareVideo, uploadVideo } from '@/api/uploads';
 import { errorMessage } from '@/lib/errors';
 import { pickVideo } from '@/lib/pickPhotos';
-import { colors, radius, space, typography } from '@/theme';
+import { accents, colors, radius, space, typography } from '@/theme';
+import { dialog, toast } from './Dialog';
+import { Icon } from './Icon';
 import { Banner, ProgressBar } from './ui';
 
 /** Property videos: add, play, delete (M3). */
@@ -40,25 +41,33 @@ export function VideoSection({
     }
   };
 
-  const openActions = (video: PropertyVideo) => {
-    Alert.alert('Video', undefined, [
-      {
-        text: 'Play',
-        onPress: () =>
-          void playVideo(video).catch((err) =>
-            Alert.alert("Couldn't play the video", errorMessage(err)),
-          ),
-      },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () =>
-          deleteVideo.mutate(video.id, {
-            onError: (err) => Alert.alert("Couldn't delete the video", errorMessage(err)),
+  const openActions = async (video: PropertyVideo) => {
+    const choice = await dialog.actions({
+      title: 'Video',
+      actions: [
+        { label: 'Play', value: 'play' as const, icon: 'play' },
+        { label: 'Delete video', value: 'delete' as const, icon: 'delete', tone: 'danger' },
+      ],
+    });
+    if (choice === 'play') {
+      await playVideo(video).catch((err) =>
+        dialog.alert({
+          title: "Couldn't play the video",
+          message: errorMessage(err),
+          tone: 'danger',
+        }),
+      );
+    } else if (choice === 'delete') {
+      deleteVideo.mutate(video.id, {
+        onSuccess: () => toast('Video deleted'),
+        onError: (err) =>
+          void dialog.alert({
+            title: "Couldn't delete the video",
+            message: errorMessage(err),
+            tone: 'danger',
           }),
-      },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+      });
+    }
   };
 
   return (
@@ -72,12 +81,12 @@ export function VideoSection({
         {videos.map((video) => (
           <Pressable
             key={video.id}
-            onPress={() => openActions(video)}
+            onPress={() => void openActions(video)}
             style={[styles.tile, styles.videoTile]}
             accessibilityRole="button"
             accessibilityLabel="Property video"
           >
-            <Ionicons name="play-circle" size={36} color={colors.onPrimary} />
+            <Icon name="play-circle" size={34} color={colors.onPrimary} />
             <Text style={styles.meta}>
               {video.duration_seconds ? `${Math.round(video.duration_seconds)}s · ` : ''}
               {formatFileSize(video.file_size)}
@@ -96,12 +105,11 @@ export function VideoSection({
             accessibilityRole="button"
             accessibilityLabel="Add a video"
           >
-            <Ionicons name="videocam-outline" size={26} color={colors.primary} />
+            <Icon name="video" size={24} color={accents.rose.fg} />
             <Text style={styles.addText}>Add video</Text>
           </Pressable>
         ) : null}
       </ScrollView>
-      <Text style={typography.caption}>Up to 60 seconds and 50 MB per video.</Text>
     </View>
   );
 }
@@ -128,11 +136,11 @@ const styles = StyleSheet.create({
   addTile: {
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft,
+    borderColor: accents.rose.fg,
+    backgroundColor: accents.rose.bg,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
   },
-  addText: { fontSize: 13, fontWeight: '600', color: colors.primary },
+  addText: { fontSize: 13, fontWeight: '700', color: accents.rose.fg },
 });

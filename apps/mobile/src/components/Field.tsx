@@ -18,7 +18,7 @@ export const TextField = forwardRef<TextInput, FieldProps>(function TextField(
     <View style={styles.wrap}>
       <Text style={styles.label}>
         {label}
-        {optional ? <Text style={styles.optional}> (optional)</Text> : null}
+        {optional ? <Text style={styles.optional}> · optional</Text> : null}
       </Text>
       <TextInput
         ref={ref}
@@ -53,21 +53,21 @@ export const TextField = forwardRef<TextInput, FieldProps>(function TextField(
 
 const styles = StyleSheet.create({
   wrap: { gap: 6 },
-  label: { fontSize: 14, fontWeight: '600', color: colors.text },
-  optional: { fontWeight: '400', color: colors.textSubtle },
+  label: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
+  optional: { fontWeight: '500', color: colors.textSubtle },
   input: {
     minHeight: 50,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
+    borderWidth: 1.5,
+    borderColor: colors.surfaceMuted,
     borderRadius: radius.md,
     paddingHorizontal: space.md,
     paddingVertical: space.md,
     fontSize: 16,
     color: colors.text,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceMuted,
   },
-  multiline: { minHeight: 110, textAlignVertical: 'top' },
-  inputFocused: { borderColor: colors.primary },
-  inputError: { borderColor: colors.danger },
-  error: { fontSize: 13, color: colors.danger },
+  multiline: { minHeight: 96, textAlignVertical: 'top' },
+  inputFocused: { borderColor: colors.primary, backgroundColor: colors.surface },
+  inputError: { borderColor: colors.danger, backgroundColor: colors.dangerSoft },
+  error: { fontSize: 13, color: colors.danger, fontWeight: '600' },
 });

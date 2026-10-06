@@ -17,7 +17,7 @@ export function ServiceRequestList({ propertyId }: { propertyId?: string }) {
       data={data}
       keyExtractor={(r) => r.id}
       contentContainerStyle={data.length === 0 ? styles.empty : styles.list}
-      ItemSeparatorComponent={() => <View style={{ height: space.sm }} />}
+      ItemSeparatorComponent={() => <View style={{ height: space.md }} />}
       refreshControl={
         <RefreshControl
           refreshing={isRefetching}
@@ -30,9 +30,10 @@ export function ServiceRequestList({ propertyId }: { propertyId?: string }) {
       )}
       ListEmptyComponent={
         <EmptyState
-          icon="clipboard-outline"
-          title="No service requests yet"
-          message="Requests you submit will appear here with their status."
+          icon="requests"
+          accent="coral"
+          title="No requests yet"
+          message="Book a service and follow every step right here."
         />
       }
     />
@@ -40,6 +41,6 @@ export function ServiceRequestList({ propertyId }: { propertyId?: string }) {
 }
 
 const styles = StyleSheet.create({
-  list: { padding: space.lg },
+  list: { padding: space.lg, paddingTop: space.sm, paddingBottom: space.xxl },
   empty: { flexGrow: 1 },
 });

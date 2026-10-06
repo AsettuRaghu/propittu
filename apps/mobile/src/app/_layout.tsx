@@ -7,6 +7,7 @@ import { AppState, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ApiError, setLimitedAccessHandler } from '@/api/client';
 import { SessionProvider, useSession } from '@/auth/SessionProvider';
+import { DialogHost } from '@/components/Dialog';
 import { envProblems } from '@/lib/env';
 import { colors, space, typography } from '@/theme';
 
@@ -50,6 +51,7 @@ export default function RootLayout() {
         <SessionProvider>
           <RootNavigator />
         </SessionProvider>
+        <DialogHost />
       </QueryClientProvider>
       <StatusBar style="dark" />
     </SafeAreaProvider>

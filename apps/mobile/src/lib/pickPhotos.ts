@@ -1,6 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
-import { Alert, Linking } from 'react-native';
+import { Linking } from 'react-native';
 import { MAX_VIDEO_SECONDS } from '@propittu/shared';
+import { dialog } from '@/components/Dialog';
 
 /**
  * Asks "Take photo" or "Choose from library", then returns the picked
@@ -9,14 +10,29 @@ import { MAX_VIDEO_SECONDS } from '@propittu/shared';
  * The library picker needs no permission on current iOS/Android — the
  * system photo picker runs out-of-process.
  */
-export function pickPhotos(limit: number): Promise<ImagePicker.ImagePickerAsset[]> {
-  return new Promise((resolve) => {
-    Alert.alert('Add photos', undefined, [
-      { text: 'Take photo', onPress: () => void fromCamera().then(resolve) },
-      { text: 'Choose from library', onPress: () => void fromLibrary(limit).then(resolve) },
-      { text: 'Cancel', style: 'cancel', onPress: () => resolve([]) },
-    ]);
+export async function pickPhotos(limit: number): Promise<ImagePicker.ImagePickerAsset[]> {
+  const source = await dialog.actions({
+    title: 'Add photos',
+    actions: [
+      {
+        label: 'Take a photo',
+        value: 'camera' as const,
+        icon: 'camera',
+        description: 'Use the camera now',
+      },
+      {
+        label: 'Choose from library',
+        value: 'library' as const,
+        icon: 'images',
+        description: limit > 1 ? `Pick up to ${limit}` : undefined,
+      },
+    ],
   });
+  // Let the sheet finish closing; iOS refuses to present a picker over a dismissing modal.
+  if (source) await new Promise((r) => setTimeout(r, 350));
+  if (source === 'camera') return fromCamera();
+  if (source === 'library') return fromLibrary(limit);
+  return [];
 }
 
 async function fromLibrary(limit: number): Promise<ImagePicker.ImagePickerAsset[]> {
@@ -33,14 +49,14 @@ async function fromLibrary(limit: number): Promise<ImagePicker.ImagePickerAsset[
 async function fromCamera(): Promise<ImagePicker.ImagePickerAsset[]> {
   const permission = await ImagePicker.requestCameraPermissionsAsync();
   if (!permission.granted) {
-    Alert.alert(
-      'Camera access is off',
-      'Allow camera access for Propittu in Settings to take property photos.',
-      [
-        { text: 'Not now', style: 'cancel' },
-        { text: 'Open Settings', onPress: () => void Linking.openSettings() },
-      ],
-    );
+    const open = await dialog.confirm({
+      title: 'Camera access is off',
+      message: 'Allow camera access for Propittu in Settings to take property photos.',
+      confirmLabel: 'Open Settings',
+      cancelLabel: 'Not now',
+      icon: 'camera',
+    });
+    if (open) void Linking.openSettings();
     return [];
   }
   const result = await ImagePicker.launchCameraAsync({

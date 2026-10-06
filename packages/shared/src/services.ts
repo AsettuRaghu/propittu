@@ -63,6 +63,19 @@ export const SERVICE_REQUEST_ACTION_LABELS: Record<ServiceRequestStatus, string>
   cancelled: 'Cancel request',
 };
 
+export const PREFERRED_SLOTS = ['morning', 'afternoon', 'evening'] as const;
+export type PreferredSlot = (typeof PREFERRED_SLOTS)[number];
+export const PREFERRED_SLOT_LABELS: Record<PreferredSlot, string> = {
+  morning: 'Morning',
+  afternoon: 'Afternoon',
+  evening: 'Evening',
+};
+export const PREFERRED_SLOT_HOURS: Record<PreferredSlot, string> = {
+  morning: '9 am – 12 pm',
+  afternoon: '12 – 4 pm',
+  evening: '4 – 7 pm',
+};
+
 export const SERVICE_COVERAGE_LABELS: Record<ServiceRequest['coverage'], string> = {
   included: 'Included in your plan',
   extra: 'Extra service',

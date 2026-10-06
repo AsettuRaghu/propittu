@@ -1,8 +1,7 @@
-import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   ALLOWED_DOCUMENT_MIME_TYPES,
   DOCUMENT_TYPES,
@@ -15,9 +14,12 @@ import { useInvalidateProperty } from '@/api/queries';
 import { prepareDocument, uploadDocument, type LocalFile } from '@/api/uploads';
 import { Footer } from '@/components/Footer';
 import { TextField } from '@/components/Field';
-import { Banner, Button, Card, OptionList, ProgressBar, SectionTitle } from '@/components/ui';
+import { Icon } from '@/components/Icon';
+import { FormSection } from '@/components/PropertyForm';
+import { Banner, Button, Card, IconTile, ProgressBar } from '@/components/ui';
+import { DOCUMENT_TYPE_VISUALS } from '@/lib/icons';
 import { errorMessage } from '@/lib/errors';
-import { colors, radius, space, typography } from '@/theme';
+import { accents, colors, radius, shadow, space, typography } from '@/theme';
 
 type Status =
   | { kind: 'idle' }
@@ -86,7 +88,7 @@ export default function AddDocumentScreen() {
       <View style={styles.done}>
         <Stack.Screen options={{ title: 'Document saved', headerBackVisible: false }} />
         <View style={styles.doneIcon}>
-          <Ionicons name="checkmark" size={40} color={colors.success} />
+          <Icon name="check" size={40} color={colors.success} strokeWidth={2.5} />
         </View>
         <Text style={typography.title}>Document saved</Text>
         <Text style={[typography.small, styles.center]}>
@@ -113,26 +115,45 @@ export default function AddDocumentScreen() {
     <View style={styles.flex}>
       <Stack.Screen options={{ headerBackVisible: !uploading, gestureEnabled: !uploading }} />
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.section}>
-          <SectionTitle title="1. Document type" />
-          <OptionList
-            options={DOCUMENT_TYPES.map((t) => ({ value: t, label: DOCUMENT_TYPE_LABELS[t] }))}
-            value={documentType}
-            onChange={(t) => !uploading && setDocumentType(t)}
-          />
-        </View>
+        <FormSection icon="folder" accent="amber" title="What is it?">
+          <View style={styles.typeGrid}>
+            {DOCUMENT_TYPES.map((t) => {
+              const selected = documentType === t;
+              const v = DOCUMENT_TYPE_VISUALS[t];
+              return (
+                <Pressable
+                  key={t}
+                  onPress={() => !uploading && setDocumentType(t)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                  style={[
+                    styles.typeTile,
+                    selected && {
+                      borderColor: accents[v.accent].fg,
+                      backgroundColor: accents[v.accent].bg,
+                    },
+                  ]}
+                >
+                  <IconTile icon={v.icon} accent={v.accent} size={34} solid={selected} />
+                  <Text style={styles.typeLabel} numberOfLines={1}>
+                    {DOCUMENT_TYPE_LABELS[t]}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </FormSection>
 
-        <View style={styles.section}>
-          <SectionTitle title="2. File" />
-          <Text style={typography.small}>
-            PDF, JPG or PNG, up to {formatFileSize(MAX_DOCUMENT_BYTES)}.
-          </Text>
+        <FormSection
+          icon="attach"
+          accent="indigo"
+          title="Choose the file"
+          subtitle={`PDF, JPG or PNG · up to ${formatFileSize(MAX_DOCUMENT_BYTES)}`}
+        >
           {file ? (
-            <Card style={styles.fileCard}>
-              <Ionicons
-                name={
-                  file.mimeType === 'application/pdf' ? 'document-text-outline' : 'image-outline'
-                }
+            <Card flat style={styles.fileCard}>
+              <Icon
+                name={file.mimeType === 'application/pdf' ? 'document' : 'image'}
                 size={24}
                 color={colors.primary}
               />
@@ -145,18 +166,12 @@ export default function AddDocumentScreen() {
               {!uploading ? <Button title="Change" variant="ghost" onPress={chooseFile} /> : null}
             </Card>
           ) : (
-            <Button
-              title="Choose file"
-              variant="secondary"
-              icon="attach-outline"
-              onPress={chooseFile}
-            />
+            <Button title="Choose file" variant="secondary" icon="attach" onPress={chooseFile} />
           )}
           {fileError ? <Banner message={fileError} /> : null}
-        </View>
+        </FormSection>
 
-        <View style={styles.section}>
-          <SectionTitle title="3. Description" />
+        <FormSection icon="document" accent="slate" title="Description">
           <TextField
             label="Description"
             optional
@@ -167,7 +182,7 @@ export default function AddDocumentScreen() {
             onChangeText={setDescription}
             editable={!uploading}
           />
-        </View>
+        </FormSection>
       </ScrollView>
 
       <Footer>
@@ -180,7 +195,7 @@ export default function AddDocumentScreen() {
         {status.kind === 'error' ? <Banner message={status.message} /> : null}
         <Button
           title={status.kind === 'error' ? 'Try again' : 'Upload'}
-          icon="cloud-upload-outline"
+          icon="upload"
           onPress={upload}
           loading={uploading}
           disabled={!documentType || !file}
@@ -192,9 +207,28 @@ export default function AddDocumentScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  content: { padding: space.lg, gap: space.xl, paddingBottom: space.xxl },
-  section: { gap: space.md },
-  fileCard: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  content: { padding: space.lg, paddingTop: space.xs, gap: space.lg, paddingBottom: space.xxl },
+  typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  typeTile: {
+    width: '48.5%',
+    flexGrow: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    padding: space.sm,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  typeLabel: { flex: 1, fontSize: 13, fontWeight: '700', color: colors.text },
+  fileCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    backgroundColor: colors.surfaceMuted,
+    ...shadow,
+  },
   fileBody: { flex: 1, gap: 2 },
   progress: { gap: space.xs },
   done: {

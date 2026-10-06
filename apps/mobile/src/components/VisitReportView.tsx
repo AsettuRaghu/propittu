@@ -1,14 +1,15 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import * as WebBrowser from 'expo-web-browser';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { VISIT_CONDITION_LABELS, type VisitMedia, type VisitReport } from '@propittu/shared';
 import { playVideo } from '@/api/uploads';
 import { errorMessage } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
 import { signedImage } from '@/lib/image';
 import { colors, radius, space, typography } from '@/theme';
-import { Badge, Card, type Tone } from './ui';
+import { dialog } from './Dialog';
+import { Icon } from './Icon';
+import { Badge, Card, IconTile, type Tone } from './ui';
 
 const CONDITION_TONES: Record<VisitReport['condition'], Tone> = {
   good: 'success',
@@ -31,14 +32,19 @@ export function VisitReportView({
     const action =
       m.kind === 'video' ? playVideo({ url: m.url }) : WebBrowser.openBrowserAsync(m.url);
     void Promise.resolve(action).catch((err) =>
-      Alert.alert("Couldn't open this file", errorMessage(err)),
+      dialog.alert({
+        title: "Couldn't open this file",
+        message: errorMessage(err),
+        tone: 'danger',
+      }),
     );
   };
 
   return (
     <Card style={styles.card}>
       <View style={styles.row}>
-        <Text style={typography.heading}>Visit report</Text>
+        <IconTile icon="document-check" accent="teal" size={36} />
+        <Text style={[typography.heading, { flex: 1 }]}>Visit report</Text>
         <Badge
           label={VISIT_CONDITION_LABELS[report.condition]}
           tone={CONDITION_TONES[report.condition]}
@@ -64,7 +70,7 @@ export function VisitReportView({
                 <Image source={signedImage(m.url)} style={styles.image} contentFit="cover" />
               ) : (
                 <View style={[styles.image, styles.video]}>
-                  <Ionicons name="play-circle" size={32} color={colors.onPrimary} />
+                  <Icon name="play-circle" size={30} color={colors.onPrimary} />
                 </View>
               )}
             </Pressable>
@@ -89,7 +95,7 @@ const TILE = 96;
 
 const styles = StyleSheet.create({
   card: { gap: space.md },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   section: { gap: space.xs },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   tile: { width: TILE, height: TILE, borderRadius: radius.md, overflow: 'hidden' },

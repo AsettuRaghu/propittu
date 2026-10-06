@@ -660,11 +660,9 @@ try {
     method: 'POST',
     body: { property_id: 'x', service_id: 'y', description: '' },
   });
-  check(
-    r.status === 400 && r.json.error.details?.description,
-    'empty service request → 400',
-    r.json,
-  );
+  check(r.status === 400 && r.json.error.details?.property_id && r.json.error.details?.service_id, 'request with invalid ids → 400 (notes are optional now)', r.json);
+  r = await call('/service-requests', { token: valid, method: 'POST', body: { property_id: '11111111-1111-1111-1111-111111111111', service_id: '5e000000-0000-0000-0000-000000000001', preferred_slot: 'midnight' } });
+  check(r.status === 400 && r.json.error.details?.preferred_slot, 'unknown time of day rejected', r.json);
 
   // ---- M5 / M6: Plans, Benefits, Usage, Limited Access ----
   r = await call('/me', { token: valid });

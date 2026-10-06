@@ -1,10 +1,8 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Modal,
   Pressable,
@@ -22,11 +20,21 @@ import {
 } from '@propittu/shared';
 import { useDeleteDocument, useDocuments } from '@/api/queries';
 import { openDocument } from '@/api/uploads';
+import { dialog, toast } from '@/components/Dialog';
+import { Icon } from '@/components/Icon';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
-import { Button, Card } from '@/components/ui';
+import { Badge, Button, Card, IconButton, IconTile, type Tone } from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
-import { colors, radius, space, typography } from '@/theme';
+import { DOCUMENT_TYPE_VISUALS } from '@/lib/icons';
+import { colors, space, typography } from '@/theme';
+
+const DOC_TONES: Record<PropertyDocument['status'], Tone> = {
+  uploaded: 'neutral',
+  under_review: 'warning',
+  verified: 'success',
+  rejected: 'danger',
+};
 
 /** A property's documents: view, open, delete (PRODUCT_SPEC.md §8.3, §20). */
 export default function DocumentsScreen() {
@@ -45,24 +53,34 @@ export default function DocumentsScreen() {
       const result = await openDocument(doc);
       if (result.kind === 'image') setImageUrl(result.url);
     } catch (err) {
-      Alert.alert("Couldn't open this document", errorMessage(err));
+      void dialog.alert({
+        title: "Couldn't open this document",
+        message: errorMessage(err),
+        tone: 'danger',
+      });
     } finally {
       setOpening(null);
     }
   };
 
-  const confirmDelete = (doc: PropertyDocument) => {
-    Alert.alert(`Delete "${doc.file_name}"?`, 'This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () =>
-          deleteDocument.mutate(doc.id, {
-            onError: (err) => Alert.alert("Couldn't delete the document", errorMessage(err)),
-          }),
-      },
-    ]);
+  const confirmDelete = async (doc: PropertyDocument) => {
+    const ok = await dialog.confirm({
+      title: 'Delete this document?',
+      message: `"${doc.file_name}" will be permanently deleted.`,
+      confirmLabel: 'Delete document',
+      tone: 'danger',
+      icon: 'delete',
+    });
+    if (!ok) return;
+    deleteDocument.mutate(doc.id, {
+      onSuccess: () => toast('Document deleted'),
+      onError: (err) =>
+        void dialog.alert({
+          title: "Couldn't delete the document",
+          message: errorMessage(err),
+          tone: 'danger',
+        }),
+    });
   };
 
   return (
@@ -70,9 +88,7 @@ export default function DocumentsScreen() {
       <Stack.Screen
         options={{
           headerRight: () => (
-            <Pressable onPress={addDocument} hitSlop={12} accessibilityLabel="Add document">
-              <Ionicons name="add" size={28} color={colors.primary} />
-            </Pressable>
+            <IconButton icon="add" label="Add document" onPress={addDocument} size={36} />
           ),
         }}
       />
@@ -95,15 +111,11 @@ export default function DocumentsScreen() {
           }
           renderItem={({ item }) => (
             <Card onPress={() => void open(item)} style={styles.row}>
-              <View style={styles.icon}>
-                <Ionicons
-                  name={
-                    item.mime_type === 'application/pdf' ? 'document-text-outline' : 'image-outline'
-                  }
-                  size={22}
-                  color={colors.primary}
-                />
-              </View>
+              <IconTile
+                icon={DOCUMENT_TYPE_VISUALS[item.document_type].icon}
+                accent={DOCUMENT_TYPE_VISUALS[item.document_type].accent}
+                size={44}
+              />
               <View style={styles.body}>
                 <Text style={typography.bodyStrong}>
                   {DOCUMENT_TYPE_LABELS[item.document_type]}
@@ -116,28 +128,34 @@ export default function DocumentsScreen() {
                     {item.description}
                   </Text>
                 ) : null}
-                <Text style={typography.caption}>
-                  {formatFileSize(item.file_size)} · {formatDate(item.created_at)} ·{' '}
-                  {DOCUMENT_STATUS_LABELS[item.status]}
-                </Text>
+                <View style={styles.metaRow}>
+                  <Text style={typography.caption}>
+                    {formatFileSize(item.file_size)} · {formatDate(item.created_at)}
+                  </Text>
+                  <Badge
+                    label={DOCUMENT_STATUS_LABELS[item.status]}
+                    tone={DOC_TONES[item.status]}
+                  />
+                </View>
               </View>
               {opening === item.id ? (
                 <ActivityIndicator color={colors.primary} />
               ) : (
                 <Pressable
-                  onPress={() => confirmDelete(item)}
+                  onPress={() => void confirmDelete(item)}
                   hitSlop={12}
                   accessibilityRole="button"
                   accessibilityLabel={`Delete ${item.file_name}`}
                 >
-                  <Ionicons name="trash-outline" size={20} color={colors.textSubtle} />
+                  <Icon name="delete" size={19} color={colors.textSubtle} />
                 </Pressable>
               )}
             </Card>
           )}
           ListEmptyComponent={
             <EmptyState
-              icon="folder-open-outline"
+              icon="folder"
+              accent="amber"
               title="No documents yet"
               message="Keep sale deeds, tax receipts and other papers for this property in one place."
               action={<Button title="Add Document" icon="add" onPress={addDocument} />}
@@ -155,7 +173,7 @@ export default function DocumentsScreen() {
         <SafeAreaView style={styles.viewer}>
           <View style={styles.viewerBar}>
             <Pressable onPress={() => setImageUrl(null)} hitSlop={12} accessibilityLabel="Close">
-              <Ionicons name="close" size={28} color="#FFFFFF" />
+              <Icon name="close" size={26} color="#FFFFFF" />
             </Pressable>
           </View>
           {imageUrl ? (
@@ -171,15 +189,8 @@ const styles = StyleSheet.create({
   list: { padding: space.lg },
   empty: { flexGrow: 1 },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-  icon: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  body: { flex: 1, gap: 2 },
+  body: { flex: 1, gap: 3 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' },
   viewer: { flex: 1, backgroundColor: '#000000' },
   viewerBar: { flexDirection: 'row', justifyContent: 'flex-end', padding: space.lg },
   viewerImage: { flex: 1 },

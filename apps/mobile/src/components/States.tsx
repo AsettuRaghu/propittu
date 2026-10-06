@@ -1,11 +1,11 @@
-import { Ionicons } from '@expo/vector-icons';
-import type { ComponentProps, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { ApiError } from '@/api/client';
 import { errorMessage } from '@/lib/errors';
+import { colors, space, typography, type Accent } from '@/theme';
+import type { IconName } from './Icon';
 import { LimitedAccessState } from './PlanGate';
-import { colors, space, typography } from '@/theme';
-import { Button } from './ui';
+import { Button, IconTile } from './ui';
 
 /*
  * PRODUCT_SPEC.md §40: "Every asynchronous operation should have a
@@ -26,11 +26,17 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
   if (error instanceof ApiError && error.code === 'LIMITED_ACCESS') return <LimitedAccessState />;
   return (
     <View style={styles.center}>
-      <Ionicons name="cloud-offline-outline" size={40} color={colors.textSubtle} />
+      <IconTile icon="error" accent="coral" size={64} />
       <Text style={[typography.heading, styles.text]}>Couldn&apos;t load this</Text>
       <Text style={[typography.small, styles.text]}>{errorMessage(error)}</Text>
       {onRetry ? (
-        <Button title="Try again" variant="secondary" onPress={onRetry} style={styles.action} />
+        <Button
+          title="Try again"
+          icon="refresh"
+          variant="secondary"
+          onPress={onRetry}
+          style={styles.action}
+        />
       ) : null}
     </View>
   );
@@ -41,19 +47,21 @@ export function EmptyState({
   title,
   message,
   action,
+  accent = 'indigo',
 }: {
-  icon: ComponentProps<typeof Ionicons>['name'];
+  icon: IconName;
   title: string;
   message?: string;
   action?: ReactNode;
+  accent?: Accent;
 }) {
   return (
     <View style={styles.center}>
-      <View style={styles.iconCircle}>
-        <Ionicons name={icon} size={32} color={colors.primary} />
-      </View>
-      <Text style={[typography.heading, styles.text]}>{title}</Text>
-      {message ? <Text style={[typography.small, styles.text]}>{message}</Text> : null}
+      <IconTile icon={icon} accent={accent} size={72} />
+      <Text style={[typography.title, styles.text]}>{title}</Text>
+      {message ? (
+        <Text style={[typography.small, styles.text, styles.message]}>{message}</Text>
+      ) : null}
       {action ? <View style={styles.action}>{action}</View> : null}
     </View>
   );
@@ -68,14 +76,6 @@ const styles = StyleSheet.create({
     gap: space.sm,
   },
   text: { textAlign: 'center' },
+  message: { maxWidth: 300 },
   action: { marginTop: space.md, alignSelf: 'stretch' },
-  iconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: space.sm,
-  },
 });

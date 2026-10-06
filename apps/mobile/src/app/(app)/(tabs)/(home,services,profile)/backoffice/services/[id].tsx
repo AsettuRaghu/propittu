@@ -18,7 +18,7 @@ export default function BackofficeServiceScreen() {
   if (isPending) return <LoadingState />;
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
   const service = data.find((s) => s.id === id);
-  if (!service) return <EmptyState icon="construct-outline" title="Service not found" />;
+  if (!service) return <EmptyState icon="services" title="Service not found" />;
   return <ServiceForm service={service} />;
 }
 

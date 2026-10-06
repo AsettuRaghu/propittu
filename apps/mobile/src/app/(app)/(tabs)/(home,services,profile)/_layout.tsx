@@ -27,8 +27,8 @@ export const unstable_settings = {
 const SCREENS: { name: string; options: Record<string, unknown> }[] = [
   // Tab roots
   { name: 'index', options: { headerShown: false, title: 'Home' } },
-  { name: 'services/index', options: { title: 'Services' } },
-  { name: 'profile', options: { title: 'Profile' } },
+  { name: 'services/index', options: { headerShown: false, title: 'Services' } },
+  { name: 'profile', options: { headerShown: false, title: 'Profile' } },
 
   { name: 'properties/new', options: { title: 'Add property' } },
   { name: 'properties/added', options: { headerShown: false, gestureEnabled: false } },
@@ -62,8 +62,9 @@ export default function TabStackLayout({ segment }: { segment?: string }) {
       initialRouteName={root}
       screenOptions={{
         headerTintColor: colors.primary,
-        headerTitleStyle: { color: colors.text, fontWeight: '600' },
-        headerStyle: { backgroundColor: colors.surface },
+        headerTitleStyle: { color: colors.text, fontWeight: '700', fontSize: 17 },
+        headerStyle: { backgroundColor: colors.background },
+        headerShadowVisible: false,
         headerBackButtonDisplayMode: 'minimal',
         contentStyle: { backgroundColor: colors.background },
       }}
