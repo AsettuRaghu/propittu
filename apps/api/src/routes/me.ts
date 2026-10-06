@@ -11,7 +11,7 @@ import { audit } from '../audit.js';
 import { HttpError, must, ok } from '../errors.js';
 import { logger } from '../logger.js';
 import { serviceClient } from '../supabase.js';
-import { aiAvailableFor } from '../ai/jobs.js';
+import { canStartReading } from '../ai/jobs.js';
 import { loadPlanState, planSummary } from '../plan.js';
 
 /** GET /me — Profile screen (§25) plus Account (M1) and staff status (M9). */
@@ -41,6 +41,7 @@ meRouter.get('/me', async (req, res) => {
       .eq('account_id', accountId),
     loadPlanState(db, accountId),
   ]);
+  const documentReading = await canStartReading(accountId);
 
   const row = must<ProfileRow | null>(profile);
   const acc = must<{ id: string; status: AccountStatus }>(account);
@@ -59,7 +60,7 @@ meRouter.get('/me', async (req, res) => {
     account: { id: acc.id, status: acc.status, role: accountRole },
     staff_role: staffRow?.is_active ? staffRow.role : null,
     plan: planSummary(plan),
-    features: { document_reading: aiAvailableFor(accountId) },
+    features: { document_reading: documentReading },
   };
 
   ok(res, data);

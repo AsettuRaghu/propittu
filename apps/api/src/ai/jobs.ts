@@ -84,6 +84,22 @@ export function aiAvailableFor(accountId: string): boolean {
   return env.AI_PILOT_ACCOUNTS.length === 0 || env.AI_PILOT_ACCOUNTS.includes(accountId);
 }
 
+/**
+ * Can this account start a reading right now? Switched on, in the pilot,
+ * daily readings left and the monthly budget not used up. Used by GET /me so
+ * the app offers the Sale Deed path only when it will actually work.
+ */
+export async function canStartReading(accountId: string): Promise<boolean> {
+  if (!aiAvailableFor(accountId) || !serviceClient) return false;
+  try {
+    await enforceDailyLimit(serviceClient, accountId);
+  } catch {
+    return false;
+  }
+  const spend = Number((await serviceClient.rpc('ai_month_spend_usd')).data ?? 0);
+  return spend < env.AI_MONTHLY_BUDGET_USD;
+}
+
 export function assertAiAvailable(accountId: string): void {
   if (!aiAvailableFor(accountId)) {
     throw new HttpError(503, 'AI_UNAVAILABLE', 'Pittu is not available yet.');
