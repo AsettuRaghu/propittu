@@ -11,6 +11,8 @@ import { logger } from './logger.js';
 export type NotificationEvent =
   | { type: 'service_request.status_changed'; requestId: string; status: string }
   | { type: 'visit_report.published'; requestId: string }
+  | { type: 'service_outcome.published'; requestId: string }
+  | { type: 'service_request.info_requested'; requestId: string; ticketId: string }
   | { type: 'payment.received'; orderId: string | null };
 
 export function notify(event: NotificationEvent): void {

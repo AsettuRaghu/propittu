@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   formatPrice,
   PREFERRED_SLOT_LABELS,
-  SERVICE_REQUEST_STATUS_LABELS,
+  requestStatusLabel,
   type ServiceRequestDetail,
 } from '@propittu/shared';
 import { PullRefresh } from '@/components/PullRefresh';
@@ -13,6 +13,7 @@ import { dialog, toast } from '@/components/Dialog';
 import { Icon, type IconName } from '@/components/Icon';
 import { ErrorState, LoadingState } from '@/components/States';
 import { Badge, Button, Card, IconTile, SectionTitle } from '@/components/ui';
+import { OutcomeView } from '@/components/OutcomeView';
 import { VisitReportView } from '@/components/VisitReportView';
 import { errorMessage } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
@@ -83,19 +84,21 @@ export default function ServiceRequestScreen() {
         </View>
         <View style={styles.heroRow}>
           <Badge
-            label={SERVICE_REQUEST_STATUS_LABELS[request.status]}
+            label={requestStatusLabel(request.status, request.fulfilment)}
             tone={STATUS_TONES[request.status]}
             icon={STATUS_ICONS[request.status]}
           />
           <Text style={styles.cost}>{costLabel(request)}</Text>
         </View>
-        {request.status_note ? (
+        {request.status_note && request.status !== 'awaiting_customer' ? (
           <View style={styles.note}>
             <Icon name="chat" size={16} color={colors.primary} />
             <Text style={[typography.body, styles.flex]}>{request.status_note}</Text>
           </View>
         ) : null}
       </Card>
+
+      {request.status === 'awaiting_customer' ? <NeedsYou request={request} /> : null}
 
       <PaymentCard request={request} />
 
@@ -116,6 +119,7 @@ export default function ServiceRequestScreen() {
       ) : null}
 
       {request.report ? <VisitReportView report={request.report} /> : null}
+      {request.outcome ? <OutcomeView outcome={request.outcome} /> : null}
 
       {submitted === '1' ? <Button title="Done" onPress={() => router.back()} /> : null}
       <View style={styles.actions}>
@@ -216,11 +220,39 @@ function PaymentCard({ request }: { request: ServiceRequestDetail }) {
       <View style={styles.payRow}>
         <IconTile icon="card" accent="sky" size={40} />
         <View style={styles.flex}>
-          <Text style={typography.bodyStrong}>Your visit is confirmed</Text>
+          <Text style={typography.bodyStrong}>
+            {request.fulfilment === 'assistance'
+              ? 'We’ve accepted your request'
+              : 'Your visit is confirmed'}
+          </Text>
           <Text style={typography.small}>Pay {price} securely by UPI or card.</Text>
         </View>
       </View>
       <Button title={`Pay ${price}`} icon="lock" onPress={start} loading={pay.isPending} />
+    </Card>
+  );
+}
+
+/** "Need info from you": what Propittu asked, and one tap to reply (with files). */
+function NeedsYou({ request }: { request: ServiceRequestDetail }) {
+  const ticket = request.info_ticket;
+  return (
+    <Card style={styles.needs}>
+      <View style={styles.payRow}>
+        <IconTile icon="chat" accent="coral" size={40} />
+        <View style={styles.flex}>
+          <Text style={typography.bodyStrong}>We need something from you</Text>
+          <Text style={typography.small}>Reply so we can carry on — you can attach files.</Text>
+        </View>
+      </View>
+      {request.status_note ? (
+        <View style={styles.ask}>
+          <Text style={typography.body}>{request.status_note}</Text>
+        </View>
+      ) : null}
+      {ticket ? (
+        <Button title="Reply" icon="chat" onPress={() => router.push(`/support/${ticket.id}`)} />
+      ) : null}
     </Card>
   );
 }
@@ -236,14 +268,20 @@ interface Step {
 
 function Timeline({ request }: { request: ServiceRequestDetail }) {
   const s = request.status;
-  const order = ['requested', 'confirmed', 'scheduled', 'in_progress', 'completed'];
-  const reached = (k: string) => s !== 'cancelled' && order.indexOf(s) >= order.indexOf(k);
+  const assistance = request.fulfilment === 'assistance';
+  const order = assistance
+    ? ['requested', 'confirmed', 'in_progress', 'completed']
+    : ['requested', 'confirmed', 'scheduled', 'in_progress', 'completed'];
+  // "Need info from you" sits on the "Working on it" step.
+  const at = s === 'awaiting_customer' ? 'in_progress' : s;
+  const reached = (k: string) => s !== 'cancelled' && order.indexOf(at) >= order.indexOf(k);
   const when = [
     request.preferred_date ? formatDate(request.preferred_date) : null,
     request.preferred_slot ? PREFERRED_SLOT_LABELS[request.preferred_slot] : null,
   ]
     .filter(Boolean)
     .join(' · ');
+  const result = request.report ? ' · report below' : request.outcome ? ' · outcome below' : '';
 
   const steps: Step[] = [
     {
@@ -260,27 +298,34 @@ function Timeline({ request }: { request: ServiceRequestDetail }) {
       detail: request.confirmed_at ? formatDate(request.confirmed_at) : 'Usually within a day',
       done: reached('confirmed'),
     },
-    {
-      key: 'scheduled',
-      icon: 'calendar',
-      title: 'Visit scheduled',
-      detail: request.scheduled_for ? formatDate(request.scheduled_for) : null,
-      done: reached('scheduled'),
-    },
+    ...(assistance
+      ? []
+      : [
+          {
+            key: 'scheduled',
+            icon: 'calendar' as const,
+            title: 'Visit scheduled',
+            detail: request.scheduled_for ? formatDate(request.scheduled_for) : null,
+            done: reached('scheduled'),
+          },
+        ]),
     {
       key: 'in_progress',
-      icon: 'bolt',
-      title: 'In progress',
-      detail: s === 'in_progress' ? 'Our team is on it' : null,
+      icon: s === 'awaiting_customer' ? 'chat' : 'bolt',
+      title: assistance ? 'Working on it' : 'In progress',
+      detail:
+        s === 'awaiting_customer'
+          ? 'Waiting for your reply'
+          : s === 'in_progress'
+            ? 'Our team is on it'
+            : null,
       done: reached('in_progress'),
     },
     {
       key: 'completed',
       icon: 'success',
       title: 'Completed',
-      detail: request.completed_at
-        ? `${formatDate(request.completed_at)}${request.report ? ' · report below' : ''}`
-        : null,
+      detail: request.completed_at ? `${formatDate(request.completed_at)}${result}` : null,
       done: reached('completed'),
     },
   ];
@@ -376,6 +421,8 @@ const styles = StyleSheet.create({
   },
   payTitle: { fontSize: 15, fontWeight: '800' },
   payCard: { gap: space.md },
+  needs: { gap: space.md, borderWidth: 1.5, borderColor: accents.coral.fg },
+  ask: { backgroundColor: colors.surfaceMuted, borderRadius: 14, padding: space.md },
   payRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   step: { flexDirection: 'row', gap: space.md },
   rail: { alignItems: 'center', width: 24 },

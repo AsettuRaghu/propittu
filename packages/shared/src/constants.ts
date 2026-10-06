@@ -143,6 +143,7 @@ export const SERVICE_REQUEST_STATUSES = [
   'confirmed',
   'scheduled',
   'in_progress',
+  'awaiting_customer',
   'completed',
   'cancelled',
 ] as const;
@@ -154,6 +155,7 @@ export const SERVICE_REQUEST_STATUS_LABELS: Record<ServiceRequestStatus, string>
   confirmed: 'Confirmed',
   scheduled: 'Scheduled',
   in_progress: 'In Progress',
+  awaiting_customer: 'Need info from you',
   completed: 'Completed',
   cancelled: 'Cancelled',
 };

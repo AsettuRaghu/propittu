@@ -15,7 +15,13 @@ import { HttpError, invalid, must, notFound, ok, uuidParam } from '../errors.js'
 import { assertOwnsProperty } from '../ownership.js';
 import { planOf, type PlanState } from '../plan.js';
 import { orderForRequest } from '../billing/orders.js';
-import { loadReport, REQUEST_COLUMNS, todayInIndia } from '../requests.js';
+import {
+  loadInfoTicket,
+  loadOutcome,
+  loadReport,
+  REQUEST_COLUMNS,
+  todayInIndia,
+} from '../requests.js';
 
 /**
  * Property Care & Services (M4).
@@ -29,7 +35,7 @@ import { loadReport, REQUEST_COLUMNS, todayInIndia } from '../requests.js';
 export const servicesRouter = Router();
 
 const SERVICE_COLUMNS =
-  'id, code, name, category, description, sort_order, price_paise, is_extra_available';
+  'id, code, name, category, description, sort_order, price_paise, is_extra_available, fulfilment';
 
 /** Included allowance left per service code for this Account (null = not included). */
 async function allowances(
@@ -107,9 +113,14 @@ async function loadRequest(
       .maybeSingle(),
   );
   if (!row) throw notFound('Service request');
-  // RLS shows the customer a report only once the request is Completed.
-  const [report, order] = await Promise.all([loadReport(db, id), orderForRequest(db, id)]);
-  return { ...row, report, order };
+  // RLS shows the customer a report / outcome only once the request is Completed.
+  const [report, outcome, infoTicket, order] = await Promise.all([
+    loadReport(db, id),
+    loadOutcome(db, id),
+    loadInfoTicket(db, id),
+    orderForRequest(db, id),
+  ]);
+  return { ...row, report, outcome, info_ticket: infoTicket, order };
 }
 
 /* GET /service-requests/:id — with the visit report, if any */

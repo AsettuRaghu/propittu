@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { SERVICE_REQUEST_STATUS_LABELS, type ServiceRequest } from '@propittu/shared';
+import { requestStatusLabel, type ServiceRequest } from '@propittu/shared';
 import { formatDate } from '@/lib/format';
 import { serviceVisual, STATUS_ICONS, STATUS_TONES } from '@/lib/icons';
 import { colors, space, typography } from '@/theme';
@@ -59,7 +59,7 @@ export function ServiceRequestCard({
 
       <View style={styles.bottom}>
         <Badge
-          label={SERVICE_REQUEST_STATUS_LABELS[request.status]}
+          label={requestStatusLabel(request.status, request.fulfilment)}
           tone={STATUS_TONES[request.status]}
           icon={STATUS_ICONS[request.status]}
         />

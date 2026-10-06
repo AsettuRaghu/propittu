@@ -3,7 +3,7 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   PROPERTY_TYPE_LABELS,
-  SERVICE_REQUEST_STATUS_LABELS,
+  requestStatusLabel,
   type CompletionItem,
   type PropertyDetail,
 } from '@propittu/shared';
@@ -246,7 +246,7 @@ function RecentRequests({ property }: { property: PropertyDetail }) {
                 <Text style={typography.caption}>{formatDate(r.created_at)}</Text>
               </View>
               <Badge
-                label={SERVICE_REQUEST_STATUS_LABELS[r.status]}
+                label={requestStatusLabel(r.status, r.fulfilment)}
                 tone={STATUS_TONES[r.status]}
               />
             </Pressable>

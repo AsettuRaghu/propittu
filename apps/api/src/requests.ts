@@ -1,6 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   STORAGE_BUCKETS,
+  type DocumentType,
+  type OutcomeFile,
+  type RequestInfoThread,
+  type ServiceOutcome,
   type VisitCondition,
   type VisitMedia,
   type VisitReport,
@@ -14,7 +18,7 @@ import { signDownloads } from './storage.js';
  */
 
 export const REQUEST_COLUMNS =
-  'id, reference, status, description, coverage, price_paise, preferred_date, preferred_slot, scheduled_for, ' +
+  'id, reference, status, fulfilment, description, coverage, price_paise, preferred_date, preferred_slot, scheduled_for, ' +
   'status_note, confirmed_at, completed_at, cancelled_at, cancelled_by, created_at, updated_at, ' +
   'service:services(id, code, name, category), ' +
   'property:properties(id, name, city)';
@@ -88,6 +92,88 @@ export async function loadReport(
     updated_at: row.updated_at,
     media,
   };
+}
+
+interface OutcomeRow {
+  id: string;
+  summary: string;
+  findings: string;
+  reference_number: string | null;
+  next_due_date: string | null;
+  updated_at: string;
+  files: {
+    id: string;
+    file_name: string;
+    mime_type: string;
+    file_size: number;
+    document_type: DocumentType | null;
+    storage_path: string;
+    upload_status: 'pending' | 'ready';
+    property_document_id: string | null;
+    created_at: string;
+  }[];
+}
+
+/** The outcome summary (paperwork help) with signed file URLs (ready files only). */
+export async function loadOutcome(
+  db: SupabaseClient,
+  requestId: string,
+): Promise<ServiceOutcome | null> {
+  const row = must<OutcomeRow | null>(
+    await db
+      .from('service_outcomes')
+      .select(
+        'id, summary, findings, reference_number, next_due_date, updated_at, ' +
+          'files:service_outcome_files(id, file_name, mime_type, file_size, document_type, ' +
+          'storage_path, upload_status, property_document_id, created_at)',
+      )
+      .eq('service_request_id', requestId)
+      .maybeSingle(),
+  );
+  if (!row) return null;
+  const ready = row.files
+    .filter((f) => f.upload_status === 'ready')
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const urls = await signDownloads(
+    db,
+    STORAGE_BUCKETS.documents,
+    ready.map((f) => f.storage_path),
+  );
+  const files: OutcomeFile[] = ready.map((f) => ({
+    id: f.id,
+    file_name: f.file_name,
+    mime_type: f.mime_type,
+    file_size: f.file_size,
+    document_type: f.document_type,
+    saved_to_documents: f.property_document_id !== null,
+    url: urls.get(f.storage_path) ?? null,
+  }));
+  return {
+    id: row.id,
+    summary: row.summary,
+    findings: row.findings,
+    reference_number: row.reference_number,
+    next_due_date: row.next_due_date,
+    updated_at: row.updated_at,
+    files,
+  };
+}
+
+/** The ticket where staff asked the customer for information, if any. */
+export async function loadInfoTicket(
+  db: SupabaseClient,
+  requestId: string,
+): Promise<RequestInfoThread | null> {
+  return must<RequestInfoThread | null>(
+    await db
+      .from('support_tickets')
+      .select('id, reference')
+      .eq('service_request_id', requestId)
+      .neq('status', 'closed')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  );
 }
 
 /** Today's date in India (YYYY-MM-DD), for "not in the past" checks. */

@@ -10,9 +10,13 @@ import {
   grantPlanSchema,
   LIMIT_LABELS,
   OPEN_REQUEST_STATUSES,
+  outcomeFileIntentSchema,
+  outcomeSchema,
+  requestFulfilmentSchema,
+  requestInfoSchema,
+  requestStatusLabel,
+  requestTransitions,
   SERVICE_REQUEST_STATUSES,
-  SERVICE_REQUEST_STATUS_LABELS,
-  SERVICE_REQUEST_TRANSITIONS,
   staffCan,
   staffRequestUpdateSchema,
   STORAGE_BUCKETS,
@@ -39,6 +43,7 @@ import {
   type StaffPermission,
   type StaffRole,
   type StaffService,
+  type OutcomeFile,
   type UploadIntent,
   type VisitMedia,
 } from '@propittu/shared';
@@ -50,7 +55,7 @@ import { describeAccountPlan } from '../plan.js';
 import { ORDER_COLUMNS, orderForRequest, toOrder, type OrderRow } from '../billing/orders.js';
 import { notify } from '../notify.js';
 import { confirmAttachment, loadMessages, startAttachment, TICKET_COLUMNS } from './support.js';
-import { loadReport, REQUEST_COLUMNS } from '../requests.js';
+import { loadInfoTicket, loadOutcome, loadReport, REQUEST_COLUMNS } from '../requests.js';
 import {
   removeObjects,
   signDownload,
@@ -389,9 +394,11 @@ async function loadRequestRow(db: SupabaseClient, id: string): Promise<RequestRo
 
 async function loadRequestDetail(db: SupabaseClient, id: string): Promise<BackofficeRequestDetail> {
   const row = await loadRequestRow(db, id);
-  const [[request], report, address, order] = await Promise.all([
+  const [[request], report, outcome, infoTicket, address, order] = await Promise.all([
     withCustomers(db, [row]),
     loadReport(db, id),
+    loadOutcome(db, id),
+    loadInfoTicket(db, id),
     row.property
       ? db
           .from('properties')
@@ -412,7 +419,14 @@ async function loadRequestDetail(db: SupabaseClient, id: string): Promise<Backof
   const propertyAddress = a
     ? [a.address_line, a.city, a.state, a.pincode].filter(Boolean).join(', ') || null
     : null;
-  return { ...(request as BackofficeRequest), report, property_address: propertyAddress, order };
+  return {
+    ...(request as BackofficeRequest),
+    report,
+    outcome,
+    info_ticket: infoTicket,
+    property_address: propertyAddress,
+    order,
+  };
 }
 
 /* GET /backoffice/requests?status=open|all|<status> */
@@ -442,11 +456,11 @@ backofficeRouter.post('/requests/:id/status', allow('requests.manage'), async (r
   const input = staffRequestUpdateSchema.parse(req.body);
   const current = await loadRequestRow(ctx.db, id);
 
-  if (!SERVICE_REQUEST_TRANSITIONS[current.status].includes(input.status)) {
+  if (!requestTransitions(current.fulfilment, current.status).includes(input.status)) {
     throw new HttpError(
       409,
       'CONFLICT',
-      `A ${SERVICE_REQUEST_STATUS_LABELS[current.status]} request cannot be moved to ${SERVICE_REQUEST_STATUS_LABELS[input.status]}.`,
+      `A ${requestStatusLabel(current.status, current.fulfilment)} request cannot be moved to ${requestStatusLabel(input.status, current.fulfilment)}.`,
     );
   }
 
@@ -470,6 +484,9 @@ backofficeRouter.post('/requests/:id/status', allow('requests.manage'), async (r
   if (input.status === 'completed' && detail.report) {
     notify({ type: 'visit_report.published', requestId: id });
   }
+  if (input.status === 'completed' && detail.outcome) {
+    notify({ type: 'service_outcome.published', requestId: id });
+  }
   ok(res, detail);
 });
 
@@ -480,6 +497,13 @@ backofficeRouter.put('/requests/:id/report', allow('requests.manage'), async (re
   const input = visitReportSchema.parse(req.body);
   const request = await loadRequestRow(ctx.db, id);
   assertReportEditable(request.status);
+  if (request.fulfilment !== 'visit') {
+    throw new HttpError(
+      409,
+      'CONFLICT',
+      'Paperwork requests get an outcome summary, not a visit report.',
+    );
+  }
 
   const existing = must<{ id: string } | null>(
     await ctx.db.from('visit_reports').select('id').eq('service_request_id', id).maybeSingle(),
@@ -684,6 +708,269 @@ backofficeRouter.delete(
 );
 
 /* ================================================================== *
+ * Paperwork help: ask the customer, outcome summary, result files
+ * ================================================================== */
+
+/*
+ * POST /backoffice/requests/:id/ask {message} — "Need info from you".
+ * Asks in the request's support ticket (created on first use); the
+ * customer's reply there moves the request back to "Working on it".
+ */
+backofficeRouter.post('/requests/:id/ask', allow('requests.manage'), async (req, res) => {
+  const ctx = auth(req);
+  const id = uuidParam(req.params.id, 'Service request');
+  const { message } = requestInfoSchema.parse(req.body);
+  const current = await loadRequestRow(ctx.db, id);
+  if (!requestTransitions(current.fulfilment, current.status).includes('awaiting_customer')) {
+    throw new HttpError(
+      409,
+      'CONFLICT',
+      current.fulfilment === 'visit'
+        ? 'On-site requests do not use “Need info from you”. Message the customer from Support instead.'
+        : `A ${requestStatusLabel(current.status, current.fulfilment)} request cannot wait on the customer.`,
+    );
+  }
+  const ticketId = must<string>(
+    await ctx.db.rpc('staff_request_info', { p_request: id, p_message: message }),
+  );
+  await staffAudit(
+    ctx,
+    'staff.service_request.info_requested',
+    current.account_id,
+    { type: 'service_request', id },
+    { ticket_id: ticketId },
+  );
+  notify({ type: 'service_request.info_requested', requestId: id, ticketId });
+  ok(res, await loadRequestDetail(ctx.db, id));
+});
+
+/* POST /backoffice/requests/:id/fulfilment {fulfilment} — switch on-site ⇄ paperwork */
+backofficeRouter.post('/requests/:id/fulfilment', allow('requests.manage'), async (req, res) => {
+  const ctx = auth(req);
+  const id = uuidParam(req.params.id, 'Service request');
+  const { fulfilment } = requestFulfilmentSchema.parse(req.body);
+  const current = await loadRequestRow(ctx.db, id);
+  if (current.fulfilment !== fulfilment) {
+    const { error } = await ctx.db.rpc('staff_set_request_fulfilment', {
+      p_request: id,
+      p_fulfilment: fulfilment,
+    });
+    if (error?.code === '23514') throw new HttpError(409, 'CONFLICT', error.message);
+    must({ data: null, error });
+    await staffAudit(
+      ctx,
+      'staff.service_request.fulfilment_changed',
+      current.account_id,
+      { type: 'service_request', id },
+      { from: current.fulfilment, to: fulfilment },
+    );
+  }
+  ok(res, await loadRequestDetail(ctx.db, id));
+});
+
+async function assistanceRequest(db: SupabaseClient, requestId: string) {
+  const request = await loadRequestRow(db, requestId);
+  assertReportEditable(request.status);
+  if (request.fulfilment !== 'assistance') {
+    throw new HttpError(
+      409,
+      'CONFLICT',
+      'On-site requests get a visit report, not an outcome summary.',
+    );
+  }
+  return request;
+}
+
+/* PUT /backoffice/requests/:id/outcome — create or update the outcome summary (draft) */
+backofficeRouter.put('/requests/:id/outcome', allow('requests.manage'), async (req, res) => {
+  const ctx = auth(req);
+  const id = uuidParam(req.params.id, 'Service request');
+  const input = outcomeSchema.parse(req.body);
+  const request = await assistanceRequest(ctx.db, id);
+
+  const existing = must<{ id: string } | null>(
+    await ctx.db.from('service_outcomes').select('id').eq('service_request_id', id).maybeSingle(),
+  );
+  if (existing) {
+    must(
+      await ctx.db
+        .from('service_outcomes')
+        .update({ ...input, updated_by: ctx.userId })
+        .eq('id', existing.id),
+    );
+  } else {
+    must(
+      await ctx.db.from('service_outcomes').insert({
+        ...input,
+        service_request_id: id,
+        account_id: request.account_id,
+        property_id: request.property?.id ?? null,
+        created_by: ctx.userId,
+      }),
+    );
+  }
+  await staffAudit(ctx, 'staff.service_outcome.saved', request.account_id, {
+    type: 'service_request',
+    id,
+  });
+  ok(res, await loadRequestDetail(ctx.db, id));
+});
+
+const DOC_EXT: Record<string, string> = {
+  'application/pdf': 'pdf',
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+};
+
+interface OutcomeFileRow {
+  id: string;
+  outcome_id: string;
+  account_id: string;
+  file_name: string;
+  storage_path: string;
+  mime_type: string;
+  file_size: number;
+  document_type: OutcomeFile['document_type'];
+  upload_status: 'pending' | 'ready';
+  property_document_id: string | null;
+}
+const OUTCOME_FILE_COLUMNS =
+  'id, outcome_id, account_id, file_name, storage_path, mime_type, file_size, document_type, ' +
+  'upload_status, property_document_id';
+
+async function outcomeFor(db: SupabaseClient, requestId: string) {
+  const request = await assistanceRequest(db, requestId);
+  const outcome = must<{ id: string; account_id: string } | null>(
+    await db
+      .from('service_outcomes')
+      .select('id, account_id')
+      .eq('service_request_id', requestId)
+      .maybeSingle(),
+  );
+  if (!outcome)
+    throw new HttpError(409, 'CONFLICT', 'Save the outcome summary before adding files.');
+  return { request, outcome };
+}
+
+async function outcomeFileFor(
+  db: SupabaseClient,
+  requestId: string,
+  fileId: string,
+): Promise<OutcomeFileRow> {
+  const { outcome } = await outcomeFor(db, requestId);
+  const row = must<OutcomeFileRow | null>(
+    await db
+      .from('service_outcome_files')
+      .select(OUTCOME_FILE_COLUMNS)
+      .eq('id', fileId)
+      .eq('outcome_id', outcome.id)
+      .maybeSingle(),
+  );
+  if (!row) throw notFound('File');
+  return row;
+}
+
+/* POST /backoffice/requests/:id/outcome/files/intent {file_name, mime_type, file_size, document_type} */
+backofficeRouter.post(
+  '/requests/:id/outcome/files/intent',
+  allow('requests.manage'),
+  async (req, res) => {
+    const ctx = auth(req);
+    const id = uuidParam(req.params.id, 'Service request');
+    const input = outcomeFileIntentSchema.parse(req.body);
+    const { request, outcome } = await outcomeFor(ctx.db, id);
+
+    // Under the property folder, so completing can save it into Documents as is.
+    const folder = request.property
+      ? `${outcome.account_id}/${request.property.id}`
+      : outcome.account_id;
+    const storagePath = `${folder}/outcomes/${id}/${randomUUID()}.${DOC_EXT[input.mime_type]}`;
+    const row = must<{ id: string }>(
+      await ctx.db
+        .from('service_outcome_files')
+        .insert({
+          outcome_id: outcome.id,
+          account_id: outcome.account_id,
+          file_name: input.file_name,
+          storage_path: storagePath,
+          mime_type: input.mime_type,
+          file_size: input.file_size,
+          document_type: request.property ? input.document_type : null,
+          created_by: ctx.userId,
+        })
+        .select('id')
+        .single(),
+    );
+
+    let uploadUrl: string;
+    try {
+      uploadUrl = await signUpload(ctx.db, STORAGE_BUCKETS.documents, storagePath);
+    } catch (err) {
+      await ctx.db.from('service_outcome_files').delete().eq('id', row.id);
+      throw err;
+    }
+    const data: UploadIntent = {
+      id: row.id,
+      upload_url: uploadUrl,
+      expires_in: SIGNED_UPLOAD_TTL_SECONDS,
+    };
+    ok(res, data, 201);
+  },
+);
+
+/* POST /backoffice/requests/:id/outcome/files/:fileId/confirm — idempotent */
+backofficeRouter.post(
+  '/requests/:id/outcome/files/:fileId/confirm',
+  allow('requests.manage'),
+  async (req, res) => {
+    const ctx = auth(req);
+    const id = uuidParam(req.params.id, 'Service request');
+    const row = await outcomeFileFor(ctx.db, id, uuidParam(req.params.fileId, 'File'));
+    if (row.upload_status !== 'ready') {
+      try {
+        await verifyUploaded(ctx.db, STORAGE_BUCKETS.documents, row.storage_path, row.mime_type);
+      } catch (err) {
+        if (err instanceof HttpError && err.code === 'UNSUPPORTED_FILE_TYPE') {
+          await ctx.db.from('service_outcome_files').delete().eq('id', row.id);
+        }
+        throw err;
+      }
+      must(
+        await ctx.db
+          .from('service_outcome_files')
+          .update({ upload_status: 'ready' })
+          .eq('id', row.id),
+      );
+      await staffAudit(ctx, 'staff.outcome_file.uploaded', row.account_id, {
+        type: 'outcome_file',
+        id: row.id,
+      });
+    }
+    ok(res, await loadRequestDetail(ctx.db, id));
+  },
+);
+
+/* DELETE /backoffice/requests/:id/outcome/files/:fileId */
+backofficeRouter.delete(
+  '/requests/:id/outcome/files/:fileId',
+  allow('requests.manage'),
+  async (req, res) => {
+    const ctx = auth(req);
+    const id = uuidParam(req.params.id, 'Service request');
+    const row = await outcomeFileFor(ctx.db, id, uuidParam(req.params.fileId, 'File'));
+    await removeObjects(ctx.db, STORAGE_BUCKETS.documents, [row.storage_path]).catch(
+      () => undefined,
+    );
+    must(await ctx.db.from('service_outcome_files').delete().eq('id', row.id));
+    await staffAudit(ctx, 'staff.outcome_file.deleted', row.account_id, {
+      type: 'outcome_file',
+      id: row.id,
+    });
+    res.status(204).end();
+  },
+);
+
+/* ================================================================== *
  * Properties and document review
  * ================================================================== */
 
@@ -780,7 +1067,7 @@ backofficeRouter.post('/documents/:id/status', allow('documents.review'), async 
  * ================================================================== */
 
 const STAFF_SERVICE_COLUMNS =
-  'id, code, name, category, description, sort_order, price_paise, is_extra_available, is_active';
+  'id, code, name, category, description, sort_order, price_paise, is_extra_available, fulfilment, is_active';
 
 /* GET /backoffice/services — including inactive ones */
 backofficeRouter.get('/services', async (req, res) => {

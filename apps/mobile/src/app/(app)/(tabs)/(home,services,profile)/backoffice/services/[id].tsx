@@ -1,12 +1,18 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
-import { staffCan, type StaffService } from '@propittu/shared';
+import {
+  SERVICE_FULFILMENT_LABELS,
+  SERVICE_FULFILMENTS,
+  staffCan,
+  type ServiceFulfilment,
+  type StaffService,
+} from '@propittu/shared';
 import { useBoServices, useBoUpdateService } from '@/api/backoffice';
 import { useMe } from '@/api/queries';
 import { TextField } from '@/components/Field';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
-import { Banner, Button, Card } from '@/components/ui';
+import { Banner, Button, Card, Segmented } from '@/components/ui';
 import { errorMessage, fieldErrors } from '@/lib/errors';
 import { colors, space, typography } from '@/theme';
 
@@ -34,6 +40,7 @@ function ServiceForm({ service }: { service: StaffService }) {
   );
   const [isActive, setIsActive] = useState(service.is_active);
   const [isExtra, setIsExtra] = useState(service.is_extra_available);
+  const [fulfilment, setFulfilment] = useState<ServiceFulfilment>(service.fulfilment);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -52,6 +59,7 @@ function ServiceForm({ service }: { service: StaffService }) {
         price_paise: rupees === null ? null : Math.round(rupees * 100),
         is_active: isActive,
         is_extra_available: isExtra,
+        fulfilment,
       },
       {
         onSuccess: () => router.back(),
@@ -101,6 +109,23 @@ function ServiceForm({ service }: { service: StaffService }) {
           error={errors.price_paise}
           editable={canEdit}
         />
+        <View style={styles.type}>
+          <Text style={typography.overline}>How it is delivered</Text>
+          <Segmented
+            options={SERVICE_FULFILMENTS.map((f) => ({
+              value: f,
+              label: SERVICE_FULFILMENT_LABELS[f],
+            }))}
+            value={fulfilment}
+            onChange={(v) => canEdit && setFulfilment(v)}
+          />
+          <Text style={typography.caption}>
+            {fulfilment === 'visit'
+              ? 'Customer picks a date; staff schedule a visit and finish with a visit report and photos.'
+              : 'No date or visit; staff can ask the customer for information and finish with an outcome and files saved to Documents.'}{' '}
+            New requests use this; existing ones keep theirs.
+          </Text>
+        </View>
         <Toggle
           label="Active (shown to customers)"
           value={isActive}
@@ -144,6 +169,7 @@ function Toggle({
 }
 
 const styles = StyleSheet.create({
+  type: { gap: space.sm },
   content: { padding: space.lg, gap: space.xl, paddingBottom: space.xxl },
   card: { gap: space.lg },
   toggle: { flexDirection: 'row', alignItems: 'center', gap: space.md },

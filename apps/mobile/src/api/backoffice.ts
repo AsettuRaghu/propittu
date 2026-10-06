@@ -7,7 +7,9 @@ import type {
   BackofficeRequest,
   BackofficeRequestDetail,
   DocumentStatus,
+  OutcomeInput,
   PropertyDocument,
+  ServiceFulfilment,
   StaffRequestUpdateInput,
   StaffService,
   UpdateServiceInput,
@@ -114,6 +116,53 @@ export function useBoSaveReport(id: string) {
       qc.setQueryData(boKeys.request(id), detail);
       refresh();
     },
+  });
+}
+
+/** Shared shape for request mutations that answer with the fresh detail. */
+function useRequestMutation<T>(id: string, fn: (input: T) => Promise<BackofficeRequestDetail>) {
+  const qc = useQueryClient();
+  const refresh = useRefresh();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: (detail) => {
+      qc.setQueryData(boKeys.request(id), detail);
+      refresh();
+    },
+  });
+}
+
+/** "Need info from you": asks in the request's support thread. */
+export const useBoAskCustomer = (id: string) =>
+  useRequestMutation(id, (message: string) =>
+    api<BackofficeRequestDetail>(`/backoffice/requests/${id}/ask`, {
+      method: 'POST',
+      body: { message },
+    }),
+  );
+
+export const useBoSetFulfilment = (id: string) =>
+  useRequestMutation(id, (fulfilment: ServiceFulfilment) =>
+    api<BackofficeRequestDetail>(`/backoffice/requests/${id}/fulfilment`, {
+      method: 'POST',
+      body: { fulfilment },
+    }),
+  );
+
+export const useBoSaveOutcome = (id: string) =>
+  useRequestMutation(id, (input: OutcomeInput) =>
+    api<BackofficeRequestDetail>(`/backoffice/requests/${id}/outcome`, {
+      method: 'PUT',
+      body: input,
+    }),
+  );
+
+export function useBoDeleteOutcomeFile(requestId: string) {
+  const refresh = useRefresh();
+  return useMutation({
+    mutationFn: (fileId: string) =>
+      api<void>(`/backoffice/requests/${requestId}/outcome/files/${fileId}`, { method: 'DELETE' }),
+    onSuccess: refresh,
   });
 }
 

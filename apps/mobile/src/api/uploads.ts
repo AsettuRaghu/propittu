@@ -285,6 +285,27 @@ export async function uploadVisitMedia(
   return api<VisitMedia>(`${base}/${intent.id}/confirm`, { method: 'POST' });
 }
 
+/** Backoffice: a result file on a paperwork request's outcome (saved to Documents as `documentType`). */
+export async function uploadOutcomeFile(
+  requestId: string,
+  file: LocalFile,
+  documentType: DocumentType | null,
+  onProgress?: ProgressFn,
+): Promise<void> {
+  const base = `/backoffice/requests/${requestId}/outcome/files`;
+  const intent = await api<UploadIntent>(`${base}/intent`, {
+    method: 'POST',
+    body: {
+      file_name: file.name,
+      mime_type: file.mimeType,
+      file_size: file.size,
+      document_type: documentType,
+    },
+  });
+  await putToSignedUrl(intent.upload_url, file, onProgress);
+  await api<unknown>(`${base}/${intent.id}/confirm`, { method: 'POST' });
+}
+
 /** Plays a video in the in-app browser (Safari/Chrome play MP4/MOV natively). */
 export async function playVideo(video: Pick<PropertyVideo, 'url'>): Promise<void> {
   if (!video.url) throw new ApiError(0, 'NETWORK', 'This video is not available right now.');

@@ -5,7 +5,7 @@ import {
   formatIndianMobile,
   formatPrice,
   ORDER_DISPLAY_LABELS,
-  SERVICE_REQUEST_STATUS_LABELS,
+  requestStatusLabel,
   TICKET_CATEGORY_LABELS,
   TICKET_STATUS_LABELS,
   type BackofficeOrder,
@@ -174,7 +174,7 @@ function RequestRow({ request }: { request: BackofficeRequest }) {
       <View style={styles.row}>
         <Text style={typography.caption}>{request.reference}</Text>
         <Badge
-          label={SERVICE_REQUEST_STATUS_LABELS[request.status]}
+          label={requestStatusLabel(request.status, request.fulfilment)}
           tone={STATUS_TONES[request.status]}
         />
       </View>

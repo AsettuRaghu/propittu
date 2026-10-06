@@ -102,7 +102,7 @@ export default function RequestServiceScreen() {
     return <ServicePicker services={services.data} onPick={(s) => setServiceId(s.id)} />;
   }
 
-  const onSite = isOnSiteService(service.category);
+  const onSite = isOnSiteService(service);
   const v = serviceVisual(service.code, service.category);
 
   const submit = () => {

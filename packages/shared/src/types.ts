@@ -1,5 +1,6 @@
 import type { CompletionItem, PropertyCompletion } from './completion';
 import type { PlanSummary } from './plans';
+import type { ServiceFulfilment } from './services';
 import type {
   AccountRole,
   AccountStatus,
@@ -107,6 +108,7 @@ export interface PropertySummary {
     id: string;
     reference: string;
     status: ServiceRequestStatus;
+    fulfilment: ServiceFulfilment;
     service_name: string;
     scheduled_for: string | null;
     preferred_date: string | null;
@@ -190,6 +192,8 @@ export interface Service {
   price_paise: number | null;
   /** Can be requested as a paid Extra when not Included in the Plan. */
   is_extra_available: boolean;
+  /** How it is delivered: an on-site visit, or paperwork help. */
+  fulfilment: ServiceFulfilment;
 }
 
 export interface ServiceRequest {
@@ -197,6 +201,8 @@ export interface ServiceRequest {
   /** Human-facing reference, e.g. "PR-000123" (§23). */
   reference: string;
   status: ServiceRequestStatus;
+  /** Copied from the service when opened; decides the steps and the result. */
+  fulfilment: ServiceFulfilment;
   description: string;
   created_at: string;
   updated_at: string;

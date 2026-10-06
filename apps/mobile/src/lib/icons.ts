@@ -3,6 +3,7 @@ import type {
   TicketStatus,
   PropertyType,
   ServiceCategory,
+  ServiceFulfilment,
   ServiceRequestStatus,
 } from '@propittu/shared';
 import type { IconName } from '@/components/Icon';
@@ -74,8 +75,9 @@ export function serviceVisual(
 }
 
 /** On-site services get a preferred date + time of day; paperwork does not. */
-export function isOnSiteService(category: ServiceCategory): boolean {
-  return category === 'property_care';
+/** On-site work gets a date and a visit; paperwork help does not. */
+export function isOnSiteService(service: { fulfilment: ServiceFulfilment }): boolean {
+  return service.fulfilment === 'visit';
 }
 
 export const DOCUMENT_TYPE_VISUALS: Record<DocumentType, { icon: IconName; accent: Accent }> = {
@@ -91,6 +93,7 @@ export const STATUS_TONES: Record<ServiceRequestStatus, Tone> = {
   confirmed: 'brand',
   scheduled: 'warning',
   in_progress: 'warning',
+  awaiting_customer: 'danger',
   completed: 'success',
   cancelled: 'neutral',
 };
@@ -100,6 +103,7 @@ export const STATUS_ICONS: Record<ServiceRequestStatus, IconName> = {
   confirmed: 'check',
   scheduled: 'calendar',
   in_progress: 'bolt',
+  awaiting_customer: 'chat',
   completed: 'success',
   cancelled: 'cancelled',
 };

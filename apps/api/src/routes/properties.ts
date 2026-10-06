@@ -8,6 +8,7 @@ import {
   type Property,
   type PropertyDetail,
   type PropertySummary,
+  type ServiceFulfilment,
   type ServiceRequestStatus,
   type ValueSource,
 } from '@propittu/shared';
@@ -104,7 +105,7 @@ propertiesRouter.get('/properties', async (req, res) => {
     db
       .from('service_requests')
       .select(
-        'id, reference, status, property_id, scheduled_for, preferred_date, service:services(name)',
+        'id, reference, status, fulfilment, property_id, scheduled_for, preferred_date, service:services(name)',
       )
       .eq('account_id', accountId)
       .in('status', OPEN_REQUEST_STATUSES)
@@ -122,6 +123,7 @@ propertiesRouter.get('/properties', async (req, res) => {
       id: string;
       reference: string;
       status: ServiceRequestStatus;
+      fulfilment: ServiceFulfilment;
       property_id: string | null;
       scheduled_for: string | null;
       preferred_date: string | null;
@@ -133,6 +135,7 @@ propertiesRouter.get('/properties', async (req, res) => {
       id: r.id,
       reference: r.reference,
       status: r.status,
+      fulfilment: r.fulfilment,
       service_name: r.service?.name ?? 'Service',
       scheduled_for: r.scheduled_for,
       preferred_date: r.preferred_date,

@@ -3,11 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
-import {
-  PROPERTY_TYPE_LABELS,
-  SERVICE_REQUEST_STATUS_LABELS,
-  type PropertySummary,
-} from '@propittu/shared';
+import { PROPERTY_TYPE_LABELS, requestStatusLabel, type PropertySummary } from '@propittu/shared';
 import { formatDate, formatLocation } from '@/lib/format';
 import { PROPERTY_TYPE_GRADIENTS, PROPERTY_TYPE_ICONS, STATUS_ICONS } from '@/lib/icons';
 import { goToCompletionStep } from '@/lib/propertySteps';
@@ -94,7 +90,7 @@ export function PropertyCard({
           <Attention
             icon={STATUS_ICONS[r.status]}
             accent="teal"
-            text={`${r.service_name} · ${SERVICE_REQUEST_STATUS_LABELS[r.status]}${
+            text={`${r.service_name} · ${requestStatusLabel(r.status, r.fulfilment)}${
               r.scheduled_for ? ` ${formatDate(r.scheduled_for)}` : ''
             }`}
             onPress={() => router.push(`/requests/${r.id}`)}

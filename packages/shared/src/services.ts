@@ -4,11 +4,16 @@ import {
   ALLOWED_PHOTO_MIME_TYPES,
   ALLOWED_VIDEO_MIME_TYPES,
   DOCUMENT_STATUSES,
+  ALLOWED_DOCUMENT_MIME_TYPES,
+  DOCUMENT_TYPES,
+  MAX_DOCUMENT_BYTES,
   MAX_PHOTO_BYTES,
   MAX_VIDEO_BYTES,
+  SERVICE_REQUEST_STATUS_LABELS,
   SERVICE_CATEGORIES,
   SERVICE_REQUEST_STATUSES,
   type AccountStatus,
+  type DocumentType,
   type ServiceRequestStatus,
   type StaffRole,
 } from './constants';
@@ -37,20 +42,67 @@ import type {
  * Lifecycle
  * ------------------------------------------------------------------ */
 
-export const SERVICE_REQUEST_TRANSITIONS: Record<ServiceRequestStatus, ServiceRequestStatus[]> = {
+/**
+ * How a service is delivered (2026-10-06):
+ *   visit       on-site: Requested → Confirmed → Scheduled → In progress →
+ *               Completed, with a visit report.
+ *   assistance  paperwork help: Requested → Accepted → Working on it ⇄
+ *               Need info from you → Completed, with an outcome summary and
+ *               result files saved to the property's Documents.
+ */
+export const SERVICE_FULFILMENTS = ['visit', 'assistance'] as const;
+export type ServiceFulfilment = (typeof SERVICE_FULFILMENTS)[number];
+export const SERVICE_FULFILMENT_LABELS: Record<ServiceFulfilment, string> = {
+  visit: 'On-site visit',
+  assistance: 'Paperwork help',
+};
+
+type Transitions = Record<ServiceRequestStatus, ServiceRequestStatus[]>;
+const VISIT_TRANSITIONS: Transitions = {
   requested: ['confirmed', 'cancelled'],
   confirmed: ['scheduled', 'in_progress', 'completed', 'cancelled'],
   scheduled: ['scheduled', 'in_progress', 'completed', 'cancelled'],
   in_progress: ['completed', 'cancelled'],
+  awaiting_customer: [],
   completed: [],
   cancelled: [],
 };
+const ASSISTANCE_TRANSITIONS: Transitions = {
+  requested: ['confirmed', 'cancelled'],
+  confirmed: ['in_progress', 'awaiting_customer', 'completed', 'cancelled'],
+  scheduled: [],
+  in_progress: ['awaiting_customer', 'completed', 'cancelled'],
+  awaiting_customer: ['in_progress', 'completed', 'cancelled'],
+  completed: [],
+  cancelled: [],
+};
+
+/** Mirrors request_transitions() in the database (the authority). */
+export function requestTransitions(
+  fulfilment: ServiceFulfilment,
+  status: ServiceRequestStatus,
+): ServiceRequestStatus[] {
+  return (fulfilment === 'assistance' ? ASSISTANCE_TRANSITIONS : VISIT_TRANSITIONS)[status];
+}
+
+/** Status wording that fits the kind of work (no "visit" talk for paperwork). */
+export function requestStatusLabel(
+  status: ServiceRequestStatus,
+  fulfilment: ServiceFulfilment = 'visit',
+): string {
+  if (fulfilment === 'assistance') {
+    if (status === 'confirmed') return 'Accepted';
+    if (status === 'in_progress') return 'Working on it';
+  }
+  return SERVICE_REQUEST_STATUS_LABELS[status];
+}
 
 export const OPEN_REQUEST_STATUSES: ServiceRequestStatus[] = [
   'requested',
   'confirmed',
   'scheduled',
   'in_progress',
+  'awaiting_customer',
 ];
 
 /** Staff-facing verbs for each target status. */
@@ -59,6 +111,7 @@ export const SERVICE_REQUEST_ACTION_LABELS: Record<ServiceRequestStatus, string>
   confirmed: 'Confirm',
   scheduled: 'Schedule',
   in_progress: 'Start',
+  awaiting_customer: 'Ask the customer',
   completed: 'Complete',
   cancelled: 'Cancel request',
 };
@@ -120,8 +173,43 @@ export interface VisitReport {
   media: VisitMedia[];
 }
 
+/* ------------------------------------------------------------------ *
+ * Paperwork help: outcome summary + result files
+ * ------------------------------------------------------------------ */
+
+export interface OutcomeFile {
+  id: string;
+  file_name: string;
+  mime_type: string;
+  file_size: number;
+  /** Saved into the property's Documents as this type on completion. */
+  document_type: DocumentType | null;
+  /** True once it has been saved into Documents. */
+  saved_to_documents: boolean;
+  /** Short-lived signed URL. */
+  url: string | null;
+}
+
+export interface ServiceOutcome {
+  id: string;
+  summary: string;
+  findings: string;
+  reference_number: string | null;
+  next_due_date: string | null;
+  updated_at: string;
+  files: OutcomeFile[];
+}
+
+/** The support ticket where staff asked the customer for information. */
+export interface RequestInfoThread {
+  id: string;
+  reference: string;
+}
+
 export interface ServiceRequestDetail extends ServiceRequest {
   report: VisitReport | null;
+  outcome: ServiceOutcome | null;
+  info_ticket: RequestInfoThread | null;
   /** Latest payment order for an Extra Service (null when none). */
   order: Order | null;
 }
@@ -174,6 +262,8 @@ export interface BackofficeRequest extends ServiceRequest {
 
 export interface BackofficeRequestDetail extends BackofficeRequest {
   report: VisitReport | null;
+  outcome: ServiceOutcome | null;
+  info_ticket: RequestInfoThread | null;
   property_address: string | null;
   order: Order | null;
 }
@@ -208,7 +298,8 @@ export interface StaffService extends Service {
 
 export const staffRequestUpdateSchema = z
   .object({
-    status: z.enum(SERVICE_REQUEST_STATUSES),
+    // "Need info from you" goes through requestInfoSchema (it opens a thread).
+    status: z.enum(SERVICE_REQUEST_STATUSES).exclude(['awaiting_customer']),
     scheduled_for: z.iso.datetime({ offset: true }).nullable().optional(),
     note: z.string().trim().max(1000).nullable().optional(),
   })
@@ -243,6 +334,31 @@ export const visitMediaIntentSchema = z
   });
 export type VisitMediaIntentInput = z.input<typeof visitMediaIntentSchema>;
 
+export const requestInfoSchema = z.object({
+  message: z.string().trim().min(3, 'Say what you need from the customer').max(4000),
+});
+
+export const requestFulfilmentSchema = z.object({ fulfilment: z.enum(SERVICE_FULFILMENTS) });
+
+export const outcomeSchema = z.object({
+  summary: z.string().trim().min(1, 'Say what was done').max(4000),
+  findings: z.string().trim().max(4000).default(''),
+  reference_number: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+    z.string().trim().max(120).nullable().default(null),
+  ),
+  next_due_date: z.iso.date().nullable().default(null),
+});
+export type OutcomeInput = z.input<typeof outcomeSchema>;
+
+export const outcomeFileIntentSchema = z.object({
+  file_name: z.string().trim().min(1).max(255),
+  mime_type: z.enum(ALLOWED_DOCUMENT_MIME_TYPES, { message: 'Use a PDF, JPG or PNG file' }),
+  file_size: z.number().int().positive().max(MAX_DOCUMENT_BYTES, 'Files must be under 10 MB'),
+  document_type: z.enum(DOCUMENT_TYPES).nullable().default(null),
+});
+export type OutcomeFileIntentInput = z.input<typeof outcomeFileIntentSchema>;
+
 const serviceFields = {
   name: z.string().trim().min(1, 'Enter a name').max(80),
   description: z.string().trim().min(1, 'Enter a description').max(500),
@@ -250,6 +366,7 @@ const serviceFields = {
   price_paise: z.number().int().min(0).max(100_000_000).nullable(),
   is_active: z.boolean(),
   is_extra_available: z.boolean(),
+  fulfilment: z.enum(SERVICE_FULFILMENTS),
   sort_order: z.number().int().min(0).max(10_000),
 };
 

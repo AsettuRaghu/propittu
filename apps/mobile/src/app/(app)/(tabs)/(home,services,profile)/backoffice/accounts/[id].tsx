@@ -8,7 +8,7 @@ import {
   INCLUDED_SERVICE_LABELS,
   PLAN_STATUS_LABELS,
   PROPERTY_TYPE_LABELS,
-  SERVICE_REQUEST_STATUS_LABELS,
+  requestStatusLabel,
   staffCan,
 } from '@propittu/shared';
 import {
@@ -247,7 +247,10 @@ export default function BackofficeAccountScreen() {
                 {r.reference} · {formatDate(r.created_at)}
               </Text>
             </View>
-            <Badge label={SERVICE_REQUEST_STATUS_LABELS[r.status]} tone={STATUS_TONES[r.status]} />
+            <Badge
+              label={requestStatusLabel(r.status, r.fulfilment)}
+              tone={STATUS_TONES[r.status]}
+            />
           </Card>
         ))}
         {data.requests.length === 0 ? <Text style={typography.small}>No requests yet.</Text> : null}

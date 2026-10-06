@@ -976,6 +976,83 @@ select tst.ok(public.keepalive() is not null,                 'anon CAN call kee
 
 -- =====================================================================
 \echo
+\echo '== Service types: paperwork help (assistance) vs on-site visit =='
+-- =====================================================================
+
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select public.create_service_request('a1a1a1a1-0000-0000-0000-000000000001',
+  (select id from public.services where code = 'property_tax_assistance'), 'Pay my property tax');
+select tst.ok((select fulfilment from public.service_requests where description = 'Pay my property tax') = 'assistance',
+  'a paperwork service opens an assistance request (type copied from the service)');
+select tst.ok((select fulfilment from public.service_requests where description = 'Quarterly visit') = 'visit',
+  'a property visit is an on-site request');
+select tst.rejects($$select public.staff_request_info(
+                     (select id from public.service_requests where description = 'Pay my property tax'), 'Send receipt')$$,
+  'A cannot ask itself for information (staff only)');
+select tst.rejects($$select public.staff_set_request_fulfilment(
+                     (select id from public.service_requests where description = 'Pay my property tax'), 'visit')$$,
+  'A cannot change a request''s type');
+
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+select public.staff_update_service_request(
+  (select id from public.service_requests where description = 'Pay my property tax'), 'confirmed', null, 'On it');
+select tst.rejects($$select public.staff_update_service_request(
+                     (select id from public.service_requests where description = 'Pay my property tax'), 'scheduled', now() + interval '1 day')$$,
+  'paperwork help is never scheduled');
+select tst.ok(not exists (select 1 from unnest(array['requested','confirmed','scheduled','in_progress']) st
+                          where 'awaiting_customer' = any (public.request_transitions('visit', st))),
+  'an on-site request never goes to "Need info from you"');
+select public.staff_request_info(
+  (select id from public.service_requests where description = 'Pay my property tax'),
+  'Please share last year''s tax receipt.');
+select tst.ok((select r.status = 'awaiting_customer' and t.status = 'waiting_on_customer'
+               from public.service_requests r join public.support_tickets t on t.service_request_id = r.id
+               where r.description = 'Pay my property tax'),
+  'asking for info: request → Need info from you, linked ticket waits on the customer');
+insert into public.service_outcomes (service_request_id, account_id, property_id, summary, reference_number, next_due_date, created_by)
+select id, account_id, property_id, 'Paid 2026-27 property tax', 'BBMP-123', current_date + 365, '55555555-5555-5555-5555-555555555555'
+from public.service_requests where description = 'Pay my property tax';
+insert into public.service_outcome_files (outcome_id, account_id, file_name, storage_path, mime_type, file_size, document_type, upload_status, created_by)
+select o.id, o.account_id, 'receipt.pdf',
+       o.account_id::text || '/' || o.property_id::text || '/outcomes/' || o.service_request_id::text || '/r1.pdf',
+       'application/pdf', 100, 'property_tax', 'ready', '55555555-5555-5555-5555-555555555555'
+from public.service_outcomes o join public.service_requests r on r.id = o.service_request_id
+where r.description = 'Pay my property tax';
+select tst.rejects($$insert into public.service_outcomes (service_request_id, account_id, summary, created_by)
+                     select id, account_id, 'x', '55555555-5555-5555-5555-555555555555'
+                     from public.service_requests where description = 'Quarterly visit'$$,
+  'an on-site request gets a visit report, not an outcome summary');
+
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rows($$select * from public.service_outcomes$$, 0, 'customer cannot see the outcome while it is a draft');
+insert into public.support_ticket_messages (ticket_id, account_id, author_id, author_type, body)
+select t.id, t.account_id, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'customer', 'Here it is'
+from public.support_tickets t join public.service_requests r on r.id = t.service_request_id
+where r.description = 'Pay my property tax';
+select tst.ok((select status from public.service_requests where description = 'Pay my property tax') = 'in_progress',
+  'the customer''s reply resumes the work (→ Working on it)');
+
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+select public.staff_update_service_request(
+  (select id from public.service_requests where description = 'Pay my property tax'), 'completed');
+select tst.ok((select count(*) from public.property_documents d
+               join public.service_outcome_files f on f.property_document_id = d.id
+               where d.document_type = 'property_tax' and d.upload_status = 'ready') = 1,
+  'completing saves the result file into the property''s Documents');
+select tst.rows($$update public.service_outcomes set summary = 'changed'$$, 0,
+  'a published outcome is LOCKED');
+
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.ok((select summary from public.service_outcomes) = 'Paid 2026-27 property tax',
+  'customer sees the outcome once completed');
+select tst.rows($$select * from public.service_outcome_files$$, 1, 'customer sees the result files once completed');
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.rows($$select * from public.service_outcomes$$, 0, 'B cannot see A''s outcomes');
+reset role;
+
+-- =====================================================================
+\echo
 \echo '== Deleting a property =='
 -- =====================================================================
 
@@ -988,7 +1065,7 @@ select tst.rows($$delete from public.properties where id = 'a1a1a1a1-0000-0000-0
 select tst.rows('select * from public.property_photos',    0, 'photos cascade-deleted');
 select tst.rows('select * from public.property_documents', 0, 'documents cascade-deleted');
 select tst.rows('select * from public.property_videos', 0, 'videos cascade-deleted');
-select tst.rows('select * from public.service_requests',   4, 'service request history survives');
+select tst.rows('select * from public.service_requests',   5, 'service request history survives');
 select tst.ok((select property_id from public.service_requests limit 1) is null,
   'surviving request has property_id nulled');
 
