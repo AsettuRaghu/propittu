@@ -63,17 +63,6 @@ export const useAccountPlan = () =>
     staleTime: 0, // Usage changes with every upload.
   });
 
-export function useCancelPlan() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () => api<AccountPlanState>('/account/plan/cancel', { method: 'POST' }),
-    onSuccess: (state) => {
-      qc.setQueryData(keys.accountPlan, state);
-      void qc.invalidateQueries({ queryKey: keys.me });
-    },
-  });
-}
-
 export const useProperty = (id: string) =>
   useQuery({
     queryKey: keys.property(id),

@@ -19,8 +19,8 @@ import {
   type PublicPlan,
 } from '@propittu/shared';
 import { fetchPlanQuote, useOrders, usePlanCheckout } from '@/api/billing';
-import { useAccountPlan, useCancelPlan, usePlans } from '@/api/queries';
-import { dialog, toast } from '@/components/Dialog';
+import { useAccountPlan, usePlans } from '@/api/queries';
+import { dialog } from '@/components/Dialog';
 import { Icon, type IconName } from '@/components/Icon';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
 import {
@@ -29,7 +29,6 @@ import {
   Card,
   GradientCard,
   IconTile,
-  LinkButton,
   ProgressBar,
   Segmented,
 } from '@/components/ui';
@@ -67,7 +66,6 @@ export default function PlanScreen() {
   const state = useAccountPlan();
   const plans = usePlans();
   const orders = useOrders();
-  const cancel = useCancelPlan();
   const checkout = usePlanCheckout();
   const [tab, setTab] = useState<Tab>('usage');
 
@@ -165,22 +163,6 @@ export default function PlanScreen() {
     });
   };
 
-  const confirmCancel = async () => {
-    const ok = await dialog.confirm({
-      title: 'Cancel your plan?',
-      message: `It stays active until ${s.current ? formatDate(s.current.ends_at) : 'the end of the period'} and won't renew. Your data is kept.`,
-      confirmLabel: 'Cancel plan',
-      cancelLabel: 'Keep my plan',
-      tone: 'danger',
-    });
-    if (!ok) return;
-    cancel.mutate(undefined, {
-      onSuccess: () => toast('Plan will not renew', 'info'),
-      onError: (err) =>
-        void dialog.alert({ title: "Couldn't cancel", message: errorMessage(err), tone: 'danger' }),
-    });
-  };
-
   return (
     <ScrollView
       contentContainerStyle={styles.content}
@@ -239,11 +221,6 @@ export default function PlanScreen() {
                 onChoose={() => void choose(p)}
               />
             ))}
-            {s.current && s.current.source !== 'trial' && !s.current.cancel_at_period_end ? (
-              <View style={styles.center}>
-                <LinkButton title="Cancel plan" tone="muted" onPress={() => void confirmCancel()} />
-              </View>
-            ) : null}
           </View>
         )
       ) : orders.isPending ? (
@@ -725,7 +702,6 @@ const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
   content: { padding: space.lg, paddingTop: space.xs, gap: space.md, paddingBottom: space.xxl },
   list: { gap: space.md },
-  center: { alignItems: 'center', paddingTop: space.xs },
   empty: { minHeight: 260 },
   hero: { gap: space.sm, padding: space.lg },
   heroRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
