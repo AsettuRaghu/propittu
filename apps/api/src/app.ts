@@ -7,6 +7,7 @@ import { logger } from './logger.js';
 import { cronRouter } from './routes/cron.js';
 import { documentsRouter } from './routes/documents.js';
 import { healthRouter } from './routes/health.js';
+import { legalRouter } from './routes/legal.js';
 import { backofficeRouter } from './routes/backoffice.js';
 import { billingReturnRouter, billingRouter } from './routes/billing.js';
 import { webhooksRouter } from './routes/webhooks.js';
@@ -50,6 +51,7 @@ export function createApp(): express.Express {
   app.use(healthRouter);
   app.use(cronRouter);
   app.use(billingReturnRouter);
+  app.use(legalRouter);
 
   // Everything below requires a valid Supabase session.
   app.use(requireAuth);

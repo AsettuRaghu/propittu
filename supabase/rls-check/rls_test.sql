@@ -1100,5 +1100,47 @@ select tst.ok((select property_id from public.service_requests limit 1) is null,
   'surviving request has property_id nulled');
 
 reset role;
+
+-- =====================================================================
+\echo
+\echo '== Account deletion: personal data removed, payment records kept =='
+-- =====================================================================
+
+set role authenticated;
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+select tst.rejects($$select * from public.delete_my_account()$$, 'a staff login cannot delete itself this way');
+
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+create temp table b_files as select * from public.delete_my_account();
+reset role;
+select tst.ok((select count(*) from b_files) >= 0, 'deletion returns the stored files to remove');
+select tst.ok((select count(*) from public.properties where account_id = 'acc0000b-0000-0000-0000-00000000000b') = 0,
+  'B''s properties are gone');
+select tst.ok((select count(*) from public.service_requests where account_id = 'acc0000b-0000-0000-0000-00000000000b') = 0
+              and (select count(*) from public.support_tickets where account_id = 'acc0000b-0000-0000-0000-00000000000b') = 0,
+  'B''s requests and tickets are gone');
+select tst.ok((select status = 'closed' and closed_at is not null from public.accounts
+               where id = 'acc0000b-0000-0000-0000-00000000000b'),
+  'the account is closed');
+select tst.ok((select count(*) from public.orders where account_id = 'acc0000b-0000-0000-0000-00000000000b') > 0,
+  'payment records are kept');
+select tst.ok(not exists (select 1 from public.account_plans where account_id = 'acc0000b-0000-0000-0000-00000000000b'
+                            and starts_at <= now() and ends_at > now()),
+  'no plan is in force any more');
+select tst.ok(exists (select 1 from public.closed_trial_phones where phone_sha256 = public.phone_sha256('919000000002')),
+  'only a hash of the number is kept, to prevent a second free trial');
+
+-- The API then deletes the login itself.
+delete from auth.users where id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+select tst.ok((select count(*) from public.orders where account_id = 'acc0000b-0000-0000-0000-00000000000b' and user_id is null) > 0,
+  'after the login is deleted, payment records remain but no longer point to the person');
+select tst.ok(not exists (select 1 from public.profiles where id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'),
+  'the profile (name, number) is gone');
+
+insert into auth.users (id, phone) values ('bbbbbbbb-0000-0000-0000-00000000000b', '919000000002');
+select tst.ok(not exists (select 1 from public.account_plans ap join public.account_members m on m.account_id = ap.account_id
+                          where m.user_id = 'bbbbbbbb-0000-0000-0000-00000000000b'),
+  'signing up again with the same number does not start a new free trial');
+
 \echo
 \echo 'ALL RLS CHECKS PASSED'

@@ -1,5 +1,6 @@
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,6 +18,7 @@ import { Icon } from '@/components/Icon';
 import { ErrorState, LoadingState } from '@/components/States';
 import { Badge, ListGroup, ListRow, type Tone } from '@/components/ui';
 import { BUILD_LABEL } from '@/lib/buildInfo';
+import { env } from '@/lib/env';
 import { colors, radius, shadow, space, typography } from '@/theme';
 
 function planBadge(me: Me): { label: string; tone: Tone } {
@@ -139,12 +141,33 @@ export default function ProfileScreen() {
 
         <ListGroup>
           <ListRow
+            icon="shield"
+            title="Privacy policy"
+            onPress={() => void WebBrowser.openBrowserAsync(`${env.apiUrl}/legal/privacy`)}
+          />
+          <ListRow
+            icon="document"
+            title="Terms of use"
+            onPress={() => void WebBrowser.openBrowserAsync(`${env.apiUrl}/legal/terms`)}
+          />
+        </ListGroup>
+
+        <ListGroup>
+          <ListRow
             icon="logout"
             title={signingOut ? 'Logging out…' : 'Log out'}
             destructive
             showChevron={false}
             onPress={() => void confirmLogout()}
           />
+          {me && !me.staff_role ? (
+            <ListRow
+              icon="delete"
+              title="Delete account"
+              destructive
+              onPress={() => router.push('/account-delete')}
+            />
+          ) : null}
         </ListGroup>
 
         <Text style={[typography.caption, styles.version]}>

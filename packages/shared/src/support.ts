@@ -118,3 +118,8 @@ export const updateProfileSchema = z.object({
   ),
 });
 export type UpdateProfileInput = z.input<typeof updateProfileSchema>;
+
+/** POST /me/delete — the customer types DELETE to confirm. */
+export const deleteAccountSchema = z.object({
+  confirm: z.literal('DELETE', { message: 'Type DELETE to confirm' }),
+});

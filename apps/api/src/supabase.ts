@@ -31,10 +31,13 @@ export function userClient(accessToken: string, requestId?: string): SupabaseCli
 }
 
 /**
- * Server-privileged client, used ONLY by the billing module to call
- * record_payment_event() after a provider event has been verified
- * (webhook signature, or a server-to-server status fetch). Everything
- * else in the API acts as the signed-in user. Null when not configured.
+ * Server-privileged client, used ONLY for:
+ *   - record_payment_event() after a provider event has been verified
+ *     (webhook signature, or a server-to-server status fetch);
+ *   - account deletion: removing the customer's stored files and then the
+ *     login itself, AFTER delete_my_account() ran as the customer.
+ * Everything else in the API acts as the signed-in user. Null when not
+ * configured.
  */
 export const serviceClient: SupabaseClient | null = env.SUPABASE_SECRET_KEY
   ? createClient(env.SUPABASE_URL, env.SUPABASE_SECRET_KEY, { auth: serverAuthOptions })
