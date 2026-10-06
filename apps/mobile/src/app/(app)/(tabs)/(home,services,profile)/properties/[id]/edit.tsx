@@ -51,8 +51,11 @@ function EditForm({ property }: { property: PropertyDetail }) {
       return;
     }
     setFormError(null);
-    // The full object is sent, so clearing an optional field really clears it.
-    update.mutate(validation.data, {
+    // The full object is sent, so clearing an optional field really clears it —
+    // except the map pin, which only the location screen sets (this form has
+    // no pin, so sending it would erase a location confirmed meanwhile).
+    const { latitude: _lat, longitude: _lng, ...fields } = validation.data;
+    update.mutate(fields, {
       onSuccess: () => {
         toast('Changes saved');
         router.back();

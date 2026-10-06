@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
@@ -10,7 +11,7 @@ import { useProperty, useServiceRequests } from '@/api/queries';
 import { CompletionCard } from '@/components/CompletionCard';
 import { DocumentSlots } from '@/components/DocumentSlots';
 import { Icon, type IconName } from '@/components/Icon';
-import { PhotoSection } from '@/components/PhotoSection';
+import { PhotoSection, type PhotoSectionHandle } from '@/components/PhotoSection';
 import { PropertyMapCard } from '@/components/PropertyMapCard';
 import { ErrorState, LoadingState } from '@/components/States';
 import { VideoSection } from '@/components/VideoSection';
@@ -23,6 +24,7 @@ import { accents, colors, radius, shadow, space, typography, type Accent } from 
 export default function PropertyDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: property, isPending, error, refetch, isRefetching } = useProperty(id);
+  const photosRef = useRef<PhotoSectionHandle>(null);
 
   if (isPending) return <LoadingState />;
   if (error) {
@@ -48,7 +50,7 @@ export default function PropertyDetailsScreen() {
           params: { id: property.id, type: item.key },
         });
       case 'photo':
-        return; // The Photos section has the Add button.
+        return photosRef.current?.add();
       default:
         return edit();
     }
@@ -145,7 +147,7 @@ export default function PropertyDetailsScreen() {
 
       <View>
         <SectionTitle title="Photos" subtitle={`${property.photos.length} added`} />
-        <PhotoSection propertyId={property.id} photos={property.photos} />
+        <PhotoSection ref={photosRef} propertyId={property.id} photos={property.photos} />
       </View>
 
       <View>

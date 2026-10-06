@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { useState } from 'react';
+import { useImperativeHandle, useState, type Ref } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MAX_PHOTOS_PER_PROPERTY, type PropertyPhoto } from '@propittu/shared';
@@ -13,13 +13,20 @@ import { dialog, toast } from './Dialog';
 import { Icon } from './Icon';
 import { Banner, Button, ProgressBar } from './ui';
 
+/** Lets a parent start "add photos" (e.g. the profile-completion chip). */
+export interface PhotoSectionHandle {
+  add: () => void;
+}
+
 /** Property photo gallery with add, view and delete (PRODUCT_SPEC.md §8.2, §19). */
 export function PhotoSection({
   propertyId,
   photos,
+  ref,
 }: {
   propertyId: string;
   photos: PropertyPhoto[];
+  ref?: Ref<PhotoSectionHandle>;
 }) {
   const invalidate = useInvalidateProperty();
   const deletePhoto = useDeletePhoto(propertyId);
@@ -58,6 +65,8 @@ export function PhotoSection({
       );
     }
   };
+
+  useImperativeHandle(ref, () => ({ add: () => void addPhotos() }));
 
   const confirmDelete = async (photo: PropertyPhoto) => {
     setViewing(null);
