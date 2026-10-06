@@ -208,6 +208,19 @@ Read once, so cost is per upload, not per view.
 
 ---
 
+### Measured (trial, 6 Oct 2026 — 4 real deeds, 13–30 scanned pages)
+
+| Approach | Fields right | ≈ cost / deed | Notes |
+|---|---|---|---|
+| **Sonnet reads the whole deed** (PDF; page images if > 24 MB) | **76/76** | **$0.085 (≈ ₹7)** | Chosen for launch. Handwritten Khata read (medium confidence); ID/photo pages skipped by itself. |
+| A · Haiku page triage → chosen pages, 90 dpi → Sonnet | 72/76 | $0.047 | Missed a buyer and a sale price (pages dropped by triage). |
+| B · Haiku reads the whole deed | 69/76 | $0.039 | **Invented a name** (expanded initials) with high confidence; missed registration details. |
+| C · Tesseract OCR (eng+kan+tel) → text → Sonnet | 72/76 | $0.064 | Kannada/Telugu OCR text is token-heavy; wrong registration no. (low confidence). Needs our own OCR server. |
+
+Decision: launch with **Sonnet on the whole deed**. Optimise when volume
+justifies it: OCR + keyword page selection on the OCR text (free), English-only
+OCR for English deeds, same-project templates, cached instructions.
+
 ## 8. Testing
 
 - **Golden set:** the owner's 4 real deeds (2 plots, 2 apartments; 13–30
@@ -248,3 +261,4 @@ Read once, so cost is per upload, not per view.
 | 6 Oct 2026 | Buyer-name mismatch → ask relationship once, never block (design in 2.3). |
 | 6 Oct 2026 | Never store PAN, Aadhaar, photos, thumbprints, signatures. |
 | 6 Oct 2026 | Raise size limit for deeds (60 MB). No camera capture for deeds. |
+| 6 Oct 2026 | Trial + 3-arm cost experiment: launch with Sonnet reading the whole deed (~₹7/deed, 76/76). Haiku not used for deeds (invented a name). Cost optimisation deferred until volume. |
