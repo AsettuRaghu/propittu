@@ -2,13 +2,18 @@ import { Router } from 'express';
 import { z } from 'zod';
 import {
   isValidAnswer,
+  reviewReasons,
   type PittuAnswers,
   type PittuContext,
   type PittuState,
+  type ReviewFact,
+  type ReviewReason,
 } from '@propittu/shared';
 import { auth, type AuthContext } from '../auth.js';
 import { audit } from '../audit.js';
 import { invalid, must, notFound, ok, uuidParam } from '../errors.js';
+import { logger } from '../logger.js';
+import { serviceClient } from '../supabase.js';
 
 /**
  * Pittu guided setup (docs/PITTU_PROPERTY_SETUP.md). The questions, their
@@ -20,7 +25,7 @@ import { invalid, must, notFound, ok, uuidParam } from '../errors.js';
  */
 export const pittuRouter = Router();
 
-async function loadState(ctx: AuthContext, propertyId: string): Promise<PittuState> {
+export async function loadState(ctx: AuthContext, propertyId: string): Promise<PittuState> {
   const property = must<{
     id: string;
     state: string | null;
@@ -112,5 +117,68 @@ pittuRouter.put('/properties/:id/pittu/answers/:questionId', async (req, res) =>
     { type: 'property', id: propertyId },
     { question: questionId },
   );
-  ok(res, { ...state, answers: { ...state.answers, [questionId]: answer } });
+  const next: PittuState = { ...state, answers: { ...state.answers, [questionId]: answer } };
+  await refreshReview(ctx, propertyId, next);
+  ok(res, next);
 });
+
+/**
+ * Keeps the property's row on the staff Review list current (reasons are
+ * shared rules: reviewReasons). Written with the server key — customers
+ * cannot see or change it. A reviewed property reopens only for a NEW
+ * reason. Never fails the customer's request.
+ */
+export async function refreshReview(
+  ctx: AuthContext,
+  propertyId: string,
+  state?: PittuState,
+): Promise<void> {
+  const db = serviceClient;
+  if (!db) return;
+  try {
+    const s = state ?? (await loadState(ctx, propertyId));
+    const facts = must<ReviewFact[]>(
+      await ctx.db
+        .from('property_facts')
+        .select('key, status, confidence')
+        .eq('property_id', propertyId)
+        .eq('account_id', ctx.accountId)
+        .neq('status', 'superseded'),
+    );
+    const reasons = reviewReasons(s.context, s.answers, facts);
+    const existing = must<{ reasons: ReviewReason[]; status: 'open' | 'done' } | null>(
+      await db
+        .from('property_reviews')
+        .select('reasons, status')
+        .eq('property_id', propertyId)
+        .maybeSingle(),
+    );
+    const same = (a: string[], b: string[]) =>
+      a.length === b.length && a.every((r) => b.includes(r));
+
+    if (!existing) {
+      if (reasons.length > 0) {
+        must(
+          await db
+            .from('property_reviews')
+            .insert({ property_id: propertyId, account_id: ctx.accountId, reasons }),
+        );
+      }
+    } else if (existing.status === 'open') {
+      if (reasons.length === 0) {
+        must(await db.from('property_reviews').delete().eq('property_id', propertyId));
+      } else if (!same(reasons, existing.reasons)) {
+        must(await db.from('property_reviews').update({ reasons }).eq('property_id', propertyId));
+      }
+    } else if (reasons.some((r) => !existing.reasons.includes(r))) {
+      must(
+        await db
+          .from('property_reviews')
+          .update({ reasons, status: 'open' })
+          .eq('property_id', propertyId),
+      );
+    }
+  } catch (err) {
+    logger.warn({ err, propertyId }, 'Pittu review refresh failed');
+  }
+}

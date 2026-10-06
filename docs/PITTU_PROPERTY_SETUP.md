@@ -189,6 +189,20 @@ Rules:
   type change (plot → house), conflicting deed vs entered details, low-confidence
   extracted values → a **Review** list in Backoffice. Customer flow is never
   blocked; admin can follow up.
+  - *Built (step 6):* Backoffice → **Pittu** tab. Table `property_reviews`
+    (one row per property, staff-only; migration 20). Reasons are the shared
+    rule `reviewReasons()` — `name_mismatch`, `not_owner` (family / manages
+    it), `type_changed` (deed type corrected), `low_confidence` (an unsure
+    value accepted as read). The API re-checks after setup and after each
+    answer; a reviewed property reopens only for a *new* reason. Staff with
+    `documents.review` mark it reviewed with a note (audited). The same tab
+    shows this month's spend vs budget, readings, average cost/time, how
+    many values customers kept / corrected / removed, spend by customer, and
+    failed readings (last 30 days) with **Read again** for retryable ones.
+    The staff property screen shows the review, the answers and every value
+    read from the deed (page, confidence, the customer's correction).
+  - *Not yet:* "conflicting deed vs entered details" for a deed uploaded
+    later (needs the cross-check).
 - **Lawyer-required services:** flagged on the service; requests go through the
   existing staff flow with a "needs legal review" step.
 

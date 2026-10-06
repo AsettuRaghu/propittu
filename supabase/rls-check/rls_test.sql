@@ -1270,6 +1270,37 @@ reset role;
 
 -- =====================================================================
 \echo
+\echo '== Pittu Review list: staff only; reasons are server-written =='
+-- =====================================================================
+
+-- The server (service key) writes the review row.
+insert into public.property_reviews (property_id, account_id, reasons)
+values ('a1a1a1a1-0000-0000-0000-000000000001', 'acc0000a-0000-0000-0000-00000000000a', '{name_mismatch}');
+select tst.rejects($$insert into public.property_reviews (property_id, account_id, reasons)
+                     values ('a1a1a1a1-0000-0000-0000-000000000001', 'acc0000a-0000-0000-0000-00000000000a', '{made_up}')$$,
+  'review reasons are a fixed list');
+
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rows('select * from public.property_reviews', 0, 'customers never see the Review list');
+select tst.rows($$update public.property_reviews set status = 'done', reviewed_by = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'$$, 0,
+  'a customer cannot mark their own property reviewed');
+select tst.rejects($$insert into public.property_reviews (property_id, account_id)
+                     values ('a1a1a1a1-0000-0000-0000-000000000001', 'acc0000a-0000-0000-0000-00000000000a')$$,
+  'a customer cannot add review rows');
+
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+select tst.rows('select * from public.property_reviews', 1, 'staff see the Review list');
+select tst.rows($$update public.property_reviews set status = 'done', note = 'Spoke to the owner',
+                    reviewed_by = '55555555-5555-5555-5555-555555555555', reviewed_at = now()$$, 1,
+  'staff mark a property reviewed');
+select tst.rejects($$update public.property_reviews set reasons = '{}'$$, 'staff cannot rewrite the reasons');
+select tst.rejects($$update public.property_reviews set status = 'open', reviewed_by = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'$$,
+  'a review cannot be recorded in someone else''s name');
+reset role;
+
+-- =====================================================================
+\echo
 \echo '== Deleting a property =='
 -- =====================================================================
 

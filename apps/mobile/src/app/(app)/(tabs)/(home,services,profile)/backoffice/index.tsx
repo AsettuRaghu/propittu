@@ -14,6 +14,7 @@ import {
   type BackofficeRequest,
   type StaffService,
 } from '@propittu/shared';
+import { BoPittu } from '@/components/BoPittu';
 import { PullRefresh } from '@/components/PullRefresh';
 import { useBoPayments } from '@/api/billing';
 import { useBoTickets } from '@/api/support';
@@ -26,7 +27,7 @@ import { STATUS_TONES, TICKET_TONES } from '@/lib/icons';
 import { colors, radius, space, typography } from '@/theme';
 import { Icon } from '@/components/Icon';
 
-type Tab = 'requests' | 'tickets' | 'accounts' | 'payments' | 'services';
+type Tab = 'requests' | 'tickets' | 'accounts' | 'payments' | 'services' | 'pittu';
 
 /**
  * Backoffice (M9) — staff mode. Reachable from Profile for staff only;
@@ -44,6 +45,7 @@ export default function BackofficeScreen() {
             ['accounts', 'Customers'],
             ['payments', 'Payments'],
             ['services', 'Services'],
+            ['pittu', 'Pittu'],
           ] as const
         ).map(([value, label]) => (
           <Pressable
@@ -53,7 +55,11 @@ export default function BackofficeScreen() {
             accessibilityState={{ selected: tab === value }}
             style={[styles.segment, tab === value && styles.segmentActive]}
           >
-            <Text style={[styles.segmentText, tab === value && styles.segmentTextActive]}>
+            <Text
+              style={[styles.segmentText, tab === value && styles.segmentTextActive]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
               {label}
             </Text>
           </Pressable>
@@ -67,8 +73,10 @@ export default function BackofficeScreen() {
         <Accounts />
       ) : tab === 'payments' ? (
         <Payments />
-      ) : (
+      ) : tab === 'services' ? (
         <Services />
+      ) : (
+        <BoPittu />
       )}
     </View>
   );
@@ -366,7 +374,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: colors.surfaceMuted,
   },
-  segment: { flex: 1, paddingVertical: space.sm, borderRadius: radius.sm, alignItems: 'center' },
+  segment: {
+    flex: 1,
+    paddingVertical: space.sm,
+    paddingHorizontal: 2,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+  },
   segmentActive: { backgroundColor: colors.surface },
   segmentText: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
   segmentTextActive: { color: colors.text, fontWeight: '600' },

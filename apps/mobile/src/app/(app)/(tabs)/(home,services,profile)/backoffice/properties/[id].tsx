@@ -12,6 +12,7 @@ import {
   type DocumentStatus,
   type PropertyDocument,
 } from '@propittu/shared';
+import { BoPropertyPittu } from '@/components/BoPittu';
 import { PullRefresh } from '@/components/PullRefresh';
 import { useBoDocumentStatus, useBoProperty } from '@/api/backoffice';
 import { useMe } from '@/api/queries';
@@ -101,6 +102,8 @@ export default function BackofficePropertyScreen() {
           </ScrollView>
         </View>
       ) : null}
+
+      {data.pittu ? <BoPropertyPittu propertyId={id} pittu={data.pittu} /> : null}
 
       <View style={styles.section}>
         <SectionTitle title={`Documents (${data.documents.length})`} />

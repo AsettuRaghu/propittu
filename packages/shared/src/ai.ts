@@ -198,3 +198,60 @@ export interface DraftProperty {
   /** The uploaded sale deed, if the upload finished. */
   document_id: string | null;
 }
+
+/* ------------------------------------------------------------------ *
+ * Backoffice → Pittu: usage, cost, failures and the Review list
+ * ------------------------------------------------------------------ */
+
+/** Staff wording for every failure code (the customer sees ANALYSIS_ERROR_LABELS). */
+export const STAFF_ANALYSIS_ERROR_LABELS: Record<string, string> = {
+  not_a_sale_deed: 'Not a sale deed',
+  too_large: 'File too large (over 24 MB)',
+  daily_limit: 'Daily limit reached',
+  unavailable: 'Paused (budget or switched off)',
+  failed: 'Reading failed',
+  document_missing: 'File missing from storage',
+  unknown_task: 'Unknown task version',
+};
+
+export interface AiFailure {
+  analysis_id: string;
+  account_id: string;
+  customer_phone: string | null;
+  property_id: string;
+  property_name: string;
+  is_draft: boolean;
+  error_code: string | null;
+  attempts: number;
+  updated_at: string;
+  /** Staff may start this reading again (it may cost money). */
+  can_retry: boolean;
+}
+
+export interface AiAccountSpend {
+  account_id: string;
+  customer_phone: string | null;
+  customer_name: string | null;
+  calls: number;
+  cost_usd: number;
+}
+
+/** GET /backoffice/ai/summary — this calendar month (UTC, same as the budget). */
+export interface AiSummary {
+  enabled: boolean;
+  pilot_accounts: number;
+  month_start: string;
+  budget_usd: number;
+  spend_usd: number;
+  today_spend_usd: number;
+  calls: { ok: number; failed: number };
+  avg_cost_usd: number | null;
+  avg_seconds: number | null;
+  input_tokens: number;
+  output_tokens: number;
+  /** What customers did with the values Pittu read (the accuracy signal). */
+  facts: { confirmed: number; edited: number; rejected: number };
+  review_open: number;
+  by_account: AiAccountSpend[];
+  failures: AiFailure[];
+}

@@ -8,6 +8,7 @@ import {
   documentStatusSchema,
   extendPlanSchema,
   releaseSlotSchema,
+  reviewDecisionSchema,
   grantPlanSchema,
   LIMIT_LABELS,
   OPEN_REQUEST_STATUSES,
@@ -25,6 +26,10 @@ import {
   visitMediaIntentSchema,
   visitReportSchema,
   type AccountPlanState,
+  type AiSummary,
+  type BackofficePittu,
+  type PropertyReview,
+  type ReviewListItem,
   type AuditEntry,
   type PropertySlot,
   type BackofficeAccount,
@@ -50,6 +55,8 @@ import {
   type UploadIntent,
   type VisitMedia,
 } from '@propittu/shared';
+import { waitUntil } from '@vercel/functions';
+import { isRetryableFailure, processAnalysis, requeueFailedAnalysis } from '../ai/jobs.js';
 import { auth, type AuthContext } from '../auth.js';
 import { audit } from '../audit.js';
 import { env } from '../env.js';
@@ -1097,6 +1104,7 @@ backofficeRouter.get('/properties/:id', async (req, res) => {
     account_id: accountId,
     photos,
     documents: must<DocumentRow[]>(documents).map(toDocument),
+    pittu: await loadPittu(db, id),
   };
   ok(res, data);
 });
@@ -1382,3 +1390,258 @@ backofficeRouter.post(
     ok(res, await confirmAttachment(ctx.db, id, uuidParam(req.params.attachmentId, 'Attachment')));
   },
 );
+
+/* ================================================================== *
+ * Pittu (AI): usage and cost, failed readings, the Review list
+ * ================================================================== */
+
+const round = (n: number, dp = 4) => Math.round(n * 10 ** dp) / 10 ** dp;
+
+/** Phone + name for a set of accounts (staff view). */
+async function accountLabels(db: SupabaseClient, ids: string[]) {
+  if (ids.length === 0) return new Map<string, { phone: string | null; name: string | null }>();
+  const rows = must<{ id: string; phone: string | null; full_name: string | null }[]>(
+    await db.from('backoffice_accounts').select('id, phone, full_name').in('id', ids),
+  );
+  return new Map(rows.map((r) => [r.id, { phone: r.phone, name: r.full_name }]));
+}
+
+async function propertyLabels(db: SupabaseClient, ids: string[]) {
+  if (ids.length === 0) return new Map<string, { name: string; is_draft: boolean }>();
+  const rows = must<{ id: string; name: string; is_draft: boolean }[]>(
+    await db.from('properties').select('id, name, is_draft').in('id', ids),
+  );
+  return new Map(rows.map((r) => [r.id, { name: r.name, is_draft: r.is_draft }]));
+}
+
+/* GET /backoffice/ai/summary — this month's spend, readings, accuracy, failures */
+backofficeRouter.get('/ai/summary', async (req, res) => {
+  const { db } = auth(req);
+  const now = new Date();
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+  const todayStart = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  ).toISOString();
+  const factCount = (status: string) =>
+    db
+      .from('property_facts')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', status)
+      .gte('decided_at', monthStart);
+
+  const [ops, confirmed, edited, rejected, reviewOpen, failed] = await Promise.all([
+    db
+      .from('ai_operations')
+      .select('account_id, cost_usd, duration_ms, input_tokens, output_tokens, outcome, created_at')
+      .gte('created_at', monthStart)
+      .limit(5000),
+    factCount('confirmed'),
+    factCount('edited'),
+    factCount('rejected'),
+    db
+      .from('property_reviews')
+      .select('property_id', { count: 'exact', head: true })
+      .eq('status', 'open'),
+    db
+      .from('document_analyses')
+      .select('id, account_id, property_id, error_code, attempts, updated_at')
+      .eq('status', 'failed')
+      .gte('updated_at', new Date(Date.now() - 30 * 86_400_000).toISOString())
+      .order('updated_at', { ascending: false })
+      .limit(25),
+  ]);
+  const rows = must<
+    {
+      account_id: string | null;
+      cost_usd: number | string;
+      duration_ms: number;
+      input_tokens: number;
+      output_tokens: number;
+      outcome: string;
+      created_at: string;
+    }[]
+  >(ops);
+  const failures = must<
+    {
+      id: string;
+      account_id: string;
+      property_id: string;
+      error_code: string | null;
+      attempts: number;
+      updated_at: string;
+    }[]
+  >(failed);
+  for (const r of [confirmed, edited, rejected, reviewOpen]) must(r);
+
+  const spend = rows.reduce((sum, r) => sum + Number(r.cost_usd), 0);
+  const okRows = rows.filter((r) => r.outcome === 'ok');
+  const perAccount = new Map<string, { calls: number; cost: number }>();
+  for (const r of rows) {
+    if (!r.account_id) continue;
+    const a = perAccount.get(r.account_id) ?? { calls: 0, cost: 0 };
+    a.calls++;
+    a.cost += Number(r.cost_usd);
+    perAccount.set(r.account_id, a);
+  }
+  const [accounts, properties] = await Promise.all([
+    accountLabels(db, [...new Set([...perAccount.keys(), ...failures.map((f) => f.account_id)])]),
+    propertyLabels(db, [...new Set(failures.map((f) => f.property_id))]),
+  ]);
+
+  const data: AiSummary = {
+    enabled: env.AI_ENABLED,
+    pilot_accounts: env.AI_PILOT_ACCOUNTS.length,
+    month_start: monthStart,
+    budget_usd: env.AI_MONTHLY_BUDGET_USD,
+    spend_usd: round(spend),
+    today_spend_usd: round(
+      rows.filter((r) => r.created_at >= todayStart).reduce((s, r) => s + Number(r.cost_usd), 0),
+    ),
+    calls: { ok: okRows.length, failed: rows.length - okRows.length },
+    avg_cost_usd: okRows.length
+      ? round(okRows.reduce((s, r) => s + Number(r.cost_usd), 0) / okRows.length)
+      : null,
+    avg_seconds: okRows.length
+      ? round(okRows.reduce((s, r) => s + r.duration_ms, 0) / okRows.length / 1000, 1)
+      : null,
+    input_tokens: rows.reduce((s, r) => s + r.input_tokens, 0),
+    output_tokens: rows.reduce((s, r) => s + r.output_tokens, 0),
+    facts: {
+      confirmed: confirmed.count ?? 0,
+      edited: edited.count ?? 0,
+      rejected: rejected.count ?? 0,
+    },
+    review_open: reviewOpen.count ?? 0,
+    by_account: [...perAccount.entries()]
+      .map(([id, a]) => ({
+        account_id: id,
+        customer_phone: accounts.get(id)?.phone ?? null,
+        customer_name: accounts.get(id)?.name ?? null,
+        calls: a.calls,
+        cost_usd: round(a.cost),
+      }))
+      .sort((x, y) => y.cost_usd - x.cost_usd)
+      .slice(0, 10),
+    failures: failures.map((f) => ({
+      analysis_id: f.id,
+      account_id: f.account_id,
+      customer_phone: accounts.get(f.account_id)?.phone ?? null,
+      property_id: f.property_id,
+      property_name: properties.get(f.property_id)?.name ?? 'Property removed',
+      is_draft: properties.get(f.property_id)?.is_draft ?? false,
+      error_code: f.error_code,
+      attempts: f.attempts,
+      updated_at: f.updated_at,
+      can_retry: isRetryableFailure(f.error_code),
+    })),
+  };
+  ok(res, data);
+});
+
+/* POST /backoffice/ai/analyses/:id/retry — "Read again" (may cost money) */
+backofficeRouter.post('/ai/analyses/:id/retry', allow('documents.review'), async (req, res) => {
+  const ctx = auth(req);
+  const id = uuidParam(req.params.id, 'Reading');
+  const reading = must<{ account_id: string; document_id: string } | null>(
+    await ctx.db
+      .from('document_analyses')
+      .select('account_id, document_id')
+      .eq('id', id)
+      .maybeSingle(),
+  );
+  if (!reading) throw notFound('Reading');
+  if (!(await requeueFailedAnalysis(id))) {
+    throw new HttpError(409, 'CONFLICT', 'This reading cannot be started again.');
+  }
+  waitUntil(processAnalysis(id));
+  await staffAudit(ctx, 'staff.ai.reading_retried', reading.account_id, {
+    type: 'document',
+    id: reading.document_id,
+  });
+  ok(res, { queued: true });
+});
+
+/* GET /backoffice/ai/reviews?status=open|done */
+const reviewListSchema = z.object({ status: z.enum(['open', 'done']).default('open') });
+const REVIEW_COLUMNS =
+  'property_id, account_id, reasons, status, note, reviewed_at, created_at, updated_at';
+
+backofficeRouter.get('/ai/reviews', async (req, res) => {
+  const { db } = auth(req);
+  const { status } = reviewListSchema.parse(req.query);
+  const rows = must<PropertyReview[]>(
+    await db
+      .from('property_reviews')
+      .select(REVIEW_COLUMNS)
+      .eq('status', status)
+      .order('updated_at', { ascending: false })
+      .limit(100),
+  );
+  const [accounts, properties] = await Promise.all([
+    accountLabels(db, [...new Set(rows.map((r) => r.account_id))]),
+    propertyLabels(
+      db,
+      rows.map((r) => r.property_id),
+    ),
+  ]);
+  const data: ReviewListItem[] = rows.map((r) => ({
+    ...r,
+    property_name: properties.get(r.property_id)?.name ?? 'Property removed',
+    customer_phone: accounts.get(r.account_id)?.phone ?? null,
+  }));
+  ok(res, data);
+});
+
+/* POST /backoffice/properties/:id/review {status: done|open, note?} */
+backofficeRouter.post('/properties/:id/review', allow('documents.review'), async (req, res) => {
+  const ctx = auth(req);
+  const id = uuidParam(req.params.id, 'Property');
+  const { status, note } = reviewDecisionSchema.parse(req.body);
+  const row = must<PropertyReview | null>(
+    await ctx.db
+      .from('property_reviews')
+      .update({
+        status,
+        ...(note !== undefined ? { note: note || null } : {}),
+        reviewed_by: ctx.userId,
+        reviewed_at: status === 'done' ? new Date().toISOString() : null,
+      })
+      .eq('property_id', id)
+      .select(REVIEW_COLUMNS)
+      .maybeSingle(),
+  );
+  if (!row) throw notFound('Review');
+  await staffAudit(
+    ctx,
+    status === 'done' ? 'staff.property.reviewed' : 'staff.property.review_reopened',
+    row.account_id,
+    { type: 'property', id },
+    { reasons: row.reasons },
+  );
+  ok(res, row);
+});
+
+/** Pittu section of the staff property screen (null when Pittu was never involved). */
+async function loadPittu(db: SupabaseClient, propertyId: string): Promise<BackofficePittu | null> {
+  const [review, answers, facts] = await Promise.all([
+    db.from('property_reviews').select(REVIEW_COLUMNS).eq('property_id', propertyId).maybeSingle(),
+    db.from('property_answers').select('question_id, answer').eq('property_id', propertyId),
+    db
+      .from('property_facts')
+      .select('key, value, final_value, status, confidence, pages')
+      .eq('property_id', propertyId)
+      .neq('status', 'superseded')
+      .order('key'),
+  ]);
+  const data: BackofficePittu = {
+    review: must<PropertyReview | null>(review),
+    answers: Object.fromEntries(
+      must<{ question_id: string; answer: string }[]>(answers).map((a) => [
+        a.question_id,
+        a.answer,
+      ]),
+    ),
+    facts: must<BackofficePittu['facts']>(facts),
+  };
+  return data.review || data.facts.length || Object.keys(data.answers).length ? data : null;
+}

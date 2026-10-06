@@ -1,6 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   AccountPlanState,
+  AiSummary,
+  PropertyReview,
+  PropertyReviewStatus,
+  ReviewListItem,
   AuditEntry,
   BackofficeAccount,
   BackofficeAccountDetail,
@@ -94,6 +98,41 @@ export const useBoProperty = (id: string) =>
     queryKey: boKeys.property(id),
     queryFn: () => api<BackofficeProperty>(`/backoffice/properties/${id}`),
   });
+
+/* ---- Pittu (AI): usage, cost, failures, Review list ---- */
+
+export const useBoAiSummary = () =>
+  useQuery({
+    queryKey: ['backoffice', 'ai', 'summary'],
+    queryFn: () => api<AiSummary>('/backoffice/ai/summary'),
+  });
+
+export const useBoReviews = (status: PropertyReviewStatus) =>
+  useQuery({
+    queryKey: ['backoffice', 'ai', 'reviews', status],
+    queryFn: () => api<ReviewListItem[]>(`/backoffice/ai/reviews?status=${status}`),
+  });
+
+export function useBoRetryReading() {
+  const refresh = useRefresh();
+  return useMutation({
+    mutationFn: (analysisId: string) =>
+      api<{ queued: boolean }>(`/backoffice/ai/analyses/${analysisId}/retry`, { method: 'POST' }),
+    onSuccess: refresh,
+  });
+}
+
+export function useBoReviewDecision(propertyId: string) {
+  const refresh = useRefresh();
+  return useMutation({
+    mutationFn: (body: { status: PropertyReviewStatus; note?: string }) =>
+      api<PropertyReview>(`/backoffice/properties/${propertyId}/review`, {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: refresh,
+  });
+}
 
 export const useBoServices = () =>
   useQuery({

@@ -212,6 +212,43 @@ async function enforceDailyLimit(db: SupabaseClient, accountId: string): Promise
   }
 }
 
+/** Can staff start this failed reading again? (others are final for the document) */
+export const isRetryableFailure = (errorCode: string | null) =>
+  RETRYABLE_FAILURES.has(errorCode ?? '');
+
+/**
+ * Staff "Read again" on a failed reading (Backoffice → Pittu). Same rules
+ * as the customer's retry except the daily limit; the monthly budget is
+ * still checked when the job runs. Returns false if it cannot be retried.
+ */
+export async function requeueFailedAnalysis(analysisId: string): Promise<boolean> {
+  const db = server();
+  const row = must<Pick<AnalysisRow, 'id' | 'account_id' | 'status' | 'error_code'> | null>(
+    await db
+      .from('document_analyses')
+      .select('id, account_id, status, error_code')
+      .eq('id', analysisId)
+      .maybeSingle(),
+  );
+  if (!row) throw notFound('Reading');
+  if (row.status !== 'failed' || !isRetryableFailure(row.error_code)) return false;
+  assertAiAvailable(row.account_id);
+  must(
+    await db
+      .from('document_analyses')
+      .update({
+        status: 'queued',
+        attempts: 0,
+        error_code: null,
+        finished_at: null,
+        started_at: null,
+      })
+      .eq('id', row.id)
+      .eq('status', 'failed'),
+  );
+  return true;
+}
+
 /** True when the job should be (re)started by whoever is looking at it. */
 export function needsRun(row: Pick<AnalysisRow, 'status' | 'started_at' | 'attempts'>): boolean {
   if (row.attempts >= MAX_ATTEMPTS) return false;

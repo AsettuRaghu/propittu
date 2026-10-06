@@ -7,6 +7,7 @@ import {
   isValidAnswer,
   matchBuyerName,
   pittuQuestions,
+  reviewReasons,
   type PittuContext,
 } from '@propittu/shared';
 
@@ -114,4 +115,29 @@ test('documents checklist follows the state', () => {
     ],
   );
   assert.equal(documentChecklist({ ...KA_PLOT, state: 'Telangana' }).length, 2);
+});
+
+test('Review list: who goes on it and why', () => {
+  const owner = { ...KA_PLOT, account_name: 'Ananya Rao' };
+  const typed = [{ key: 'city', status: 'confirmed', confidence: 'high' }];
+  assert.deepEqual(reviewReasons(owner, {}, typed), [], 'owner by name, clean facts → not listed');
+  assert.deepEqual(reviewReasons(KA_PLOT, { relation: 'owner' }, typed), ['name_mismatch']);
+  assert.deepEqual(reviewReasons(KA_PLOT, { relation: 'manage' }, typed), [
+    'name_mismatch',
+    'not_owner',
+  ]);
+  assert.deepEqual(
+    reviewReasons(owner, {}, [
+      { key: 'property_kind', status: 'edited', confidence: 'high' },
+      { key: 'pincode', status: 'confirmed', confidence: 'low' },
+      { key: 'village', status: 'edited', confidence: 'low' },
+    ]),
+    ['type_changed', 'low_confidence'],
+    'an unsure value the customer corrected is fine; one accepted as read is not',
+  );
+  assert.deepEqual(
+    reviewReasons({ ...KA_PLOT, account_name: null }, { relation: 'family' }, []),
+    ['not_owner'],
+    'no account name → no mismatch claim, but family still listed',
+  );
 });

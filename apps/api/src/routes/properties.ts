@@ -27,6 +27,7 @@ import { HttpError, must, notFound, ok, uuidParam } from '../errors.js';
 import { assertOwnsProperty } from '../ownership.js';
 import { enforceLimit, planOf, requireFeature } from '../plan.js';
 import { removeObjects, signDownloads } from '../storage.js';
+import { refreshReview } from './pittu.js';
 import { listReadyPhotos } from './photos.js';
 import { listReadyVideos } from './videos.js';
 
@@ -428,6 +429,7 @@ propertiesRouter.post('/properties/:id/setup', async (req, res) => {
       facts_rejected: rejected,
     },
   );
+  await refreshReview(ctx, id);
   ok(res, toProperty(row));
 });
 

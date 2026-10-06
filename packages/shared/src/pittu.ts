@@ -487,3 +487,99 @@ export interface PittuState {
   context: PittuContext;
   answers: PittuAnswers;
 }
+
+/* ------------------------------------------------------------------ *
+ * Staff review (Backoffice → Pittu → Review list)
+ *
+ * A property lands on the Review list when something about it deserves
+ * a human look. Fixed rules, re-checked whenever the customer finishes
+ * setup or answers a question; a reviewed property reopens only when a
+ * NEW reason appears.
+ * ------------------------------------------------------------------ */
+
+export const REVIEW_REASONS = [
+  'name_mismatch',
+  'not_owner',
+  'type_changed',
+  'low_confidence',
+] as const;
+export type ReviewReason = (typeof REVIEW_REASONS)[number];
+
+export const REVIEW_REASON_LABELS: Record<ReviewReason, string> = {
+  name_mismatch: 'Name differs from the deed',
+  not_owner: 'Not the owner (family / manages it)',
+  type_changed: 'Property type changed',
+  low_confidence: 'Unsure values accepted',
+};
+
+/** One deed fact as the review rule needs it. */
+export interface ReviewFact {
+  key: string;
+  status: string;
+  confidence: string | null;
+}
+
+export function reviewReasons(
+  ctx: PittuContext,
+  answers: PittuAnswers,
+  facts: ReviewFact[],
+): ReviewReason[] {
+  const reasons: ReviewReason[] = [];
+  const match = matchBuyerName(ctx.account_name, ctx.buyers);
+  // Answered "owner" despite a different name → still worth a look.
+  if (match === 'no_match') reasons.push('name_mismatch');
+  if (match !== 'match' && (answers.relation === 'family' || answers.relation === 'manage')) {
+    reasons.push('not_owner');
+  }
+  if (facts.some((f) => f.key === 'property_kind' && f.status === 'edited')) {
+    reasons.push('type_changed');
+  }
+  if (facts.some((f) => f.confidence === 'low' && f.status === 'confirmed')) {
+    reasons.push('low_confidence');
+  }
+  return reasons;
+}
+
+/** Short question names for staff screens. */
+export const PITTU_QUESTION_LABELS: Record<PittuQuestionId, string> = {
+  relation: 'Relation to property',
+  plot_built: 'Plot built?',
+  occupancy: 'Who lives there',
+  last_visit: 'Last seen',
+  khata_name: 'Khata in owner’s name',
+  ptin: 'PTIN',
+  tax_paid: 'Tax paid this year',
+};
+
+export type PropertyReviewStatus = 'open' | 'done';
+
+export interface PropertyReview {
+  property_id: string;
+  account_id: string;
+  reasons: ReviewReason[];
+  status: PropertyReviewStatus;
+  note: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** GET /backoffice/ai/reviews */
+export interface ReviewListItem extends PropertyReview {
+  property_name: string;
+  customer_phone: string | null;
+}
+
+/** Pittu section of GET /backoffice/properties/:id */
+export interface BackofficePittu {
+  review: PropertyReview | null;
+  answers: PittuAnswers;
+  facts: {
+    key: string;
+    value: unknown;
+    final_value: unknown;
+    status: string;
+    confidence: string | null;
+    pages: number[];
+  }[];
+}

@@ -19,6 +19,7 @@ import {
 } from './constants';
 import type { Order } from './billing';
 import type { AccountPlanState } from './plans';
+import type { BackofficePittu } from './pittu';
 import type {
   Property,
   PropertyDocument,
@@ -296,6 +297,12 @@ export const releaseSlotSchema = z.object({
   reason: z.string().trim().min(3, 'Say why the slot is freed').max(500),
 });
 
+/** Staff decision on a Pittu review (POST /backoffice/properties/:id/review). */
+export const reviewDecisionSchema = z.object({
+  status: z.enum(['open', 'done']),
+  note: z.string().trim().max(500).optional(),
+});
+
 /** One audit entry for the Backoffice activity list (M11). */
 export interface AuditEntry {
   id: string;
@@ -316,6 +323,8 @@ export interface BackofficeProperty {
   account_id: string;
   photos: PropertyPhoto[];
   documents: PropertyDocument[];
+  /** Present when the property was added from a deed or answered Pittu's questions. */
+  pittu: BackofficePittu | null;
 }
 
 export interface StaffService extends Service {
