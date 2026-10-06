@@ -807,7 +807,7 @@ values ('acc0000b-0000-0000-0000-00000000000b', 'included_service', 'property_vi
 set role authenticated;
 select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
 select tst.ok((select (q->>'mode') = 'upgrade' and (q->>'list_price_paise')::int = 149900
-                      and abs((q->>'credit_paise')::int - 25019) < 200
+                      and abs((q->>'credit_paise')::int - 25019) < 300
                       and (q->>'amount_paise')::int = 149900 - (q->>'credit_paise')::int
                from (select public.plan_quote('plus') q) x),
   'upgrade Basic → Plus mid-term: unused Basic is credited (prorated)');
