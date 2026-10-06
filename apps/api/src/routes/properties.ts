@@ -208,15 +208,13 @@ propertiesRouter.post('/properties', async (req, res) => {
  * GET /properties/:id — Property details (§18) + completion (M2)
  * ------------------------------------------------------------------ */
 
-/** Confirmed properties only — drafts never count toward the plan. */
+/**
+ * Property slots used this plan term (the database counts them): every
+ * property that existed or was added this term, deleted or not, unless staff
+ * freed it. Drafts never count.
+ */
 async function countConfirmed(db: SupabaseClient, accountId: string): Promise<number> {
-  const res = await db
-    .from('properties')
-    .select('id', { count: 'exact', head: true })
-    .eq('account_id', accountId)
-    .eq('is_draft', false);
-  must(res);
-  return res.count ?? 0;
+  return Number(must<number>(await db.rpc('property_slots_used', { p_account: accountId })) ?? 0);
 }
 
 /* ------------------------------------------------------------------ *

@@ -127,6 +127,13 @@ export interface AccountPlanState {
     max_documents_on_a_property: number;
     max_photos_on_a_property: number;
     max_videos_on_a_property: number;
+    /**
+     * Property slots this term: every property that existed or was added
+     * this term uses one until the term ends (deleting does not free it).
+     */
+    property_slots_used: number;
+    /** Deleted this term but still counted (until the term ends). */
+    deleted_still_counted: { name: string; deleted_at: string }[];
   };
   /** What the customer has already received from Propittu. */
   received: {

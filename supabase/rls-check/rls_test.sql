@@ -1168,6 +1168,79 @@ reset role;
 
 -- =====================================================================
 \echo
+\echo '== Property slots: a property uses a slot for the whole term =='
+-- =====================================================================
+
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+create temp table slots0 as select public.property_slots_used('acc0000a-0000-0000-0000-00000000000a') as n;
+select tst.ok((select n from slots0) >= 1, 'properties that exist in the term hold a slot');
+insert into public.properties (account_id, user_id, property_type, name)
+values ('acc0000a-0000-0000-0000-00000000000a', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'land', 'Slot test plot');
+select tst.ok(public.property_slots_used('acc0000a-0000-0000-0000-00000000000a') = (select n from slots0) + 1,
+  'adding a property uses a slot');
+delete from public.properties where name = 'Slot test plot';
+select tst.ok(public.property_slots_used('acc0000a-0000-0000-0000-00000000000a') = (select n from slots0) + 1,
+  'deleting it does NOT free the slot before the term ends');
+select tst.ok((select property_deleted_at is not null and property_name = 'Slot test plot' from public.property_slots
+               where property_name = 'Slot test plot'),
+  'the slot remembers the deleted property by name');
+insert into public.properties (account_id, user_id, property_type, name, is_draft)
+values ('acc0000a-0000-0000-0000-00000000000a', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'other', 'Slot test draft', true);
+select tst.ok(public.property_slots_used('acc0000a-0000-0000-0000-00000000000a') = (select n from slots0) + 1,
+  'a draft uses no slot');
+delete from public.properties where name = 'Slot test draft';
+select tst.rejects($$insert into public.property_slots (account_id, property_name)
+                     values ('acc0000a-0000-0000-0000-00000000000a', 'x')$$, 'customers cannot write slots');
+select tst.rejects($$update public.property_slots set released_at = now()$$, 'customers cannot free a slot');
+select tst.rejects($$select public.staff_release_property_slot((select id from public.property_slots limit 1), 'please')$$,
+  'customers cannot use the staff release');
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.rejects($$select public.property_slots_used('acc0000a-0000-0000-0000-00000000000a')$$,
+  'another account cannot read A''s slots');
+select tst.rows('select * from public.property_slots where account_id = ''acc0000a-0000-0000-0000-00000000000a''', 0,
+  'B cannot see A''s slots');
+
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+select tst.rejects($$select public.staff_release_property_slot((select id from public.property_slots where property_name = 'Slot test plot'), '')$$,
+  'staff must give a reason');
+select public.staff_release_property_slot((select id from public.property_slots where property_name = 'Slot test plot'),
+  'Property sold — deed of sale checked');
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.ok(public.property_slots_used('acc0000a-0000-0000-0000-00000000000a') = (select n from slots0),
+  'staff freed the slot (case by case) — it counts no more');
+reset role;
+select tst.ok(exists (select 1 from public.audit_events where action = 'db.property_slots.update' and actor_type = 'staff'),
+  'the staff release is in the audit trail');
+
+-- A plan that can't hold today's properties is refused.
+insert into public.properties (account_id, user_id, property_type, name)
+select 'acc0000a-0000-0000-0000-00000000000a', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'land', 'Bulk ' || g
+from generate_series(1, 11) g;
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.ok((select public.plan_quote('plus')->>'blocked_reason') like 'You have % properties and Plus covers 10.%',
+  'buying a plan with fewer slots than today''s properties is refused');
+select tst.rejects($$select public.create_plan_order('plus')$$, 'and cannot be ordered');
+reset role;
+delete from public.properties where name like 'Bulk %';
+
+-- A new term starts fresh: only properties that exist on its first day count.
+insert into public.properties (account_id, user_id, property_type, name)
+values ('acc0000a-0000-0000-0000-00000000000a', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'land', 'Gone before renewal');
+delete from public.properties where name = 'Gone before renewal';
+insert into public.account_plans (account_id, plan_version_id, source, starts_at, ends_at)
+select 'acc0000a-0000-0000-0000-00000000000a', pv.id, 'staff', now(), now() + interval '365 days'
+from public.plan_versions pv join public.plans p on p.id = pv.plan_id where p.code = 'plus' and pv.is_current;
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.ok(public.property_slots_used('acc0000a-0000-0000-0000-00000000000a')
+              = (select count(*)::int from public.properties where account_id = 'acc0000a-0000-0000-0000-00000000000a' and not is_draft),
+  'a new term counts only the properties that exist on its first day');
+reset role;
+
+-- =====================================================================
+\echo
 \echo '== Deleting a property =='
 -- =====================================================================
 

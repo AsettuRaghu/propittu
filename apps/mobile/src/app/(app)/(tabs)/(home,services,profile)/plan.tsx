@@ -49,7 +49,7 @@ import {
 type Tab = 'usage' | 'plans' | 'payments';
 
 /** How a plan card relates to what the customer has now. */
-type CardState = 'choose' | 'current' | 'upgrade' | 'later';
+type CardState = 'choose' | 'current' | 'upgrade' | 'later' | 'too_small';
 
 const PLAN_ACCENT: Record<string, Accent> = { trial: 'teal', basic: 'sky', plus: 'violet' };
 const PLAN_GRADIENT: Record<string, readonly [string, string]> = {
@@ -81,14 +81,18 @@ export default function PlanScreen() {
     (top, p) => (!top || p.price_paise > top.price_paise ? p : top),
     null,
   )?.code;
+  const owned = s.usage.properties;
   const cardState = (p: PublicPlan): CardState =>
-    !paidPlan
-      ? 'choose'
-      : p.code === code
-        ? 'current'
-        : p.price_paise > currentPrice
-          ? 'upgrade'
-          : 'later';
+    // A plan must hold every property you have today.
+    p.benefits.limits.max_properties !== undefined && owned > p.benefits.limits.max_properties
+      ? 'too_small'
+      : !paidPlan
+        ? 'choose'
+        : p.code === code
+          ? 'current'
+          : p.price_paise > currentPrice
+            ? 'upgrade'
+            : 'later';
 
   const choose = async (plan: PublicPlan) => {
     let q;
@@ -225,6 +229,7 @@ export default function PlanScreen() {
                 plan={p}
                 state={cardState(p)}
                 laterDate={s.current ? formatDate(s.current.ends_at) : null}
+                owned={owned}
                 popular={!paidPlan && p.code === topCode}
                 busy={checkout.isPending && checkout.variables === p.code}
                 disabled={checkout.isPending}
@@ -441,7 +446,12 @@ function UsageTab({
           icon="home"
           accent="indigo"
           label="Properties"
-          used={u.properties}
+          hint={
+            u.deleted_still_counted.length
+              ? `this term · incl. ${u.deleted_still_counted.length} deleted`
+              : 'this term'
+          }
+          used={u.property_slots_used}
           limit={l.max_properties}
         />
         <UsageRow
@@ -637,6 +647,7 @@ function PlanCard({
   plan,
   state,
   laterDate,
+  owned,
   popular,
   busy,
   disabled,
@@ -649,19 +660,22 @@ function PlanCard({
   busy: boolean;
   disabled: boolean;
   onChoose: () => void;
+  owned: number;
 }) {
   const a = accents[PLAN_ACCENT[plan.code] ?? 'slate'];
   const current = state === 'current';
-  const later = state === 'later';
+  const later = state === 'later' || state === 'too_small';
   const label = busy
     ? 'Opening payment…'
     : current
       ? 'Renew'
       : state === 'upgrade'
         ? `Upgrade to ${plan.name}`
-        : later
-          ? `Available after ${laterDate ?? 'your plan ends'}`
-          : `Choose ${plan.name}`;
+        : state === 'too_small'
+          ? `Covers ${plan.benefits.limits.max_properties} — you have ${owned} properties`
+          : later
+            ? `Available after ${laterDate ?? 'your plan ends'}`
+            : `Choose ${plan.name}`;
   return (
     <View style={[styles.planCard, shadow, current && { borderColor: a.fg }]}>
       <View style={styles.planHead}>

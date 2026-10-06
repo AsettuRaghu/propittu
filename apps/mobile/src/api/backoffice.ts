@@ -10,6 +10,7 @@ import type {
   DocumentStatus,
   OutcomeInput,
   PropertyDocument,
+  PropertySlot,
   ServiceFulfilment,
   StaffRequestUpdateInput,
   StaffService,
@@ -68,6 +69,25 @@ export const useBoActivity = (accountId: string, kind: 'events' | 'changes') =>
     queryFn: () => api<AuditEntry[]>(`/backoffice/accounts/${accountId}/activity?kind=${kind}`),
     staleTime: 0,
   });
+
+export const useBoSlots = (accountId: string) =>
+  useQuery({
+    queryKey: ['backoffice', 'slots', accountId],
+    queryFn: () => api<PropertySlot[]>(`/backoffice/accounts/${accountId}/slots`),
+    staleTime: 0,
+  });
+
+export function useBoReleaseSlot() {
+  const refresh = useRefresh();
+  return useMutation({
+    mutationFn: ({ slotId, reason }: { slotId: string; reason: string }) =>
+      api<{ released: boolean }>(`/backoffice/slots/${slotId}/release`, {
+        method: 'POST',
+        body: { reason },
+      }),
+    onSuccess: refresh,
+  });
+}
 
 export const useBoProperty = (id: string) =>
   useQuery({

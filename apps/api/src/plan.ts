@@ -34,6 +34,8 @@ interface CurrentPlanRow {
   starts_at: string;
   ends_at: string;
   cancel_at_period_end: boolean;
+  /** Carried over on an upgrade: the term (slots, included services) continues. */
+  usage_since: string | null;
   plan_version: {
     id: string;
     version: number;
@@ -47,7 +49,7 @@ interface CurrentPlanRow {
 }
 
 const CURRENT_PLAN_SELECT =
-  'id, source, starts_at, ends_at, cancel_at_period_end, ' +
+  'id, source, starts_at, ends_at, cancel_at_period_end, usage_since, ' +
   'plan_version:plan_versions(id, version, price_paise, currency, billing_period, term_days, ' +
   'plan:plans(code, name, description), benefits:plan_version_benefits(kind, code, value, period))';
 
@@ -310,6 +312,24 @@ export async function describeAccountPlan(
       ),
     ]);
 
+  // Property slots this term (see migration 18): counted by the database.
+  const slotsUsed = state.current
+    ? Number(must<number>(await db.rpc('property_slots_used', { p_account: accountId })) ?? 0)
+    : 0;
+  const windowStart = state.current ? (state.current.usage_since ?? state.current.starts_at) : null;
+  const deletedCounted = windowStart
+    ? must<{ property_name: string; property_deleted_at: string }[]>(
+        await db
+          .from('property_slots')
+          .select('property_name, property_deleted_at')
+          .eq('account_id', accountId)
+          .is('released_at', null)
+          .not('property_deleted_at', 'is', null)
+          .gte('claimed_at', windowStart)
+          .order('property_deleted_at', { ascending: false }),
+      ).map((r) => ({ name: r.property_name, deleted_at: r.property_deleted_at }))
+    : [];
+
   const usage = must<{ property_count: number; storage_bytes: number } | null>(usageRes);
   const perProperty =
     must<{ document_count: number; photo_count: number; video_count: number }[]>(summariesRes);
@@ -369,6 +389,8 @@ export async function describeAccountPlan(
       max_documents_on_a_property: Math.max(0, ...perProperty.map((p) => p.document_count)),
       max_photos_on_a_property: Math.max(0, ...perProperty.map((p) => p.photo_count)),
       max_videos_on_a_property: Math.max(0, ...perProperty.map((p) => p.video_count)),
+      property_slots_used: slotsUsed,
+      deleted_still_counted: deletedCounted,
     },
     received: {
       services_completed: servicesCompleted,

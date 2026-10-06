@@ -2,7 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import type { PropertyDetail } from '@propittu/shared';
-import { useDeleteProperty, useProperty, useUpdateProperty } from '@/api/queries';
+import { useDeleteProperty, useProperty, useUpdateProperty, useMe } from '@/api/queries';
 import { dialog, toast } from '@/components/Dialog';
 import { DocumentSlots } from '@/components/DocumentSlots';
 import { Footer } from '@/components/Footer';
@@ -16,6 +16,7 @@ import {
 import { ErrorState, LoadingState } from '@/components/States';
 import { Banner, Button } from '@/components/ui';
 import { errorMessage, fieldErrors } from '@/lib/errors';
+import { formatDate } from '@/lib/format';
 import { space } from '@/theme';
 
 /** Edit and delete a property (PRODUCT_SPEC.md §8.2). */
@@ -36,6 +37,7 @@ function EditForm({ property }: { property: PropertyDetail }) {
   const scrollRef = useRef<ScrollView>(null);
   const update = useUpdateProperty(property.id);
   const remove = useDeleteProperty();
+  const me = useMe();
 
   const onChange = (patch: Partial<PropertyFormValues>) => {
     setValues((v) => ({ ...v, ...patch }));
@@ -75,6 +77,9 @@ function EditForm({ property }: { property: PropertyDetail }) {
       message: [
         files > 0 ? 'Its photos and documents will be permanently deleted.' : null,
         property.service_request_count > 0 ? 'Your service request history will be kept.' : null,
+        me.data?.plan.ends_at
+          ? `It still counts as one of your plan’s properties until ${formatDate(me.data.plan.ends_at)}, when your plan renews.`
+          : null,
         'This cannot be undone.',
       ]
         .filter(Boolean)

@@ -286,6 +286,9 @@ const fake = http.createServer((req, res) => {
           },
         ]);
       }
+      // Property slots this term (migration 18): the fake account has 3 properties.
+      if (req.url.startsWith('/rest/v1/rpc/property_slots_used')) return json(200, 3);
+      if (req.method === 'GET' && req.url.startsWith('/rest/v1/property_slots')) return json(200, []);
       if (req.url.startsWith('/rest/v1/backoffice_accounts')) {
         const row = {
           id: ACCOUNT,

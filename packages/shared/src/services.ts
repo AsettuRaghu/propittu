@@ -281,6 +281,21 @@ export interface BackofficeAccountDetail {
   orders: Order[];
 }
 
+/** One property slot this term (Backoffice). */
+export interface PropertySlot {
+  id: string;
+  property_id: string | null;
+  property_name: string;
+  claimed_at: string;
+  property_deleted_at: string | null;
+  released_at: string | null;
+  release_reason: string | null;
+}
+
+export const releaseSlotSchema = z.object({
+  reason: z.string().trim().min(3, 'Say why the slot is freed').max(500),
+});
+
 /** One audit entry for the Backoffice activity list (M11). */
 export interface AuditEntry {
   id: string;

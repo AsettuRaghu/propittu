@@ -7,6 +7,7 @@ import {
   createServiceSchema,
   documentStatusSchema,
   extendPlanSchema,
+  releaseSlotSchema,
   grantPlanSchema,
   LIMIT_LABELS,
   OPEN_REQUEST_STATUSES,
@@ -25,6 +26,7 @@ import {
   visitReportSchema,
   type AccountPlanState,
   type AuditEntry,
+  type PropertySlot,
   type BackofficeAccount,
   type BackofficeAccountDetail,
   type BackofficeOrder,
@@ -267,6 +269,55 @@ backofficeRouter.get('/accounts/:accountId/activity', async (req, res) => {
     changes: d?.changes ?? null,
   }));
   ok(res, data);
+});
+
+/* GET /backoffice/accounts/:accountId/slots — property slots in the current term */
+backofficeRouter.get('/accounts/:accountId/slots', async (req, res) => {
+  const { db } = auth(req);
+  const accountId = uuidParam(req.params.accountId, 'Account');
+  await loadAccount(db, accountId);
+  const plan = await describeAccountPlan(db, accountId); // also claims slots for existing properties
+  const since = plan.current ? plan.current.starts_at : null;
+  if (!since) return ok(res, [] as PropertySlot[]);
+  const window = must<{ usage_since: string | null; starts_at: string } | null>(
+    await db
+      .from('account_plans')
+      .select('usage_since, starts_at')
+      .eq('id', plan.current!.id)
+      .maybeSingle(),
+  );
+  const start = window?.usage_since ?? window?.starts_at ?? since;
+  const rows = must<PropertySlot[]>(
+    await db
+      .from('property_slots')
+      .select(
+        'id, property_id, property_name, claimed_at, property_deleted_at, released_at, release_reason',
+      )
+      .eq('account_id', accountId)
+      .gte('claimed_at', start)
+      .order('claimed_at'),
+  );
+  ok(res, rows);
+});
+
+/* POST /backoffice/slots/:slotId/release {reason} — free a slot, case by case */
+backofficeRouter.post('/slots/:slotId/release', allow('plans.manage'), async (req, res) => {
+  const ctx = auth(req);
+  const slotId = uuidParam(req.params.slotId, 'Slot');
+  const { reason } = releaseSlotSchema.parse(req.body);
+  const slot = must<{ account_id: string } | null>(
+    await ctx.db.from('property_slots').select('account_id').eq('id', slotId).maybeSingle(),
+  );
+  if (!slot) throw notFound('Slot');
+  must(await ctx.db.rpc('staff_release_property_slot', { p_slot: slotId, p_reason: reason }));
+  await staffAudit(
+    ctx,
+    'staff.property_slot.released',
+    slot.account_id,
+    { type: 'property_slot', id: slotId },
+    { reason },
+  );
+  ok(res, { released: true });
 });
 
 /* GET /backoffice/accounts/:accountId/plan */

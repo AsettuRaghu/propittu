@@ -162,8 +162,23 @@ function Option({
   );
 }
 
-/** Shown instead of both choices when the plan's property limit is reached. */
-export function PropertyLimitReached({ limit, planName }: { limit: number; planName: string }) {
+/** Shown instead of both choices when this term's property slots are all used. */
+export function PropertyLimitReached({
+  limit,
+  planName,
+  usedBy,
+  renewsOn,
+}: {
+  limit: number;
+  planName: string;
+  /** Names using the slots (incl. deleted ones still counted this term). */
+  usedBy: string[];
+  renewsOn: string | null;
+}) {
+  const names =
+    usedBy.length <= 2
+      ? usedBy.join(' and ')
+      : `${usedBy.slice(0, 2).join(', ')} and ${usedBy.length - 2} more`;
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <View style={[styles.limit, shadow]}>
@@ -172,11 +187,25 @@ export function PropertyLimitReached({ limit, planName }: { limit: number; planN
         </View>
         <Text style={typography.title}>Room for one more?</Text>
         <Text style={[typography.body, styles.center]}>
-          Your {planName} plan includes {limit} {limit === 1 ? 'property' : 'properties'}, and
-          you’re using {limit === 1 ? 'it' : 'all of them'}. Upgrade to add another — everything you
-          have stays as it is.
+          Your {planName} plan covers {limit} {limit === 1 ? 'property' : 'properties'} this term
+          {names ? `, used by ${names}` : ''}. Upgrade to add more
+          {renewsOn ? `, or add one after your plan renews on ${renewsOn}` : ''}.
         </Text>
         <Button title="See plans" onPress={() => router.push('/plan')} />
+        <Button
+          title="Contact us"
+          variant="ghost"
+          icon="support"
+          onPress={() =>
+            router.push({
+              pathname: '/support/new',
+              params: { category: 'property', subject: 'Replace a property / property sold' },
+            })
+          }
+        />
+        <Text style={[typography.caption, styles.center]}>
+          Sold a property or added one by mistake? Tell us and we’ll take a look.
+        </Text>
       </View>
     </ScrollView>
   );

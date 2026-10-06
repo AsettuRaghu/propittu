@@ -4,7 +4,14 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MAX_PHOTOS_AT_CREATION } from '@propittu/shared';
-import { useAccountPlan, useCreateProperty, useInvalidateProperty, useMe } from '@/api/queries';
+import {
+  useAccountPlan,
+  useCreateProperty,
+  useInvalidateProperty,
+  useMe,
+  useProperties,
+} from '@/api/queries';
+import { formatDate } from '@/lib/format';
 import { AddPropertyChoice, PropertyLimitReached } from '@/components/AddPropertyChoice';
 import { preparePhoto, uploadPhoto } from '@/api/uploads';
 import { Footer } from '@/components/Footer';
@@ -37,11 +44,24 @@ export default function AddPropertyScreen() {
   const { manual } = useLocalSearchParams<{ manual?: string }>();
   const [mode, setMode] = useState<'choose' | 'form'>(manual === '1' ? 'form' : 'choose');
 
-  // Check the plan's property limit first, for both ways of adding.
+  const properties = useProperties();
+
+  // Check this term's property slots first, for both ways of adding.
   const limit = account.data?.plan?.benefits.limits.max_properties;
-  const used = account.data?.usage.properties ?? 0;
+  const used = account.data?.usage.property_slots_used ?? 0;
   if (limit !== undefined && used >= limit) {
-    return <PropertyLimitReached limit={limit} planName={account.data?.plan?.name ?? 'current'} />;
+    const usedBy = [
+      ...(properties.data ?? []).map((p) => p.name),
+      ...(account.data?.usage.deleted_still_counted ?? []).map((d) => `${d.name} (deleted)`),
+    ];
+    return (
+      <PropertyLimitReached
+        limit={limit}
+        planName={account.data?.plan?.name ?? 'current'}
+        usedBy={usedBy}
+        renewsOn={account.data?.current ? formatDate(account.data.current.ends_at) : null}
+      />
+    );
   }
   // Pittu is offered only where it will work right now; everyone else sees the form.
   if (mode === 'choose' && me.data?.features.document_reading) {
