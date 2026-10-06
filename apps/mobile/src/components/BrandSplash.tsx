@@ -1,11 +1,11 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useState } from 'react';
-import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, gradients } from '@/theme';
 import { Icon } from './Icon';
 
 /**
- * A brief branded moment when the app opens (~1.1 s). It sits ON TOP of the
+ * A brief branded moment when the app opens (~2.5 s; a tap skips it). It sits ON TOP of the
  * app — which is already rendering and loading underneath — so it never
  * delays anything. The white background continues the native splash.
  */
@@ -31,15 +31,16 @@ export function BrandSplash({ onDone }: { onDone: () => void }) {
           useNativeDriver: true,
         }),
       ]),
-      Animated.delay(420),
-      Animated.timing(fade, { toValue: 0, duration: 260, useNativeDriver: true }),
+      Animated.delay(1600),
+      Animated.timing(fade, { toValue: 0, duration: 320, useNativeDriver: true }),
     ]);
     anim.start(({ finished }) => finished && onDone());
     return () => anim.stop();
   }, [logo, tagline, fade, onDone]);
 
   return (
-    <Animated.View style={[styles.wrap, { opacity: fade }]} pointerEvents="none">
+    <Animated.View style={[styles.wrap, { opacity: fade }]}>
+      <Pressable style={styles.fill} onPress={onDone} accessibilityLabel="Skip" />
       <Animated.View
         style={[
           styles.center,
@@ -88,6 +89,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 10,
   },
+  fill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   center: { alignItems: 'center', gap: 14 },
   mark: { width: 84, height: 84, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
   word: { fontSize: 30, fontWeight: '800', color: colors.text, letterSpacing: -0.8 },
