@@ -40,7 +40,14 @@ Examples:
 
 ## 3. Flow
 
+Pittu runs **inside Add property** (owner decision, 6 Oct 2026) — it is how a
+property is added, not a separate step afterwards. It uses the app's own
+header, tab bar, cards and colours.
+
 ```
+Add property ─► [Upload your Sale Deed — recommended]  or  [Enter details myself]
+             ─► "Pittu is reading your deed…" (secure upload → details → names & numbers)
+             ─► "We found these details" (tap to correct; handwritten/low-confidence highlighted)
 Deed read ─► Pittu intro card ("We read your deed!" + 1-line summary)
           ─► 3–6 question cards (chosen by rules, skippable, resumable)
           ─► Property Card (summary, profile score)
@@ -70,10 +77,17 @@ and which care need it may raise.
 | `khata_name` | "Is the Khata in your name yet?" | state = KA | Yes · Not yet · Not sure → not yet/not sure → `care.khata` |
 | `khata_number` | "Do you have your flat's own Khata number?" | state = KA, kind = apartment, no flat Khata | Add it · Don't have one · Not sure → none → `care.khata` |
 | `ptin` | "Do you know your property tax number (PTIN)?" | state = TG | Add it · Don't have one · Not sure → none → `care.tax` |
-| `tax_payer` | "Who pays the property tax?" | always (once) | I do · Tenant / family · Not sure / not paid lately → not sure → `care.tax` |
-| `tax_last_paid` | "When was the property tax last paid?" | tax_payer = I do | This year · Last year · Earlier / not sure → earlier → `care.tax` |
+| `tax_paid` | "Have you paid this year's property tax?" | always | Yes → `tax_receipt` · Not yet → `care.tax` · Not sure → `care.tax` |
+| `tax_receipt` | "Great! Add the receipt so we can track it." | tax_paid = yes | Upload receipt (saved to Documents · Property Tax, then read by Pittu) · Later → reminder on property page; either way → `care.tax_renewal` |
 | `association` | "Is there an owners' association?" | kind = apartment | Yes · No · Not sure → (context only) |
 | `photos` | "Want to add a few photos so you can see it from anywhere?" | photo_count = 0 | Add now · Later → opens picker |
+
+**Every question leads to a service** (owner decision): each answer either
+raises a care need or sets up an ongoing one, and Pittu's reply says so
+warmly ("No problem — Propittu can pay it for you on time.").
+
+Documents checklist on the summary: Sale Deed ✓ · latest Property Tax receipt ·
+Khata certificate — each missing one has an Upload action.
 
 Rule order: identity (`owner_relation`) → what it is (`plot_built`) → who uses
 it → when last seen → records (Khata/PTIN) → tax → nice-to-have (photos).
@@ -138,11 +152,16 @@ Care needs raised by answers (and deed facts) map to services:
 | `care.khata` | Khata not in name / no flat Khata | Khata / Mutation Assistance | "A Khata in your name makes tax, loans and selling easier. We can help." |
 | `care.tax` | tax payer unknown / not paid lately / no PTIN | Property Tax Assistance | "We can check what's due and pay it for you." |
 | `care.tenant` | rented | Property Visit | "A periodic check is useful when it's rented." |
+| `care.tax_renewal` | tax paid (receipt or not) | Property Tax Assistance (reminder / pay next year) | "We remind you before it's due — or pay it for you." |
+| `care.construction` | under construction | Site Inspection (progress visits) | "We visit the site and send photos and a progress report." |
+| `care.upkeep` | built house | Maintenance | "We look for leaks, cracks and wear, and arrange repairs if you want." |
 
 Rules:
 - Show **at most 3**, most important first (identity/records → safety → upkeep).
-- Each shows its reason; "Let Propittu look after it" opens a pre-filled
-  request (or plan) using the existing service request flow.
+- Each shows its reason and a "Because …" line tied to the answer.
+- The final button is **"Add property & request N services"** — saving the
+  property and opening pre-filled requests (existing service request flow) in
+  one tap. "Save property, decide later" keeps the suggestions on the property page.
 - Services marked **requires legal review** (e.g. Khata/Mutation in disputed
   cases) say so up front: "Our team, with a lawyer where needed, will review this first."
 - Dismissed recommendations stay dismissed (until something changes).
