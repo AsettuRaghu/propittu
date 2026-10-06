@@ -62,6 +62,9 @@ jobs:
       - name: Lint
         run: npm run lint --workspace @propittu/api
 
+      - name: AI unit tests (no network, no cost)
+        run: npm run test:ai --workspace @propittu/api
+
       # Applies every migration to a throwaway Postgres and runs the
       # cross-tenant / escalation suite (uses the runner's Postgres binaries).
       - name: Database security (RLS)

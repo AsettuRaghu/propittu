@@ -5,6 +5,7 @@ import { requireAuth } from './auth.js';
 import { errorHandler, notFoundHandler } from './errors.js';
 import { logger } from './logger.js';
 import { cronRouter } from './routes/cron.js';
+import { analysisRouter } from './routes/analysis.js';
 import { documentsRouter } from './routes/documents.js';
 import { healthRouter } from './routes/health.js';
 import { legalRouter } from './routes/legal.js';
@@ -70,6 +71,7 @@ export function createApp(): express.Express {
   app.use(photosRouter);
   app.use(videosRouter);
   app.use(documentsRouter);
+  app.use(analysisRouter);
   app.use(servicesRouter);
 
   app.use(notFoundHandler);

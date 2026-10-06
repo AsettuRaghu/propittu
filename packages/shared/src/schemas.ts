@@ -7,7 +7,7 @@ import {
   DOCUMENT_TYPES,
   INDIAN_MOBILE_REGEX,
   INDIAN_PINCODE_REGEX,
-  MAX_DOCUMENT_BYTES,
+  maxDocumentBytes,
   MAX_PHOTO_BYTES,
   MAX_VIDEO_BYTES,
   MAX_VIDEO_SECONDS,
@@ -147,19 +147,20 @@ export const photoIntentSchema = z.object({
   caption: optionalText(200),
 });
 
-export const documentIntentSchema = z.object({
-  document_type: z.enum(DOCUMENT_TYPES, { message: 'Choose a document type' }),
-  file_name: z.string().trim().min(1).max(255),
-  mime_type: z.enum(ALLOWED_DOCUMENT_MIME_TYPES, {
-    message: 'Documents must be PDF, JPG or PNG',
-  }),
-  file_size: z
-    .number()
-    .int()
-    .positive()
-    .max(MAX_DOCUMENT_BYTES, `Documents must be under ${MAX_DOCUMENT_BYTES / (1024 * 1024)} MB`),
-  description: optionalText(500),
-});
+export const documentIntentSchema = z
+  .object({
+    document_type: z.enum(DOCUMENT_TYPES, { message: 'Choose a document type' }),
+    file_name: z.string().trim().min(1).max(255),
+    mime_type: z.enum(ALLOWED_DOCUMENT_MIME_TYPES, {
+      message: 'Documents must be PDF, JPG or PNG',
+    }),
+    file_size: z.number().int().positive(),
+    description: optionalText(500),
+  })
+  .refine((v) => v.file_size <= maxDocumentBytes(v.document_type), {
+    message: 'This file is too large',
+    path: ['file_size'],
+  });
 
 /** PATCH /documents/:id — recategorise or describe. Review status is staff-only. */
 export const updateDocumentSchema = z

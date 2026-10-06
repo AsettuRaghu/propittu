@@ -11,11 +11,14 @@
     "lint": "eslint src",
     "test": "node test/smoke.mjs",
     "test:bundle": "npm run build && SMOKE_TARGET=bundle node test/smoke.mjs",
-    "build": "node scripts/build-vercel.mjs"
+    "build": "node scripts/build-vercel.mjs",
+    "test:ai": "tsx --test test/ai-unit.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.131.0",
     "@propittu/shared": "*",
     "@supabase/supabase-js": "^2.117.2",
+    "@vercel/functions": "^3.9.11",
     "express": "^5.2.1",
     "jose": "^6.2.12",
     "pino": "^10.4.0",

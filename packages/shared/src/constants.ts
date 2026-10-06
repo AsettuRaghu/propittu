@@ -177,6 +177,13 @@ export type UploadStatus = (typeof UPLOAD_STATUSES)[number];
  * ------------------------------------------------------------------ */
 
 export const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024; // 10 MB
+/** Sale deeds and registration documents can be long scans (real deeds reach ~55 MB). */
+export const MAX_LONG_DOCUMENT_BYTES = 50 * 1024 * 1024; // 50 MB (Supabase Free per-file maximum)
+export const LONG_DOCUMENT_TYPES = ['sale_deed', 'registration'] as const;
+export const maxDocumentBytes = (type: string): number =>
+  (LONG_DOCUMENT_TYPES as readonly string[]).includes(type)
+    ? MAX_LONG_DOCUMENT_BYTES
+    : MAX_DOCUMENT_BYTES;
 export const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB
 
 export const ALLOWED_DOCUMENT_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png'] as const;
@@ -235,6 +242,9 @@ export const API_ERROR_CODES = [
   'LIMIT_REACHED', // a Usage Limit would be exceeded
   // Payments (M7)
   'PAYMENTS_UNAVAILABLE', // provider not configured yet
+  // AI (document intelligence)
+  'AI_UNAVAILABLE', // switched off, not in the pilot, or over budget
+  'AI_LIMIT_REACHED', // daily readings per account used up
 ] as const;
 
 /* ------------------------------------------------------------------ *

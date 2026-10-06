@@ -53,7 +53,8 @@ await writeFile(
       shouldAddSourcemapSupport: true,
       // Mumbai — same region as the Supabase project (ap-south-1).
       regions: ['bom1'],
-      maxDuration: 30,
+      // Document readings (AI) run after the response for up to ~1–2 min.
+      maxDuration: 120,
     },
     null,
     2,

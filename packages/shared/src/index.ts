@@ -6,3 +6,4 @@ export * from './plans';
 export * from './services';
 export * from './billing';
 export * from './support';
+export * from './ai';

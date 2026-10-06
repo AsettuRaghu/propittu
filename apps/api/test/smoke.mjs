@@ -89,18 +89,64 @@ let planMode = 'trial';
 // Services (M4) in the fake: a visit (Included in Trial/Plus), an extra-only
 // inspection, and a service that is neither Included nor sold as an Extra.
 const SVC = {
-  visit: { id: '5e000000-0000-0000-0000-000000000001', code: 'property_visit', name: 'Property Visit', category: 'property_care', description: '', sort_order: 100, price_paise: 99900, is_extra_available: true },
-  inspect: { id: '5e000000-0000-0000-0000-000000000002', code: 'site_inspection', name: 'Site Inspection', category: 'property_care', description: '', sort_order: 110, price_paise: 149900, is_extra_available: true },
-  closed: { id: '5e000000-0000-0000-0000-000000000003', code: 'legal_only', name: 'Legal Only', category: 'other', description: '', sort_order: 900, price_paise: null, is_extra_available: false },
+  visit: {
+    id: '5e000000-0000-0000-0000-000000000001',
+    code: 'property_visit',
+    name: 'Property Visit',
+    category: 'property_care',
+    description: '',
+    sort_order: 100,
+    price_paise: 99900,
+    is_extra_available: true,
+  },
+  inspect: {
+    id: '5e000000-0000-0000-0000-000000000002',
+    code: 'site_inspection',
+    name: 'Site Inspection',
+    category: 'property_care',
+    description: '',
+    sort_order: 110,
+    price_paise: 149900,
+    is_extra_available: true,
+  },
+  closed: {
+    id: '5e000000-0000-0000-0000-000000000003',
+    code: 'legal_only',
+    name: 'Legal Only',
+    category: 'other',
+    description: '',
+    sort_order: 900,
+    price_paise: null,
+    is_extra_available: false,
+  },
 };
 let visitsLeft = 1;
 let reqStatus = 'requested';
 const REQ_ID = '5f000000-0000-0000-0000-000000000001';
 const reqRow = () => ({
-  id: REQ_ID, reference: 'PR-000200', status: reqStatus, description: 'Visit please', coverage: 'included', price_paise: null,
-  preferred_date: null, scheduled_for: null, status_note: null, confirmed_at: null, completed_at: null, cancelled_at: null, cancelled_by: null,
-  created_at: 'now', updated_at: 'now', account_id: ACCOUNT, user_id: USER,
-  service: { id: SVC.visit.id, code: 'property_visit', name: 'Property Visit', category: 'property_care' },
+  id: REQ_ID,
+  reference: 'PR-000200',
+  status: reqStatus,
+  description: 'Visit please',
+  coverage: 'included',
+  price_paise: null,
+  preferred_date: null,
+  scheduled_for: null,
+  status_note: null,
+  confirmed_at: null,
+  completed_at: null,
+  cancelled_at: null,
+  cancelled_by: null,
+  created_at: 'now',
+  updated_at: 'now',
+  account_id: ACCOUNT,
+  user_id: USER,
+  service: {
+    id: SVC.visit.id,
+    code: 'property_visit',
+    name: 'Property Visit',
+    category: 'property_care',
+  },
   property: { id: '11111111-1111-1111-1111-111111111111', name: 'Plot', city: 'Hyderabad' },
 });
 const planRow = () => {
@@ -241,8 +287,19 @@ const fake = http.createServer((req, res) => {
         ]);
       }
       if (req.url.startsWith('/rest/v1/backoffice_accounts')) {
-        const row = { id: ACCOUNT, status: 'active', created_at: 'now', phone: '919876543210', full_name: null, property_count: 3, open_request_count: 1,
-                      plan_code: 'trial', plan_name: 'Free Trial', plan_source: 'trial', plan_ends_at: '2099-01-01T00:00:00Z' };
+        const row = {
+          id: ACCOUNT,
+          status: 'active',
+          created_at: 'now',
+          phone: '919876543210',
+          full_name: null,
+          property_count: 3,
+          open_request_count: 1,
+          plan_code: 'trial',
+          plan_name: 'Free Trial',
+          plan_source: 'trial',
+          plan_ends_at: '2099-01-01T00:00:00Z',
+        };
         return json(200, single ? row : [row]);
       }
       if (req.url.startsWith('/rest/v1/rpc/included_remaining')) {
@@ -250,15 +307,23 @@ const fake = http.createServer((req, res) => {
         return json(200, args.p_code === 'property_visit' ? visitsLeft : null);
       }
       if (req.url.startsWith('/rest/v1/rpc/create_service_request')) return json(200, REQ_ID);
-      if (req.url.startsWith('/rest/v1/rpc/cancel_service_request') || req.url.startsWith('/rest/v1/rpc/staff_update_service_request')) {
+      if (
+        req.url.startsWith('/rest/v1/rpc/cancel_service_request') ||
+        req.url.startsWith('/rest/v1/rpc/staff_update_service_request')
+      ) {
         return json(200, null);
       }
       if (req.method === 'GET' && req.url.startsWith('/rest/v1/services')) {
         const match = Object.values(SVC).find((x) => req.url.includes(`id=eq.${x.id}`));
-        if (req.url.includes('id=eq.')) return json(200, single ? (match ?? null) : match ? [match] : []);
+        if (req.url.includes('id=eq.'))
+          return json(200, single ? (match ?? null) : match ? [match] : []);
         return json(200, Object.values(SVC));
       }
-      if (req.method === 'GET' && req.url.startsWith('/rest/v1/service_requests') && req.url.includes(`id=eq.${REQ_ID}`)) {
+      if (
+        req.method === 'GET' &&
+        req.url.startsWith('/rest/v1/service_requests') &&
+        req.url.includes(`id=eq.${REQ_ID}`)
+      ) {
         return json(200, single ? reqRow() : [reqRow()]);
       }
       if (req.method === 'GET' && req.url.startsWith('/rest/v1/profiles')) {
@@ -564,7 +629,7 @@ try {
     token: valid,
     method: 'POST',
     body: {
-      document_type: 'sale_deed',
+      document_type: 'other',
       file_name: 'big.pdf',
       mime_type: 'application/pdf',
       file_size: 11 * 1024 * 1024,
@@ -572,8 +637,44 @@ try {
   });
   check(
     r.status === 400 && r.json.error.details?.file_size,
-    'document over 10 MB → 400 (§21)',
+    'ordinary document over 10 MB → 400 (§21)',
     r.json,
+  );
+  r = await call('/properties/11111111-1111-1111-1111-111111111111/documents/intent', {
+    token: valid,
+    method: 'POST',
+    body: {
+      document_type: 'sale_deed',
+      file_name: 'huge-deed.pdf',
+      mime_type: 'application/pdf',
+      file_size: 51 * 1024 * 1024,
+    },
+  });
+  check(
+    r.status === 400 && r.json.error.details?.file_size,
+    'sale deed over 50 MB → 400 (deeds may be up to 50 MB)',
+    r.json,
+  );
+
+  // ---- Pittu (AI): switched off unless AI_ENABLED ----
+  const DOC = '22222222-2222-2222-2222-222222222222';
+  r = await call(`/documents/${DOC}/analysis`, { token: valid, method: 'POST' });
+  check(
+    r.status === 503 && r.json.error.code === 'AI_UNAVAILABLE',
+    'Pittu off by default: start reading → 503 AI_UNAVAILABLE',
+    r.json,
+  );
+  r = await call(`/documents/${DOC}/analysis`, { token: valid });
+  check(
+    r.status === 503 && r.json.error.code === 'AI_UNAVAILABLE',
+    'Pittu off by default: reading status → 503',
+    r.json,
+  );
+  r = await call(`/documents/${DOC}/analysis`, { method: 'POST' });
+  check(r.status === 401, 'Pittu needs a login → 401', r.status);
+  check(
+    !seen.some((x) => x.url.includes('document_analyses') || x.url.includes('ai_operations')),
+    'with Pittu off, no AI tables are touched',
   );
 
   // ---- M2 / M3 ----
@@ -660,9 +761,25 @@ try {
     method: 'POST',
     body: { property_id: 'x', service_id: 'y', description: '' },
   });
-  check(r.status === 400 && r.json.error.details?.property_id && r.json.error.details?.service_id, 'request with invalid ids → 400 (notes are optional now)', r.json);
-  r = await call('/service-requests', { token: valid, method: 'POST', body: { property_id: '11111111-1111-1111-1111-111111111111', service_id: '5e000000-0000-0000-0000-000000000001', preferred_slot: 'midnight' } });
-  check(r.status === 400 && r.json.error.details?.preferred_slot, 'unknown time of day rejected', r.json);
+  check(
+    r.status === 400 && r.json.error.details?.property_id && r.json.error.details?.service_id,
+    'request with invalid ids → 400 (notes are optional now)',
+    r.json,
+  );
+  r = await call('/service-requests', {
+    token: valid,
+    method: 'POST',
+    body: {
+      property_id: '11111111-1111-1111-1111-111111111111',
+      service_id: '5e000000-0000-0000-0000-000000000001',
+      preferred_slot: 'midnight',
+    },
+  });
+  check(
+    r.status === 400 && r.json.error.details?.preferred_slot,
+    'unknown time of day rejected',
+    r.json,
+  );
 
   // ---- M5 / M6: Plans, Benefits, Usage, Limited Access ----
   r = await call('/me', { token: valid });
@@ -801,35 +918,101 @@ try {
   visitsLeft = 1;
   r = await call('/services', { token: valid });
   const byCode = Object.fromEntries((r.json?.data ?? []).map((x) => [x.code, x]));
-  check(r.status === 200 && byCode.property_visit?.coverage === 'included' && byCode.property_visit.included_remaining === 1,
-    'catalogue: visit shown as Included with 1 left (from the Plan)', byCode.property_visit);
-  check(byCode.site_inspection?.coverage === 'extra' && byCode.site_inspection.price_paise === 149900,
-    'catalogue: non-included service shown as Extra with its price', byCode.site_inspection);
-  check(byCode.legal_only?.coverage === 'unavailable', 'catalogue: neither Included nor Extra → unavailable', byCode.legal_only);
+  check(
+    r.status === 200 &&
+      byCode.property_visit?.coverage === 'included' &&
+      byCode.property_visit.included_remaining === 1,
+    'catalogue: visit shown as Included with 1 left (from the Plan)',
+    byCode.property_visit,
+  );
+  check(
+    byCode.site_inspection?.coverage === 'extra' && byCode.site_inspection.price_paise === 149900,
+    'catalogue: non-included service shown as Extra with its price',
+    byCode.site_inspection,
+  );
+  check(
+    byCode.legal_only?.coverage === 'unavailable',
+    'catalogue: neither Included nor Extra → unavailable',
+    byCode.legal_only,
+  );
   visitsLeft = 0;
   r = await call('/services', { token: valid });
-  check(r.json?.data?.find((x) => x.code === 'property_visit')?.coverage === 'extra', 'allowance used up → visit becomes Extra', r.json);
+  check(
+    r.json?.data?.find((x) => x.code === 'property_visit')?.coverage === 'extra',
+    'allowance used up → visit becomes Extra',
+    r.json,
+  );
 
-  r = await call('/service-requests', { token: valid, method: 'POST',
-    body: { property_id: '11111111-1111-1111-1111-111111111111', service_id: SVC.closed.id, description: 'x' } });
-  check(r.status === 403 && r.json.error.code === 'FEATURE_NOT_INCLUDED', 'unavailable service cannot be requested', r.json);
-  r = await call('/service-requests', { token: valid, method: 'POST',
-    body: { property_id: '11111111-1111-1111-1111-111111111111', service_id: SVC.visit.id, description: 'x', preferred_date: '2020-01-01' } });
-  check(r.status === 400 && r.json.error.details?.preferred_date, 'preferred date in the past → 400', r.json);
+  r = await call('/service-requests', {
+    token: valid,
+    method: 'POST',
+    body: {
+      property_id: '11111111-1111-1111-1111-111111111111',
+      service_id: SVC.closed.id,
+      description: 'x',
+    },
+  });
+  check(
+    r.status === 403 && r.json.error.code === 'FEATURE_NOT_INCLUDED',
+    'unavailable service cannot be requested',
+    r.json,
+  );
+  r = await call('/service-requests', {
+    token: valid,
+    method: 'POST',
+    body: {
+      property_id: '11111111-1111-1111-1111-111111111111',
+      service_id: SVC.visit.id,
+      description: 'x',
+      preferred_date: '2020-01-01',
+    },
+  });
+  check(
+    r.status === 400 && r.json.error.details?.preferred_date,
+    'preferred date in the past → 400',
+    r.json,
+  );
 
   seen.length = 0;
-  r = await call('/service-requests', { token: valid, method: 'POST',
-    body: { property_id: '11111111-1111-1111-1111-111111111111', service_id: SVC.visit.id, description: 'Visit please', coverage: 'included', price_paise: 0, status: 'completed' } });
+  r = await call('/service-requests', {
+    token: valid,
+    method: 'POST',
+    body: {
+      property_id: '11111111-1111-1111-1111-111111111111',
+      service_id: SVC.visit.id,
+      description: 'Visit please',
+      coverage: 'included',
+      price_paise: 0,
+      status: 'completed',
+    },
+  });
   const rpcCall = seen.find((x) => x.url.startsWith('/rest/v1/rpc/create_service_request'));
-  check(r.status === 201 && r.json.data.reference === 'PR-000200', 'POST /service-requests → 201', r.json);
-  check(rpcCall && !('coverage' in rpcCall.body) && !('price_paise' in rpcCall.body) && !('p_status' in rpcCall.body),
-    'request opened via create_service_request(); client coverage/price/status ignored', rpcCall?.body);
-  check(!seen.some((x) => x.method === 'POST' && x.url.startsWith('/rest/v1/service_requests')),
-    'API never inserts service requests directly', seen.map((x) => x.url));
+  check(
+    r.status === 201 && r.json.data.reference === 'PR-000200',
+    'POST /service-requests → 201',
+    r.json,
+  );
+  check(
+    rpcCall &&
+      !('coverage' in rpcCall.body) &&
+      !('price_paise' in rpcCall.body) &&
+      !('p_status' in rpcCall.body),
+    'request opened via create_service_request(); client coverage/price/status ignored',
+    rpcCall?.body,
+  );
+  check(
+    !seen.some((x) => x.method === 'POST' && x.url.startsWith('/rest/v1/service_requests')),
+    'API never inserts service requests directly',
+    seen.map((x) => x.url),
+  );
 
   reqStatus = 'confirmed';
   r = await call(`/service-requests/${REQ_ID}/cancel`, { token: valid, method: 'POST' });
-  check(r.status === 409, 'customer cannot cancel a confirmed request (usage already consumed)', r.json);
+  check(
+    r.status === 409,
+    'customer cannot cancel a confirmed request (usage already consumed)',
+    r.json,
+  );
   reqStatus = 'requested';
   r = await call(`/service-requests/${REQ_ID}/cancel`, { token: valid, method: 'POST' });
   check(r.status === 200, 'customer can cancel a Requested request', r.json);
@@ -841,43 +1024,114 @@ try {
   check(r.status === 404, 'customer → /backoffice/requests is 404', r.status);
   r = await call('/backoffice/requests', { token: SUP });
   check(r.status === 200, 'any staff can view the request queue', r.json);
-  r = await call(`/backoffice/requests/${REQ_ID}/status`, { token: SUP, method: 'POST', body: { status: 'confirmed' } });
+  r = await call(`/backoffice/requests/${REQ_ID}/status`, {
+    token: SUP,
+    method: 'POST',
+    body: { status: 'confirmed' },
+  });
   check(r.status === 403, 'support staff cannot change request status (role check)', r.json);
-  r = await call(`/backoffice/requests/${REQ_ID}/status`, { token: OPS, method: 'POST', body: { status: 'completed' } });
-  check(r.status === 409 && /cannot be moved/.test(r.json.error.message), 'invalid transition (Requested → Completed) → 409', r.json);
-  r = await call(`/backoffice/requests/${REQ_ID}/status`, { token: OPS, method: 'POST', body: { status: 'scheduled' } });
+  r = await call(`/backoffice/requests/${REQ_ID}/status`, {
+    token: OPS,
+    method: 'POST',
+    body: { status: 'completed' },
+  });
+  check(
+    r.status === 409 && /cannot be moved/.test(r.json.error.message),
+    'invalid transition (Requested → Completed) → 409',
+    r.json,
+  );
+  r = await call(`/backoffice/requests/${REQ_ID}/status`, {
+    token: OPS,
+    method: 'POST',
+    body: { status: 'scheduled' },
+  });
   check(r.status === 400, 'scheduling without a date → 400', r.json);
   seen.length = 0;
-  r = await call(`/backoffice/requests/${REQ_ID}/status`, { token: OPS, method: 'POST', body: { status: 'confirmed', note: 'Booked' } });
+  r = await call(`/backoffice/requests/${REQ_ID}/status`, {
+    token: OPS,
+    method: 'POST',
+    body: { status: 'confirmed', note: 'Booked' },
+  });
   const upd = seen.find((x) => x.url.startsWith('/rest/v1/rpc/staff_update_service_request'));
-  const reqAudit = seen.find((x) => x.method === 'POST' && x.url.startsWith('/rest/v1/audit_events'));
-  check(r.status === 200 && upd?.body?.p_status === 'confirmed' && upd.body.p_note === 'Booked',
-    'operations confirm → staff_update_service_request() (consumes usage in the DB)', upd?.body);
-  check(reqAudit?.body?.action === 'staff.service_request.confirmed' && reqAudit.body.account_id === ACCOUNT && reqAudit.body.actor_type === 'staff',
-    'status change audited against the customer Account', reqAudit?.body);
-  r = await call(`/backoffice/requests/${REQ_ID}/report`, { token: OPS, method: 'PUT', body: { visited_at: '2026-10-05', condition: 'good' } });
+  const reqAudit = seen.find(
+    (x) => x.method === 'POST' && x.url.startsWith('/rest/v1/audit_events'),
+  );
+  check(
+    r.status === 200 && upd?.body?.p_status === 'confirmed' && upd.body.p_note === 'Booked',
+    'operations confirm → staff_update_service_request() (consumes usage in the DB)',
+    upd?.body,
+  );
+  check(
+    reqAudit?.body?.action === 'staff.service_request.confirmed' &&
+      reqAudit.body.account_id === ACCOUNT &&
+      reqAudit.body.actor_type === 'staff',
+    'status change audited against the customer Account',
+    reqAudit?.body,
+  );
+  r = await call(`/backoffice/requests/${REQ_ID}/report`, {
+    token: OPS,
+    method: 'PUT',
+    body: { visited_at: '2026-10-05', condition: 'good' },
+  });
   check(r.status === 409, 'no visit report before the request is confirmed', r.json);
-  r = await call(`/backoffice/requests/${REQ_ID}/report/media/intent`, { token: OPS, method: 'POST', body: { kind: 'photo', mime_type: 'video/mp4', file_size: 10 } });
+  r = await call(`/backoffice/requests/${REQ_ID}/report/media/intent`, {
+    token: OPS,
+    method: 'POST',
+    body: { kind: 'photo', mime_type: 'video/mp4', file_size: 10 },
+  });
   check(r.status === 400, 'visit media: kind/type mismatch → 400', r.json);
-  r = await call('/backoffice/services/5e000000-0000-0000-0000-000000000001', { token: SUP, method: 'PATCH', body: { price_paise: 1 } });
+  r = await call('/backoffice/services/5e000000-0000-0000-0000-000000000001', {
+    token: SUP,
+    method: 'PATCH',
+    body: { price_paise: 1 },
+  });
   check(r.status === 403, 'support staff cannot edit the catalogue', r.json);
   r = await call(`/backoffice/accounts/${ACCOUNT}`, { token: SUP });
-  check(r.status === 200 && r.json.data.account.phone === '919876543210' && r.json.data.blocked_reason === null,
-    'account detail: plan, usage and "why blocked" (none)', r.json?.data);
+  check(
+    r.status === 200 &&
+      r.json.data.account.phone === '919876543210' &&
+      r.json.data.blocked_reason === null,
+    'account detail: plan, usage and "why blocked" (none)',
+    r.json?.data,
+  );
 
   // ---- Visit report lock ----
   reqStatus = 'completed';
-  r = await call(`/backoffice/requests/${REQ_ID}/report`, { token: OPS, method: 'PUT', body: { visited_at: '2026-10-05', condition: 'good' } });
-  check(r.status === 409 && /locked/.test(r.json.error.message), 'published report is locked (completed request) → 409', r.json);
-  r = await call(`/backoffice/requests/${REQ_ID}/report/media/intent`, { token: OPS, method: 'POST', body: { kind: 'photo', mime_type: 'image/jpeg', file_size: 10 } });
+  r = await call(`/backoffice/requests/${REQ_ID}/report`, {
+    token: OPS,
+    method: 'PUT',
+    body: { visited_at: '2026-10-05', condition: 'good' },
+  });
+  check(
+    r.status === 409 && /locked/.test(r.json.error.message),
+    'published report is locked (completed request) → 409',
+    r.json,
+  );
+  r = await call(`/backoffice/requests/${REQ_ID}/report/media/intent`, {
+    token: OPS,
+    method: 'POST',
+    body: { kind: 'photo', mime_type: 'image/jpeg', file_size: 10 },
+  });
   check(r.status === 409, 'no new media on a published report', r.json);
   reqStatus = 'requested';
 
   // ---- M7: Payments ----
-  r = await call('/billing/checkout', { token: valid, method: 'POST', body: { plan_code: 'plus' } });
-  check(r.status === 503 && r.json.error.code === 'PAYMENTS_UNAVAILABLE', 'checkout without provider keys → 503 PAYMENTS_UNAVAILABLE (clear, not a crash)', r.json);
+  r = await call('/billing/checkout', {
+    token: valid,
+    method: 'POST',
+    body: { plan_code: 'plus' },
+  });
+  check(
+    r.status === 503 && r.json.error.code === 'PAYMENTS_UNAVAILABLE',
+    'checkout without provider keys → 503 PAYMENTS_UNAVAILABLE (clear, not a crash)',
+    r.json,
+  );
   planMode = 'expired';
-  r = await call('/billing/checkout', { token: valid, method: 'POST', body: { plan_code: 'plus' } });
+  r = await call('/billing/checkout', {
+    token: valid,
+    method: 'POST',
+    body: { plan_code: 'plus' },
+  });
   check(r.status === 503, 'Limited Access: the payment journey stays available (not 402)', r.json);
   r = await call('/billing/orders', { token: valid });
   check(r.status === 200, 'Limited Access: payment history stays available', r.json);
@@ -891,7 +1145,11 @@ try {
   const hook = (payload, signature, eventId = 'evt_smoke_1') =>
     fetch(`${API}/webhooks/razorpay`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', ...(signature ? { 'x-razorpay-signature': signature } : {}), 'x-razorpay-event-id': eventId },
+      headers: {
+        'content-type': 'application/json',
+        ...(signature ? { 'x-razorpay-signature': signature } : {}),
+        'x-razorpay-event-id': eventId,
+      },
       body: payload,
     });
   const sign = (body) => createHmac('sha256', WEBHOOK_SECRET).update(body).digest('hex');
@@ -899,7 +1157,15 @@ try {
     event: 'payment_link.paid',
     payload: {
       payment_link: { entity: { id: 'plink_smoke', notes: { order_id: ORDER } } },
-      payment: { entity: { id: 'pay_smoke', amount: 149900, currency: 'INR', method: 'upi', status: 'captured' } },
+      payment: {
+        entity: {
+          id: 'pay_smoke',
+          amount: 149900,
+          currency: 'INR',
+          method: 'upi',
+          status: 'captured',
+        },
+      },
     },
   });
 
@@ -910,36 +1176,77 @@ try {
   check(w.status === 401, 'webhook with a forged signature → 401', w.status);
   w = await hook(paid.replace('149900', '100'), sign(paid));
   check(w.status === 401, 'tampered webhook body (amount changed after signing) → 401', w.status);
-  check(!seen.some((x) => x.url.startsWith('/rest/v1/rpc/record_payment_event')),
-    'rejected webhooks never reach the database', seen.map((x) => x.url));
+  check(
+    !seen.some((x) => x.url.startsWith('/rest/v1/rpc/record_payment_event')),
+    'rejected webhooks never reach the database',
+    seen.map((x) => x.url),
+  );
 
   w = await hook(paid, sign(paid));
   const wb = await w.json();
   const rec = seen.find((x) => x.url.startsWith('/rest/v1/rpc/record_payment_event'));
-  check(w.status === 200 && wb.data.outcome === 'plan_activated', 'correctly signed webhook → recorded', wb);
-  check(rec?.body?.p_order === ORDER && rec.body.p_amount === 149900 && rec.body.p_event_type === 'payment.captured' &&
-        rec.body.p_payment_ref === 'pay_smoke' && rec.body.p_checkout_ref === 'plink_smoke' && rec.body.p_event_id === 'evt_smoke_1',
-    'webhook normalised to a provider-neutral payment event', rec?.body);
-  check(rec?.apikey === SECRET_KEY, 'only the webhook path uses the server key', rec?.apikey?.slice(0, 12));
-  check(seen.filter((x) => x.apikey === SECRET_KEY).every((x) => x.url.startsWith('/rest/v1/rpc/record_payment_event')),
-    'server key used for record_payment_event and nothing else', seen.filter((x) => x.apikey === SECRET_KEY).map((x) => x.url));
+  check(
+    w.status === 200 && wb.data.outcome === 'plan_activated',
+    'correctly signed webhook → recorded',
+    wb,
+  );
+  check(
+    rec?.body?.p_order === ORDER &&
+      rec.body.p_amount === 149900 &&
+      rec.body.p_event_type === 'payment.captured' &&
+      rec.body.p_payment_ref === 'pay_smoke' &&
+      rec.body.p_checkout_ref === 'plink_smoke' &&
+      rec.body.p_event_id === 'evt_smoke_1',
+    'webhook normalised to a provider-neutral payment event',
+    rec?.body,
+  );
+  check(
+    rec?.apikey === SECRET_KEY,
+    'only the webhook path uses the server key',
+    rec?.apikey?.slice(0, 12),
+  );
+  check(
+    seen
+      .filter((x) => x.apikey === SECRET_KEY)
+      .every((x) => x.url.startsWith('/rest/v1/rpc/record_payment_event')),
+    'server key used for record_payment_event and nothing else',
+    seen.filter((x) => x.apikey === SECRET_KEY).map((x) => x.url),
+  );
 
   // ---- Help & Support + profile ----
   planMode = 'expired';
   r = await call('/support/tickets', { token: valid });
   check(r.status === 200, 'Limited Access: Help & Support stays available', r.status);
   planMode = 'trial';
-  r = await call('/support/tickets', { token: valid, method: 'POST', body: { subject: 'x', category: 'nope', description: '' } });
-  check(r.status === 400 && r.json.error.details?.subject && r.json.error.details?.category, 'invalid ticket → 400 with field errors', r.json);
+  r = await call('/support/tickets', {
+    token: valid,
+    method: 'POST',
+    body: { subject: 'x', category: 'nope', description: '' },
+  });
+  check(
+    r.status === 400 && r.json.error.details?.subject && r.json.error.details?.category,
+    'invalid ticket → 400 with field errors',
+    r.json,
+  );
   r = await call('/backoffice/tickets', { token: valid });
   check(r.status === 404, 'customer → Backoffice tickets is 404', r.status);
   r = await call('/me', { token: valid, method: 'PATCH', body: { full_name: 'R' } });
   check(r.status === 400, 'name too short → 400', r.json);
   seen.length = 0;
-  r = await call('/me', { token: valid, method: 'PATCH', body: { full_name: '  Raghu Varma ', user_id: 'evil' } });
+  r = await call('/me', {
+    token: valid,
+    method: 'PATCH',
+    body: { full_name: '  Raghu Varma ', user_id: 'evil' },
+  });
   const prof = seen.find((x) => x.method === 'PATCH' && x.url.startsWith('/rest/v1/profiles'));
-  check(r.status === 200 && prof?.body?.full_name === 'Raghu Varma' && !('user_id' in prof.body) && prof.url.includes(`id=eq.${USER}`),
-    'PATCH /me updates only the caller’s own name', prof);
+  check(
+    r.status === 200 &&
+      prof?.body?.full_name === 'Raghu Varma' &&
+      !('user_id' in prof.body) &&
+      prof.url.includes(`id=eq.${USER}`),
+    'PATCH /me updates only the caller’s own name',
+    prof,
+  );
 
   r = await call('/cron/keepalive');
   check(r.status === 401, 'keep-alive cron without the cron secret → 401', r);

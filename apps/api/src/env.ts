@@ -31,6 +31,26 @@ const envSchema = z.object({
   // Public base URL of this API (payment return page). Vercel provides
   // VERCEL_PROJECT_PRODUCTION_URL automatically.
   PUBLIC_API_URL: z.url().optional(),
+
+  // ---- AI (see docs/AI_DOCUMENT_INTELLIGENCE.md). Off unless switched on. ----
+  AI_ENABLED: z.preprocess((v) => v === 'true' || v === '1', z.boolean()).default(false),
+  // 'fake' answers from a fixture (tests); never set in production.
+  AI_PROVIDER: z.enum(['anthropic', 'fake']).default('anthropic'),
+  ANTHROPIC_API_KEY: optionalSecret(20),
+  // Pilot: comma-separated account ids allowed to use AI. Empty = everyone (when enabled).
+  AI_PILOT_ACCOUNTS: z.preprocess(
+    (v) =>
+      typeof v === 'string'
+        ? v
+            .split(',')
+            .map((x) => x.trim())
+            .filter(Boolean)
+        : [],
+    z.array(z.uuid()),
+  ),
+  // Cost guards: readings per account per day, and a hard monthly spend cap (USD).
+  AI_DAILY_READS_PER_ACCOUNT: z.coerce.number().int().min(0).max(100).default(5),
+  AI_MONTHLY_BUDGET_USD: z.coerce.number().min(0).max(10_000).default(10),
   VERCEL_PROJECT_PRODUCTION_URL: z.string().optional(),
 });
 

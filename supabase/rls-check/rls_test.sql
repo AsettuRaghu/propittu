@@ -1083,6 +1083,70 @@ reset role;
 
 -- =====================================================================
 \echo
+\echo '== AI foundation: results written only by the server; customers read and decide =='
+-- =====================================================================
+
+set role service_role;
+insert into public.document_analyses (account_id, property_id, document_id, task, task_version, status, model, result)
+select d.account_id, d.property_id, d.id, 'sale_deed.extract', 'sale-deed-v2', 'ready', 'test-model', '{"unit_number": "28"}'
+from public.property_documents d where d.account_id = 'acc0000a-0000-0000-0000-00000000000a' and d.document_type = 'sale_deed' limit 1;
+insert into public.property_facts (account_id, property_id, analysis_id, document_id, key, value, pages, confidence)
+select a.account_id, a.property_id, a.id, a.document_id, 'unit_number', '"28"', '{10}', 'high'
+from public.document_analyses a where a.account_id = 'acc0000a-0000-0000-0000-00000000000a';
+insert into public.ai_operations (account_id, task, task_version, provider, model, input_tokens, output_tokens, cost_usd, duration_ms, outcome)
+values ('acc0000a-0000-0000-0000-00000000000a', 'sale_deed.extract', 'sale-deed-v2', 'anthropic', 'test-model', 25000, 1200, 0.062, 14000, 'ok');
+reset role;
+select tst.rejects($$insert into public.document_analyses (account_id, property_id, document_id, task, task_version)
+                     select account_id, property_id, document_id, task, task_version from public.document_analyses limit 1$$,
+  'the same document is never read twice by the same task version (cache)');
+
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rows('select * from public.document_analyses', 1, 'A reads its own document analysis');
+select tst.rows('select * from public.property_facts', 1, 'A reads the facts found');
+select tst.rows('select * from public.ai_operations', 0, 'customers cannot see AI usage or cost');
+select tst.rejects($$select public.ai_month_spend_usd()$$, 'customers cannot read the AI spend total');
+select tst.rejects($$insert into public.document_analyses (account_id, property_id, document_id, task, task_version)
+                     select account_id, property_id, document_id, 'sale_deed.extract', 'forged' from public.document_analyses$$,
+  'A cannot create an analysis (server only)');
+select tst.rejects($$update public.document_analyses set result = '{"unit_number": "99"}'$$,
+  'A cannot write an AI result');
+select tst.rejects($$update public.property_facts set value = '"99"'$$,
+  'A cannot change what the AI found');
+select tst.rows($$update public.property_facts set status = 'edited', final_value = '"28A"',
+                    decided_by = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', decided_at = now()$$, 1,
+  'A can confirm / edit a fact (the correction is kept)');
+select tst.rejects($$update public.property_facts set status = 'confirmed', decided_by = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'$$,
+  'A cannot record a decision in someone else''s name');
+select tst.rejects($$insert into public.ai_operations (task, task_version, provider, model, outcome)
+                     values ('x.y', 'v', 'p', 'm', 'ok')$$,
+  'A cannot write to the AI usage log');
+
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.rows('select * from public.document_analyses', 0, 'B cannot see A''s analyses');
+select tst.rows('select * from public.property_facts', 0, 'B cannot see A''s facts');
+select tst.rows($$update public.property_facts set status = 'rejected', decided_by = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'$$, 0,
+  'B cannot decide on A''s facts');
+
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+select tst.ok((select count(*) from public.ai_operations) = 1, 'staff can see AI usage and cost');
+reset role;
+set role service_role;
+select tst.ok(public.ai_month_spend_usd() = 0.062, 'the server reads this month''s AI spend for the budget cap');
+reset role;
+set role authenticated;
+select tst.ok((select status = 'edited' and final_value = '"28A"' from public.property_facts), 'staff see the customer''s correction');
+reset role;
+
+select tst.rejects($$update public.property_documents set file_size = 41943040
+                     where document_type <> 'sale_deed' and document_type <> 'registration'$$,
+  'ordinary documents stay at 10 MB');
+update public.property_documents set file_size = 41943040 where document_type = 'sale_deed';
+select tst.ok(exists (select 1 from public.property_documents where document_type = 'sale_deed' and file_size = 41943040),
+  'a 40 MB sale deed is allowed (Pittu reads deeds up to 50 MB)');
+
+-- =====================================================================
+\echo
 \echo '== Deleting a property =='
 -- =====================================================================
 
