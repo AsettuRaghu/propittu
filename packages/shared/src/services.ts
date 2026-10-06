@@ -136,6 +136,7 @@ export const STAFF_PERMISSIONS = {
   'requests.manage': ['operations', 'service_operations'],
   'services.manage': ['operations'],
   'documents.review': ['operations', 'support'],
+  'support.manage': ['operations', 'support'],
 } as const satisfies Record<string, readonly StaffRole[]>;
 
 export type StaffPermission = keyof typeof STAFF_PERMISSIONS;

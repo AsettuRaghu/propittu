@@ -22,6 +22,13 @@ import {
   type BackofficeAccount,
   type BackofficeAccountDetail,
   type BackofficeOrder,
+  type BackofficeTicket,
+  type BackofficeTicketDetail,
+  type SupportTicket,
+  OPEN_TICKET_STATUSES,
+  TICKET_STATUSES,
+  ticketMessageSchema,
+  ticketStatusSchema,
   type BackofficeProperty,
   type BackofficeRequest,
   type BackofficeRequestDetail,
@@ -41,6 +48,7 @@ import { HttpError, invalid, must, notFound, ok, uuidParam } from '../errors.js'
 import { describeAccountPlan } from '../plan.js';
 import { ORDER_COLUMNS, orderForRequest, toOrder, type OrderRow } from '../billing/orders.js';
 import { notify } from '../notify.js';
+import { loadMessages, TICKET_COLUMNS } from './support.js';
 import { loadReport, REQUEST_COLUMNS } from '../requests.js';
 import {
   removeObjects,
@@ -821,4 +829,115 @@ backofficeRouter.get('/payments', async (req, res) => {
     customer_phone: phones.get(r.user_id) || null,
   }));
   ok(res, data);
+});
+
+/* ================================================================== *
+ * Support tickets (Help & Support → Backoffice)
+ * ================================================================== */
+
+type TicketRow = SupportTicket & { account_id: string; user_id: string };
+
+async function withTicketCustomers(
+  db: SupabaseClient,
+  rows: TicketRow[],
+): Promise<BackofficeTicket[]> {
+  const ids = [...new Set(rows.map((r) => r.user_id))];
+  const profiles =
+    ids.length === 0
+      ? []
+      : must<{ id: string; phone: string; full_name: string | null }[]>(
+          await db.from('profiles').select('id, phone, full_name').in('id', ids),
+        );
+  const byId = new Map(profiles.map((p) => [p.id, p]));
+  return rows.map(({ user_id, ...r }) => ({
+    ...r,
+    customer_phone: byId.get(user_id)?.phone || null,
+    customer_name: byId.get(user_id)?.full_name ?? null,
+  }));
+}
+
+async function loadTicketDetail(db: SupabaseClient, id: string): Promise<BackofficeTicketDetail> {
+  const row = must<TicketRow | null>(
+    await db
+      .from('support_tickets')
+      .select(`${TICKET_COLUMNS}, account_id, user_id`)
+      .eq('id', id)
+      .maybeSingle(),
+  );
+  if (!row) throw notFound('Ticket');
+  const [[ticket], messages] = await Promise.all([
+    withTicketCustomers(db, [row]),
+    loadMessages(db, id),
+  ]);
+  return { ...(ticket as BackofficeTicket), messages };
+}
+
+const ticketListSchema = z.object({
+  status: z.enum(['open', 'all', ...TICKET_STATUSES]).default('open'),
+});
+
+/* GET /backoffice/tickets?status=open|all|<status> */
+backofficeRouter.get('/tickets', async (req, res) => {
+  const { db } = auth(req);
+  const { status } = ticketListSchema.parse(req.query);
+  let query = db
+    .from('support_tickets')
+    .select(`${TICKET_COLUMNS}, account_id, user_id`)
+    .order('last_message_at', { ascending: false })
+    .limit(100);
+  if (status === 'open') query = query.in('status', OPEN_TICKET_STATUSES);
+  else if (status !== 'all') query = query.eq('status', status);
+  ok(res, await withTicketCustomers(db, must<TicketRow[]>(await query)));
+});
+
+/* GET /backoffice/tickets/:id */
+backofficeRouter.get('/tickets/:id', async (req, res) => {
+  const { db } = auth(req);
+  ok(res, await loadTicketDetail(db, uuidParam(req.params.id, 'Ticket')));
+});
+
+/* POST /backoffice/tickets/:id/messages {body} — staff reply */
+backofficeRouter.post('/tickets/:id/messages', allow('support.manage'), async (req, res) => {
+  const ctx = auth(req);
+  const id = uuidParam(req.params.id, 'Ticket');
+  const { body } = ticketMessageSchema.parse(req.body);
+  const ticket = await loadTicketDetail(ctx.db, id);
+  must(
+    await ctx.db.from('support_ticket_messages').insert({
+      ticket_id: id,
+      account_id: ticket.account_id,
+      author_id: ctx.userId,
+      author_type: 'staff',
+      body,
+    }),
+  );
+  // A first staff reply moves a new ticket into progress.
+  if (ticket.status === 'open') {
+    must(await ctx.db.rpc('staff_set_ticket_status', { p_ticket: id, p_status: 'in_progress' }));
+  }
+  await staffAudit(ctx, 'staff.support_ticket.replied', ticket.account_id, {
+    type: 'support_ticket',
+    id,
+  });
+  ok(res, await loadTicketDetail(ctx.db, id), 201);
+});
+
+/* POST /backoffice/tickets/:id/status {status} */
+backofficeRouter.post('/tickets/:id/status', allow('support.manage'), async (req, res) => {
+  const ctx = auth(req);
+  const id = uuidParam(req.params.id, 'Ticket');
+  const { status } = ticketStatusSchema.parse(req.body);
+  const ticket = await loadTicketDetail(ctx.db, id);
+  must(await ctx.db.rpc('staff_set_ticket_status', { p_ticket: id, p_status: status }));
+  await staffAudit(
+    ctx,
+    'staff.support_ticket.status',
+    ticket.account_id,
+    { type: 'support_ticket', id },
+    {
+      from: ticket.status,
+      to: status,
+    },
+  );
+  ok(res, await loadTicketDetail(ctx.db, id));
 });

@@ -1,5 +1,6 @@
 import type {
   DocumentType,
+  TicketStatus,
   PropertyType,
   ServiceCategory,
   ServiceRequestStatus,
@@ -101,4 +102,12 @@ export const STATUS_ICONS: Record<ServiceRequestStatus, IconName> = {
   in_progress: 'bolt',
   completed: 'success',
   cancelled: 'cancelled',
+};
+
+export const TICKET_TONES: Record<TicketStatus, Tone> = {
+  open: 'info',
+  in_progress: 'brand',
+  waiting_on_customer: 'warning',
+  resolved: 'success',
+  closed: 'neutral',
 };

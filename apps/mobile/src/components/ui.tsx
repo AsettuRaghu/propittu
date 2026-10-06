@@ -250,7 +250,7 @@ export function GradientCard({
 export function IconTile({
   icon,
   accent = 'indigo',
-  size = 40,
+  size = 32,
   solid = false,
 }: {
   icon: IconName;
@@ -327,7 +327,7 @@ export function ListRow({
 }) {
   const content = (
     <>
-      {icon ? <IconTile icon={icon} accent={destructive ? 'coral' : accent} size={36} /> : null}
+      {icon ? <IconTile icon={icon} accent={destructive ? 'coral' : accent} size={30} /> : null}
       <View style={styles.flex}>
         <Text
           style={[typography.bodyStrong, destructive && { color: colors.danger }]}
@@ -689,7 +689,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
 
   button: {
-    minHeight: 50,
+    minHeight: 46,
     borderRadius: radius.md,
     borderWidth: 1,
     paddingHorizontal: space.lg,
@@ -708,7 +708,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
-    padding: space.lg,
+    padding: 14,
   },
   cardPressed: { opacity: 0.88 },
   gradient: { borderRadius: radius.lg, padding: space.lg, overflow: 'hidden' },
@@ -725,12 +725,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
-    paddingHorizontal: space.lg,
-    paddingVertical: space.md,
-    minHeight: 60,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    minHeight: 52,
   },
   listRowPressed: { backgroundColor: colors.surfaceMuted },
-  listDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 64 },
+  listDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 56 },
   rowValue: { maxWidth: '45%' },
   keyValue: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start' },
   divider: {
@@ -754,7 +754,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
-    padding: space.md,
+    paddingVertical: 10,
+    paddingHorizontal: space.md,
     borderRadius: radius.md,
   },
   bannerTitle: { fontSize: 14, fontWeight: '700', marginBottom: 1 },

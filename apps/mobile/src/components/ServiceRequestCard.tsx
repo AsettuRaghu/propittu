@@ -31,7 +31,7 @@ export function ServiceRequestCard({
   return (
     <Card onPress={onPress} style={styles.card}>
       <View style={styles.top}>
-        <IconTile icon={v.icon} accent={v.accent} size={42} />
+        <IconTile icon={v.icon} accent={v.accent} size={36} />
         <View style={styles.flex}>
           <Text style={typography.bodyStrong} numberOfLines={1}>
             {request.service.name}
@@ -70,7 +70,7 @@ export function ServiceRequestCard({
 }
 
 const styles = StyleSheet.create({
-  card: { gap: space.md },
+  card: { gap: 10 },
   top: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   flex: { flex: 1, minWidth: 0 },
   progress: { flexDirection: 'row', gap: 4 },

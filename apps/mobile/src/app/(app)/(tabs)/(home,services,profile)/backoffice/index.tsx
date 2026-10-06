@@ -6,22 +6,26 @@ import {
   formatPrice,
   ORDER_STATUS_LABELS,
   SERVICE_REQUEST_STATUS_LABELS,
+  TICKET_CATEGORY_LABELS,
+  TICKET_STATUS_LABELS,
   type BackofficeOrder,
+  type BackofficeTicket,
   type BackofficeAccount,
   type BackofficeRequest,
   type StaffService,
 } from '@propittu/shared';
 import { useBoPayments } from '@/api/billing';
+import { useBoTickets } from '@/api/support';
 import { useBoAccounts, useBoRequests, useBoServices, type RequestFilter } from '@/api/backoffice';
 import { TextField } from '@/components/Field';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
 import { Badge, Button, Card, Chips } from '@/components/ui';
 import { formatDate } from '@/lib/format';
-import { STATUS_TONES } from '@/lib/icons';
+import { STATUS_TONES, TICKET_TONES } from '@/lib/icons';
 import { colors, radius, space, typography } from '@/theme';
 import { Icon } from '@/components/Icon';
 
-type Tab = 'requests' | 'accounts' | 'payments' | 'services';
+type Tab = 'requests' | 'tickets' | 'accounts' | 'payments' | 'services';
 
 /**
  * Backoffice (M9) — staff mode. Reachable from Profile for staff only;
@@ -35,6 +39,7 @@ export default function BackofficeScreen() {
         {(
           [
             ['requests', 'Requests'],
+            ['tickets', 'Tickets'],
             ['accounts', 'Customers'],
             ['payments', 'Payments'],
             ['services', 'Services'],
@@ -55,6 +60,8 @@ export default function BackofficeScreen() {
       </View>
       {tab === 'requests' ? (
         <Requests />
+      ) : tab === 'tickets' ? (
+        <Tickets />
       ) : tab === 'accounts' ? (
         <Accounts />
       ) : tab === 'payments' ? (
@@ -63,6 +70,68 @@ export default function BackofficeScreen() {
         <Services />
       )}
     </View>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+const TICKET_FILTERS = [
+  { value: 'open', label: 'Open' },
+  { value: 'waiting_on_customer', label: 'Awaiting customer' },
+  { value: 'resolved', label: 'Resolved' },
+  { value: 'all', label: 'All' },
+];
+
+function Tickets() {
+  const [filter, setFilter] = useState('open');
+  const { data, isPending, error, refetch, isRefetching } = useBoTickets(filter);
+  return (
+    <View style={styles.flex}>
+      <View style={styles.toolbar}>
+        <Chips options={TICKET_FILTERS} value={filter} onChange={setFilter} />
+      </View>
+      {isPending ? (
+        <LoadingState />
+      ) : error ? (
+        <ErrorState error={error} onRetry={() => void refetch()} />
+      ) : (
+        <FlatList
+          data={data}
+          keyExtractor={(t) => t.id}
+          contentContainerStyle={styles.list}
+          ItemSeparatorComponent={() => <View style={{ height: space.sm }} />}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefetching}
+              onRefresh={() => void refetch()}
+              tintColor={colors.primary}
+            />
+          }
+          renderItem={({ item }) => <TicketRow ticket={item} />}
+          ListEmptyComponent={<EmptyState icon="support" title="No tickets here" />}
+        />
+      )}
+    </View>
+  );
+}
+
+function TicketRow({ ticket }: { ticket: BackofficeTicket }) {
+  return (
+    <Card onPress={() => router.push(`/backoffice/tickets/${ticket.id}`)} style={styles.card}>
+      <View style={styles.row}>
+        <Text style={typography.caption}>
+          {ticket.reference} · {TICKET_CATEGORY_LABELS[ticket.category]}
+        </Text>
+        <Badge label={TICKET_STATUS_LABELS[ticket.status]} tone={TICKET_TONES[ticket.status]} />
+      </View>
+      <Text style={typography.bodyStrong} numberOfLines={1}>
+        {ticket.subject}
+      </Text>
+      <Text style={typography.small} numberOfLines={1}>
+        {ticket.customer_phone ? formatIndianMobile(ticket.customer_phone) : 'Unknown'}
+        {ticket.property ? ` · ${ticket.property.name}` : ''} · {formatDate(ticket.last_message_at)}
+      </Text>
+    </Card>
   );
 }
 
@@ -322,7 +391,7 @@ const styles = StyleSheet.create({
   },
   segment: { flex: 1, paddingVertical: space.sm, borderRadius: radius.sm, alignItems: 'center' },
   segmentActive: { backgroundColor: colors.surface },
-  segmentText: { fontSize: 14, fontWeight: '500', color: colors.textMuted },
+  segmentText: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
   segmentTextActive: { color: colors.text, fontWeight: '600' },
   toolbar: { paddingHorizontal: space.lg, paddingTop: space.lg },
   search: { flexDirection: 'row', alignItems: 'flex-end', gap: space.sm },

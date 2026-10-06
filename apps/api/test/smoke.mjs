@@ -924,6 +924,23 @@ try {
   check(seen.filter((x) => x.apikey === SECRET_KEY).every((x) => x.url.startsWith('/rest/v1/rpc/record_payment_event')),
     'server key used for record_payment_event and nothing else', seen.filter((x) => x.apikey === SECRET_KEY).map((x) => x.url));
 
+  // ---- Help & Support + profile ----
+  planMode = 'expired';
+  r = await call('/support/tickets', { token: valid });
+  check(r.status === 200, 'Limited Access: Help & Support stays available', r.status);
+  planMode = 'trial';
+  r = await call('/support/tickets', { token: valid, method: 'POST', body: { subject: 'x', category: 'nope', description: '' } });
+  check(r.status === 400 && r.json.error.details?.subject && r.json.error.details?.category, 'invalid ticket → 400 with field errors', r.json);
+  r = await call('/backoffice/tickets', { token: valid });
+  check(r.status === 404, 'customer → Backoffice tickets is 404', r.status);
+  r = await call('/me', { token: valid, method: 'PATCH', body: { full_name: 'R' } });
+  check(r.status === 400, 'name too short → 400', r.json);
+  seen.length = 0;
+  r = await call('/me', { token: valid, method: 'PATCH', body: { full_name: '  Raghu Varma ', user_id: 'evil' } });
+  const prof = seen.find((x) => x.method === 'PATCH' && x.url.startsWith('/rest/v1/profiles'));
+  check(r.status === 200 && prof?.body?.full_name === 'Raghu Varma' && !('user_id' in prof.body) && prof.url.includes(`id=eq.${USER}`),
+    'PATCH /me updates only the caller’s own name', prof);
+
   r = await call('/cron/keepalive');
   check(r.status === 401, 'keep-alive cron without the cron secret → 401', r);
   const cron = await fetch(`${API}/cron/keepalive`, {

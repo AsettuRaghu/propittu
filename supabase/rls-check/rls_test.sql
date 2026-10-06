@@ -777,6 +777,50 @@ reset role;
 
 -- =====================================================================
 \echo
+\echo '== Help & Support: tickets =='
+-- =====================================================================
+
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+insert into public.support_tickets (account_id, user_id, subject, category, property_id)
+values ('acc0000a-0000-0000-0000-00000000000a', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Wrong area on my plot', 'property', 'a1a1a1a1-0000-0000-0000-000000000001');
+insert into public.support_ticket_messages (ticket_id, account_id, author_id, author_type, body)
+select id, account_id, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'customer', 'The area shows 2400 but it is 2600 sqft.' from public.support_tickets;
+select tst.ok((select reference from public.support_tickets) like 'ST-%', 'A opens a ticket with an ST- reference');
+select tst.rejects($$insert into public.support_tickets (account_id, user_id, subject, category, status)
+                     values ('acc0000a-0000-0000-0000-00000000000a', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Sneaky', 'other', 'resolved')$$, 'A cannot open a ticket already resolved');
+select tst.rejects($$insert into public.support_tickets (account_id, user_id, subject, category)
+                     values ('acc0000b-0000-0000-0000-00000000000b', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Forged account', 'other')$$, 'A cannot open a ticket in account B');
+select tst.rejects($$update public.support_tickets set status = 'resolved'$$, 'A cannot change ticket status');
+select tst.rejects($$insert into public.support_ticket_messages (ticket_id, account_id, author_id, author_type, body)
+                     select id, account_id, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'staff', 'I am staff' from public.support_tickets$$,
+  'A cannot post as staff');
+select tst.rejects($$select public.staff_set_ticket_status((select id from public.support_tickets limit 1), 'closed')$$,
+  'A cannot call the staff status function');
+
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.rows('select * from public.support_tickets', 0, 'B cannot see A''s tickets');
+select tst.rows('select * from public.support_ticket_messages', 0, 'B cannot see A''s ticket messages');
+select tst.rejects($$insert into public.support_tickets (account_id, user_id, subject, category, property_id)
+                     values ('acc0000b-0000-0000-0000-00000000000b', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Not mine', 'property', 'a1a1a1a1-0000-0000-0000-000000000001')$$,
+  'B cannot link A''s property to a ticket');
+
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+select tst.rows('select * from public.support_tickets', 1, 'staff see all tickets');
+insert into public.support_ticket_messages (ticket_id, account_id, author_id, author_type, body)
+select id, account_id, '55555555-5555-5555-5555-555555555555', 'staff', 'Thanks — we have corrected it.' from public.support_tickets;
+select public.staff_set_ticket_status((select id from public.support_tickets limit 1), 'waiting_on_customer');
+select tst.ok((select status from public.support_tickets) = 'waiting_on_customer', 'staff set ticket status');
+
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+insert into public.support_ticket_messages (ticket_id, account_id, author_id, author_type, body)
+select id, account_id, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'customer', 'Still wrong on the detail page.' from public.support_tickets;
+select tst.ok((select status from public.support_tickets) = 'open', 'customer reply re-opens a waiting ticket');
+select tst.rows('select * from public.support_ticket_messages', 3, 'A sees the whole conversation');
+reset role;
+
+-- =====================================================================
+\echo
 \echo '== Data integrity constraints =='
 -- =====================================================================
 

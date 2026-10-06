@@ -10,6 +10,7 @@ import { healthRouter } from './routes/health.js';
 import { backofficeRouter } from './routes/backoffice.js';
 import { billingReturnRouter, billingRouter } from './routes/billing.js';
 import { webhooksRouter } from './routes/webhooks.js';
+import { supportRouter } from './routes/support.js';
 import { meRouter } from './routes/me.js';
 import { plansRouter } from './routes/plans.js';
 import { requireActivePlan } from './plan.js';
@@ -58,6 +59,7 @@ export function createApp(): express.Express {
   app.use(meRouter);
   app.use(plansRouter);
   app.use(billingRouter);
+  app.use(supportRouter);
   app.use('/backoffice', backofficeRouter);
 
   // Normal property-management functionality needs an active Plan or Trial.

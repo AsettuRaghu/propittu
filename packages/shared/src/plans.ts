@@ -120,6 +120,19 @@ export interface AccountPlanState {
     properties: number;
     storage_bytes: number;
     included: { code: string; used: number; quantity: number }[];
+    /** Totals across all properties, plus the fullest single property (per-property limits). */
+    documents: number;
+    photos: number;
+    videos: number;
+    max_documents_on_a_property: number;
+    max_photos_on_a_property: number;
+    max_videos_on_a_property: number;
+  };
+  /** What the customer has already received from Propittu. */
+  received: {
+    services_completed: number;
+    visit_reports: number;
+    paid_orders: number;
   };
   /** Limits currently exceeded (e.g. after a downgrade): data kept, additions blocked. */
   over_limit: LimitCode[];

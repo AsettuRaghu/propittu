@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import type { AccountStatus, Me, StaffRole } from '@propittu/shared';
+import { updateProfileSchema, type AccountStatus, type Me, type StaffRole } from '@propittu/shared';
 import { auth } from '../auth.js';
+import { audit } from '../audit.js';
 import { must, ok } from '../errors.js';
 import { loadPlanState, planSummary } from '../plan.js';
 
@@ -48,4 +49,13 @@ meRouter.get('/me', async (req, res) => {
   };
 
   ok(res, data);
+});
+
+/* PATCH /me {full_name} — the profile name (mobile number is the login, not editable). */
+meRouter.patch('/me', async (req, res) => {
+  const ctx = auth(req);
+  const { full_name } = updateProfileSchema.parse(req.body);
+  must(await ctx.db.from('profiles').update({ full_name }).eq('id', ctx.userId));
+  await audit(ctx, 'profile.updated', { type: 'profile', id: ctx.userId });
+  ok(res, { full_name });
 });

@@ -46,7 +46,7 @@ export default function ServicesScreen() {
       ) : segment === 'browse' ? (
         <Catalogue />
       ) : (
-        <ServiceRequestList />
+        <ServiceRequestList showCta={false} />
       )}
     </SafeAreaView>
   );
@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   priceText: { fontSize: 12, fontWeight: '800', color: colors.text },
-  featured: { gap: space.sm, padding: space.xl },
+  featured: { gap: 6, padding: space.lg },
   featuredTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   featuredIcon: {
     width: 46,
@@ -232,9 +232,9 @@ const styles = StyleSheet.create({
   featuredPillText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
   featuredTitle: {
     color: '#FFFFFF',
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '800',
-    letterSpacing: -0.4,
+    letterSpacing: -0.3,
     marginTop: space.xs,
   },
   featuredText: { color: 'rgba(255,255,255,0.88)', fontSize: 13, lineHeight: 18 },

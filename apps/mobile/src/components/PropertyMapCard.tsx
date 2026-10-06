@@ -12,10 +12,9 @@ import {
 } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import type { Property } from '@propittu/shared';
-import { accents, colors, gradients, radius, shadow, space } from '@/theme';
+import { accents, colors, radius, shadow, space } from '@/theme';
 import { dialog } from './Dialog';
 import { Icon, type IconName } from './Icon';
-import { GradientCard } from './ui';
 
 if (Platform.OS === 'android') UIManager.setLayoutAnimationEnabledExperimental?.(true);
 
@@ -36,16 +35,22 @@ export function PropertyMapCard({ property }: { property: Property }) {
 
   if (!hasPin) {
     return (
-      <GradientCard colors={gradients.trial} onPress={adjust} style={styles.empty}>
+      <Pressable
+        onPress={adjust}
+        accessibilityRole="button"
+        style={({ pressed }) => [styles.card, shadow, styles.empty, pressed && { opacity: 0.85 }]}
+      >
         <View style={styles.emptyIcon}>
-          <Icon name="pin" size={22} color="#FFFFFF" />
+          <Icon name="pin" size={18} color={accents.teal.fg} />
         </View>
         <View style={styles.flex}>
           <Text style={styles.emptyTitle}>Pin the exact location</Text>
-          <Text style={styles.emptyText}>Helps our team find it for visits and inspections.</Text>
+          <Text style={styles.emptyText}>Helps our team find it for visits.</Text>
         </View>
-        <Icon name="chevron" size={18} color="#FFFFFF" />
-      </GradientCard>
+        <View style={styles.emptyCta}>
+          <Text style={styles.emptyCtaText}>Set pin</Text>
+        </View>
+      </Pressable>
     );
   }
 
@@ -191,15 +196,22 @@ const styles = StyleSheet.create({
   },
   actionIconPrimary: { backgroundColor: accents.teal.fg },
   actionText: { fontSize: 12, fontWeight: '600', color: colors.text },
-  empty: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  empty: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md },
   emptyIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: accents.teal.bg,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyTitle: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
-  emptyText: { color: 'rgba(255,255,255,0.88)', fontSize: 12, marginTop: 2 },
+  emptyTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
+  emptyText: { color: colors.textMuted, fontSize: 12, marginTop: 1 },
+  emptyCta: {
+    backgroundColor: accents.teal.bg,
+    borderRadius: radius.pill,
+    paddingHorizontal: space.md,
+    paddingVertical: 6,
+  },
+  emptyCtaText: { color: accents.teal.fg, fontSize: 13, fontWeight: '800' },
 });

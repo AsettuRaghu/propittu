@@ -2,10 +2,10 @@ import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { PlanStatus, PlanSummary } from '@propittu/shared';
 import { formatDate } from '@/lib/format';
-import { accents, colors, gradients, radius, shadow, space, typography } from '@/theme';
+import { accents, colors, radius, shadow, space, typography } from '@/theme';
 import { Icon } from './Icon';
 import { EmptyState } from './States';
-import { Button, GradientCard, ProgressRing } from './ui';
+import { Button, ProgressRing } from './ui';
 
 /**
  * Limited Access (M6, strict): shown in place of property and service
@@ -51,47 +51,23 @@ export function PlanBanner({ plan }: { plan: PlanSummary }) {
   }
 
   const urgent = plan.status !== 'trialing' || days <= 7;
-  if (!urgent) {
-    return (
-      <GradientCard
-        colors={gradients.trial}
-        onPress={() => router.push('/plan')}
-        style={styles.hero}
-      >
-        <ProgressRing
-          progress={days / 30}
-          size={46}
-          stroke={5}
-          color="#FFFFFF"
-          track="rgba(255,255,255,0.25)"
-        >
-          <Text style={styles.ringText}>{days}</Text>
-        </ProgressRing>
-        <View style={styles.flex}>
-          <Text style={styles.heroTitle} numberOfLines={1}>
-            {title}
-          </Text>
-          <Text style={styles.heroSubtitle} numberOfLines={1}>
-            {subtitle}
-          </Text>
-        </View>
-        <View style={styles.heroCta}>
-          <Text style={styles.heroCtaText}>{cta}</Text>
-          <Icon name="chevron" size={14} color={accents.teal.fg} strokeWidth={2.5} />
-        </View>
-      </GradientCard>
-    );
-  }
-
+  const tint = urgent ? colors.warning : accents.teal.fg;
+  const soft = urgent ? colors.warningSoft : accents.teal.bg;
   return (
     <Pressable
       onPress={() => router.push('/plan')}
       accessibilityRole="button"
       style={({ pressed }) => [styles.warn, shadow, pressed && { opacity: 0.88 }]}
     >
-      <View style={styles.warnIcon}>
-        <Icon name="hourglass" size={20} color={colors.warning} />
-      </View>
+      {urgent ? (
+        <View style={[styles.warnIcon, { backgroundColor: soft }]}>
+          <Icon name="hourglass" size={18} color={tint} />
+        </View>
+      ) : (
+        <ProgressRing progress={days / 30} size={38} stroke={4} color={tint} track={soft}>
+          <Text style={[styles.ringSmall, { color: tint }]}>{days}</Text>
+        </ProgressRing>
+      )}
       <View style={styles.flex}>
         <Text style={typography.bodyStrong} numberOfLines={1}>
           {title}
@@ -100,7 +76,7 @@ export function PlanBanner({ plan }: { plan: PlanSummary }) {
           {subtitle}
         </Text>
       </View>
-      <View style={styles.warnCta}>
+      <View style={[styles.warnCta, { backgroundColor: tint }]}>
         <Text style={styles.warnCtaText}>{cta}</Text>
       </View>
     </Pressable>
@@ -129,11 +105,12 @@ const styles = StyleSheet.create({
     gap: space.md,
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
-    padding: space.md,
+    paddingVertical: 10,
+    paddingHorizontal: space.md,
   },
   warnIcon: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
     borderRadius: 13,
     backgroundColor: colors.warningSoft,
     alignItems: 'center',
@@ -145,5 +122,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     paddingVertical: 7,
   },
+  ringSmall: { fontSize: 13, fontWeight: '800' },
   warnCtaText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
 });

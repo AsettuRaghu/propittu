@@ -16,11 +16,7 @@ import { ErrorState, LoadingState } from '@/components/States';
 import { VideoSection } from '@/components/VideoSection';
 import { Badge, Card, IconButton, IconTile, LinkButton, SectionTitle } from '@/components/ui';
 import { formatArea, formatDate, formatLocation } from '@/lib/format';
-import {
-  PROPERTY_TYPE_ICONS,
-  STATUS_TONES,
-  serviceVisual,
-} from '@/lib/icons';
+import { PROPERTY_TYPE_ICONS, STATUS_TONES, serviceVisual } from '@/lib/icons';
 import { accents, colors, radius, shadow, space, typography, type Accent } from '@/theme';
 
 /** Property details (§18, M2/M3): map first, everything one tap away. */

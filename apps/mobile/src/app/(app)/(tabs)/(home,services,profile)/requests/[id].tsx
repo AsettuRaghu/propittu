@@ -11,7 +11,7 @@ import { useCancelServiceRequest, useServiceRequest } from '@/api/queries';
 import { dialog, toast } from '@/components/Dialog';
 import { Icon, type IconName } from '@/components/Icon';
 import { ErrorState, LoadingState } from '@/components/States';
-import { Badge, Button, Card, IconTile, LinkButton, SectionTitle } from '@/components/ui';
+import { Badge, Button, Card, IconTile, SectionTitle } from '@/components/ui';
 import { VisitReportView } from '@/components/VisitReportView';
 import { errorMessage } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
@@ -123,15 +123,32 @@ export default function ServiceRequestScreen() {
       {request.report ? <VisitReportView report={request.report} /> : null}
 
       {submitted === '1' ? <Button title="Done" onPress={() => router.back()} /> : null}
-      {request.status === 'requested' ? (
-        <View style={styles.cancel}>
-          <LinkButton
-            title="Cancel this request"
-            tone="danger"
+      <View style={styles.actions}>
+        {request.status === 'requested' ? (
+          <Button
+            title="Cancel request"
+            variant="outline"
             onPress={() => void confirmCancel()}
+            style={styles.flex}
           />
-        </View>
-      ) : null}
+        ) : null}
+        <Button
+          title="Contact support"
+          variant="secondary"
+          icon="support"
+          style={styles.flex}
+          onPress={() =>
+            router.push({
+              pathname: '/support/new',
+              params: {
+                requestId: request.id,
+                category: 'service_request',
+                subject: `${request.service.name} ${request.reference}`,
+              },
+            })
+          }
+        />
+      </View>
     </ScrollView>
   );
 }
@@ -244,7 +261,7 @@ function Timeline({ request }: { request: ServiceRequestDetail }) {
     {
       key: 'confirmed',
       icon: 'check',
-      title: 'Confirmed by Propittu',
+      title: 'Accepted by our team',
       detail: request.confirmed_at ? formatDate(request.confirmed_at) : 'Usually within a day',
       done: reached('confirmed'),
     },
@@ -254,6 +271,13 @@ function Timeline({ request }: { request: ServiceRequestDetail }) {
       title: 'Visit scheduled',
       detail: request.scheduled_for ? formatDate(request.scheduled_for) : null,
       done: reached('scheduled'),
+    },
+    {
+      key: 'in_progress',
+      icon: 'bolt',
+      title: 'In progress',
+      detail: s === 'in_progress' ? 'Our team is on it' : null,
+      done: reached('in_progress'),
     },
     {
       key: 'completed',
@@ -373,4 +397,5 @@ const styles = StyleSheet.create({
   line: { flex: 1, width: 2, backgroundColor: colors.border, marginVertical: 2 },
   stepBody: { flex: 1, gap: 2, paddingTop: 2 },
   cancel: { alignItems: 'center' },
+  actions: { flexDirection: 'row', gap: space.sm },
 });

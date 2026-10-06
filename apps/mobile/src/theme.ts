@@ -90,18 +90,18 @@ export const space = {
 } as const;
 
 export const radius = {
-  sm: 10,
-  md: 14,
-  lg: 20,
-  xl: 26,
+  sm: 9,
+  md: 12,
+  lg: 16,
+  xl: 24,
   pill: 999,
 } as const;
 
 /** Compact type scale: titles fit on one line on a phone. */
 export const typography = {
-  display: { fontSize: 28, fontWeight: '800', color: colors.text, letterSpacing: -0.6 },
-  title: { fontSize: 22, fontWeight: '700', color: colors.text, letterSpacing: -0.4 },
-  heading: { fontSize: 17, fontWeight: '700', color: colors.text, letterSpacing: -0.2 },
+  display: { fontSize: 24, fontWeight: '800', color: colors.text, letterSpacing: -0.5 },
+  title: { fontSize: 19, fontWeight: '700', color: colors.text, letterSpacing: -0.3 },
+  heading: { fontSize: 16, fontWeight: '700', color: colors.text, letterSpacing: -0.2 },
   body: { fontSize: 15, color: colors.text, lineHeight: 21 },
   bodyStrong: { fontSize: 15, fontWeight: '600', color: colors.text },
   small: { fontSize: 13, color: colors.textMuted, lineHeight: 18 },
@@ -119,8 +119,8 @@ export const typography = {
 export const shadow: ViewStyle = Platform.select({
   ios: {
     shadowColor: '#141833',
-    shadowOpacity: 0.06,
-    shadowRadius: 14,
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
   },
   default: { elevation: 2 },

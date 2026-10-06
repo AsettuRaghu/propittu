@@ -41,6 +41,11 @@ const SCREENS: { name: string; options: Record<string, unknown> }[] = [
   { name: 'requests/index', options: { title: 'Service requests' } },
   { name: 'requests/[id]', options: { title: 'Service request' } },
   { name: 'plan', options: { title: 'Plan & Usage' } },
+  { name: 'profile-edit', options: { title: 'Edit profile' } },
+  { name: 'receipts/[id]', options: { title: 'Receipt' } },
+  { name: 'support/index', options: { title: 'Help & Support' } },
+  { name: 'support/new', options: { title: 'Raise a ticket' } },
+  { name: 'support/[id]', options: { title: 'Support ticket' } },
 
   // Backoffice (M9): staff only — the API returns 404 to everyone else.
   { name: 'backoffice/index', options: { title: 'Backoffice' } },
@@ -48,6 +53,7 @@ const SCREENS: { name: string; options: Record<string, unknown> }[] = [
   { name: 'backoffice/accounts/[id]', options: { title: 'Customer' } },
   { name: 'backoffice/properties/[id]', options: { title: 'Property' } },
   { name: 'backoffice/services/[id]', options: { title: 'Service' } },
+  { name: 'backoffice/tickets/[id]', options: { title: 'Ticket' } },
 ];
 
 export default function TabStackLayout({ segment }: { segment?: string }) {

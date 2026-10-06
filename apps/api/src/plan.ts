@@ -256,27 +256,58 @@ export async function describeAccountPlan(
   accountId: string,
 ): Promise<AccountPlanState> {
   const state = await loadPlanState(db, accountId);
-  const [usageRes, summariesRes, included] = await Promise.all([
-    db
-      .from('account_usage')
-      .select('property_count, storage_bytes')
-      .eq('account_id', accountId)
-      .maybeSingle(),
-    db
-      .from('property_summaries')
-      .select('document_count, photo_count, video_count')
-      .eq('account_id', accountId),
-    // Included Services: same rule the database applies when a request is
-    // opened (consumed + still awaiting confirmation), so the numbers agree.
-    Promise.all(
-      state.benefits.included.map(async (b) => {
-        const remaining = must<number | null>(
-          await db.rpc('included_remaining', { p_account: accountId, p_code: b.code }),
-        );
-        return { code: b.code, used: b.quantity - (remaining ?? b.quantity), quantity: b.quantity };
-      }),
-    ),
-  ]);
+  const count = (q: PromiseLike<{ count: number | null; error: { message: string } | null }>) =>
+    Promise.resolve(q).then((r) => {
+      must({ data: null, error: r.error });
+      return r.count ?? 0;
+    });
+  const [usageRes, summariesRes, included, servicesCompleted, visitReports, paidOrders] =
+    await Promise.all([
+      db
+        .from('account_usage')
+        .select('property_count, storage_bytes')
+        .eq('account_id', accountId)
+        .maybeSingle(),
+      db
+        .from('property_summaries')
+        .select('document_count, photo_count, video_count')
+        .eq('account_id', accountId),
+      // Included Services: same rule the database applies when a request is
+      // opened (consumed + still awaiting confirmation), so the numbers agree.
+      Promise.all(
+        state.benefits.included.map(async (b) => {
+          const remaining = must<number | null>(
+            await db.rpc('included_remaining', { p_account: accountId, p_code: b.code }),
+          );
+          return {
+            code: b.code,
+            used: b.quantity - (remaining ?? b.quantity),
+            quantity: b.quantity,
+          };
+        }),
+      ),
+      count(
+        db
+          .from('service_requests')
+          .select('id', { count: 'exact', head: true })
+          .eq('account_id', accountId)
+          .eq('status', 'completed'),
+      ),
+      // RLS shows customers only published (completed) reports.
+      count(
+        db
+          .from('visit_reports')
+          .select('id', { count: 'exact', head: true })
+          .eq('account_id', accountId),
+      ),
+      count(
+        db
+          .from('orders')
+          .select('id', { count: 'exact', head: true })
+          .eq('account_id', accountId)
+          .eq('status', 'paid'),
+      ),
+    ]);
 
   const usage = must<{ property_count: number; storage_bytes: number } | null>(usageRes);
   const perProperty =
@@ -327,7 +358,22 @@ export async function describeAccountPlan(
           days_left: daysLeft(current.ends_at),
         }
       : null,
-    usage: { properties, storage_bytes: storageBytes, included },
+    usage: {
+      properties,
+      storage_bytes: storageBytes,
+      included,
+      documents: perProperty.reduce((n, p) => n + p.document_count, 0),
+      photos: perProperty.reduce((n, p) => n + p.photo_count, 0),
+      videos: perProperty.reduce((n, p) => n + p.video_count, 0),
+      max_documents_on_a_property: Math.max(0, ...perProperty.map((p) => p.document_count)),
+      max_photos_on_a_property: Math.max(0, ...perProperty.map((p) => p.photo_count)),
+      max_videos_on_a_property: Math.max(0, ...perProperty.map((p) => p.video_count)),
+    },
+    received: {
+      services_completed: servicesCompleted,
+      visit_reports: visitReports,
+      paid_orders: paidOrders,
+    },
     over_limit: over,
   };
 }
