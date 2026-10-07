@@ -352,11 +352,11 @@ export function DialogHost() {
             ) : (
               <View style={styles.actions}>
                 <ScrollView style={styles.actionList} bounces={false}>
-                  {request.actions.map((a) => {
+                  {request.actions.map((a, i) => {
                     const danger = a.tone === 'danger';
                     return (
                       <Pressable
-                        key={a.label}
+                        key={`${i}-${a.label}`}
                         onPress={() => close(() => request.resolve(a.value))}
                         accessibilityRole="button"
                         style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}

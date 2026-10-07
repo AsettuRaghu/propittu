@@ -11,11 +11,10 @@ import {
   type CatalogueService,
 } from '@propittu/shared';
 import { PullRefresh } from '@/components/PullRefresh';
+import { EmptyState, ErrorState, LimitedAccessState, LoadingState } from '@/components/States';
 import { useMe, useProperties, useServices } from '@/api/queries';
 import { Icon } from '@/components/Icon';
-import { LimitedAccessState } from '@/components/PlanGate';
 import { ServiceRequestList } from '@/components/ServiceRequestList';
-import { EmptyState, ErrorState, LoadingState } from '@/components/States';
 import { GradientCard, IconTile, Segmented } from '@/components/ui';
 import { serviceVisual } from '@/lib/icons';
 import { accents, colors, gradients, radius, shadow, space, typography } from '@/theme';

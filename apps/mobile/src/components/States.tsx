@@ -1,16 +1,17 @@
+import { router } from 'expo-router';
 import type { ReactNode } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import type { PlanStatus } from '@propittu/shared';
 import { ApiError } from '@/api/client';
 import { errorMessage } from '@/lib/errors';
 import { colors, space, typography, type Accent } from '@/theme';
 import type { IconName } from './Icon';
-import { LimitedAccessState } from './PlanGate';
 import { Button, IconTile } from './ui';
 
 /*
  * PRODUCT_SPEC.md §40: "Every asynchronous operation should have a
- * loading state, success state and error state." These three cover every
- * screen that loads data.
+ * loading state, success state and error state." These cover every screen
+ * that loads data, plus the Limited Access state (no active plan).
  */
 
 export function LoadingState({ label }: { label?: string }) {
@@ -64,6 +65,22 @@ export function EmptyState({
       ) : null}
       {action ? <View style={styles.action}>{action}</View> : null}
     </View>
+  );
+}
+
+/**
+ * Limited Access (M6, strict): shown in place of property and service
+ * screens when the Trial or Plan has ended. Data is kept, never deleted.
+ */
+export function LimitedAccessState({ status }: { status?: PlanStatus }) {
+  return (
+    <EmptyState
+      icon="lock"
+      accent="violet"
+      title={status === 'expired' ? 'Your plan has ended' : 'Choose a plan to continue'}
+      message="Your properties, documents and photos are safe. Pick a plan to pick up right where you left off."
+      action={<Button title="See plans" icon="plan" onPress={() => router.push('/plan')} />}
+    />
   );
 }
 

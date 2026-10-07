@@ -1,27 +1,10 @@
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import type { PlanStatus, PlanSummary } from '@propittu/shared';
+import type { PlanSummary } from '@propittu/shared';
 import { formatDate } from '@/lib/format';
 import { accents, colors, radius, shadow, space, typography } from '@/theme';
 import { Icon } from './Icon';
-import { EmptyState } from './States';
-import { Button, ProgressRing } from './ui';
-
-/**
- * Limited Access (M6, strict): shown in place of property and service
- * screens when the Trial or Plan has ended. Data is kept, never deleted.
- */
-export function LimitedAccessState({ status }: { status?: PlanStatus }) {
-  return (
-    <EmptyState
-      icon="lock"
-      accent="violet"
-      title={status === 'expired' ? 'Your plan has ended' : 'Choose a plan to continue'}
-      message="Your properties, documents and photos are safe. Pick a plan to pick up right where you left off."
-      action={<Button title="See plans" icon="plan" onPress={() => router.push('/plan')} />}
-    />
-  );
-}
+import { ProgressRing } from './ui';
 
 /**
  * Plan nudge on Home: compact, and it always says what tapping does.
@@ -85,20 +68,6 @@ export function PlanBanner({ plan }: { plan: PlanSummary }) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
-  hero: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.md },
-  ringText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
-  heroTitle: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
-  heroSubtitle: { color: 'rgba(255,255,255,0.85)', fontSize: 12, marginTop: 2 },
-  heroCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    backgroundColor: '#FFFFFF',
-    borderRadius: radius.pill,
-    paddingHorizontal: space.md,
-    paddingVertical: 7,
-  },
-  heroCtaText: { color: accents.teal.fg, fontSize: 13, fontWeight: '800' },
   warn: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -5,10 +5,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDraftProperties } from '@/api/ai';
 import { useMe, useProperties } from '@/api/queries';
 import { Icon, type IconName } from '@/components/Icon';
-import { LimitedAccessState, PlanBanner } from '@/components/PlanGate';
+import { PlanBanner } from '@/components/PlanBanner';
 import { PropertyCard, PropertyCardSkeleton } from '@/components/PropertyCard';
 import { PullRefresh } from '@/components/PullRefresh';
-import { ErrorState } from '@/components/States';
+import { ErrorState, LimitedAccessState } from '@/components/States';
 import { Button, IconButton, IconTile } from '@/components/ui';
 import { greeting } from '@/lib/format';
 import {
