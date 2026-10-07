@@ -24,13 +24,12 @@ import { signDownloads } from '../storage.js';
 import { loadReach } from '../reach.js';
 import {
   addressAt,
-  checkRecord,
   findIssue,
   issueMessage,
   refreshLocationCheck,
-  storedIssue,
   within,
 } from '../locationCheck.js';
+import { checkRecord, storedIssue } from '../locationRecord.js';
 import { listReadyPhotos } from './photos.js';
 import { listReadyVideos } from './videos.js';
 

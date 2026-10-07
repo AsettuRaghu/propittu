@@ -23,7 +23,7 @@ export function PropertyCard({
   onPress: () => void;
 }) {
   const r = p.active_request;
-  const photos = p.photo_urls.length ? p.photo_urls : p.cover_photo_url ? [p.cover_photo_url] : [];
+  const photos = p.photo_urls?.length ? p.photo_urls : p.cover_photo_url ? [p.cover_photo_url] : [];
 
   return (
     <Pressable

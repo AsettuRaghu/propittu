@@ -1,4 +1,5 @@
 import { logger } from './logger.js';
+import { distanceKm } from './locationRecord.js';
 
 /**
  * Places and PIN codes, from OpenStreetMap's Nominatim (free; data © OpenStreetMap
@@ -125,16 +126,6 @@ export async function findPlace(parts: (string | null | undefined)[]): Promise<P
     if (hits[0]) return toPlace(hits[0]);
   }
   return null;
-}
-
-/** Straight-line distance in km. */
-export function distanceKm(a: [number, number], b: [number, number]): number {
-  const rad = (d: number) => (d * Math.PI) / 180;
-  const dLat = rad(b[0] - a[0]);
-  const dLon = rad(b[1] - a[1]);
-  const h =
-    Math.sin(dLat / 2) ** 2 + Math.cos(rad(a[0])) * Math.cos(rad(b[0])) * Math.sin(dLon / 2) ** 2;
-  return 6371 * 2 * Math.asin(Math.sqrt(h));
 }
 
 /** PIN areas are irregular; allow this much beyond the area's outline. */

@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { distanceKm } from '../src/geo.js';
-import { checkRecord, storedIssue } from '../src/locationCheck.js';
+import { checkRecord, distanceKm, storedIssue } from '../src/locationRecord.js';
 
 const issue = {
   pin_place: 'Manikonda, Ranga Reddy (500089)',

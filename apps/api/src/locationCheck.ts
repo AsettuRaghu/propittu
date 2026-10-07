@@ -1,6 +1,7 @@
 import type { LocationIssue } from '@propittu/shared';
 import { describe, findPlace, pinMismatch, pincodeArea, placeAt, type Place } from './geo.js';
 import { logger } from './logger.js';
+import type { Located } from './locationRecord.js';
 import { serviceClient } from './supabase.js';
 
 /**
@@ -8,33 +9,6 @@ import { serviceClient } from './supabase.js';
  * the property (location_check) so pages never wait on the place lookup;
  * it is redone whenever the pin or the PIN code has changed since.
  */
-
-interface Located {
-  pincode: string | null;
-  latitude: number | null;
-  longitude: number | null;
-}
-interface StoredCheck {
-  pincode: string;
-  latitude: number;
-  longitude: number;
-  issue: LocationIssue | null;
-}
-
-const same = (c: StoredCheck, p: Located) =>
-  c.pincode === p.pincode && c.latitude === p.latitude && c.longitude === p.longitude;
-
-/** The stored issue, if still about the current pin and PIN code; `stale` when it needs redoing. */
-export function storedIssue(
-  check: unknown,
-  p: Located,
-): { issue: LocationIssue | null; stale: boolean } {
-  if (p.latitude === null || p.longitude === null || !p.pincode)
-    return { issue: null, stale: false };
-  const c = check as StoredCheck | null;
-  if (!c || !same(c, p)) return { issue: null, stale: true };
-  return { issue: c.issue, stale: false };
-}
 
 /** Pin vs PIN code, in words; null when they agree or we can't tell. */
 export async function findIssue(p: Located): Promise<LocationIssue | null> {
@@ -70,12 +44,6 @@ export async function refreshLocationCheck(id: string, p: Located): Promise<void
     logger.warn({ err: String(err) }, 'location check failed');
   }
 }
-
-/** What to store with a just-checked pin, so the next page load needn't check again. */
-export const checkRecord = (p: Located, issue: LocationIssue | null) =>
-  p.latitude !== null && p.longitude !== null && p.pincode
-    ? { pincode: p.pincode, latitude: p.latitude, longitude: p.longitude, issue }
-    : null;
 
 export const issueMessage = (i: LocationIssue) =>
   `The pin is in ${i.pin_place}, about ${i.distance_km} km from PIN code ${i.pincode} (${i.pincode_place}).`;
