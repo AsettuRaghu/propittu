@@ -13,6 +13,7 @@ import { DeedArt } from './DeedArt';
 import { Beckon, CelebrationBadge, FadeSwap } from './Celebration';
 import { feedHeadline, PittuFeed, usePittuFeed } from './DeedReading';
 import { Icon, type IconName } from './Icon';
+import { PittuWaitQuestions } from './PittuWaitQuestions';
 import { Button, ProgressBar } from './ui';
 
 /** Add property's phases once a deed is chosen (the start screen owns them). */
@@ -213,6 +214,12 @@ export function PittuAtWork({
             <ProgressBar progress={phase.progress} />
           </View>
         ) : null}
+        {/* The waiting minute put to use (above the feed, so the feed grows below it). */}
+        {phase.kind === 'reading' && !ending ? (
+          <View style={styles.wait}>
+            <PittuWaitQuestions propertyId={phase.propertyId} />
+          </View>
+        ) : null}
         {phase.kind === 'reading' && (!ending || ending === 'findings') ? (
           <View style={styles.feed}>
             <PittuFeed feed={feed} tone="light" />
@@ -327,6 +334,7 @@ function Outcome({
 }
 
 const styles = StyleSheet.create({
+  wait: { alignSelf: 'stretch', marginTop: space.lg },
   flex: { flex: 1 },
   title: {
     fontSize: font(28),

@@ -2,16 +2,17 @@ import * as DocumentPicker from 'expo-document-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, router } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatFileSize, MAX_LONG_DOCUMENT_BYTES } from '@propittu/shared';
 import { createDraftProperty, startAnalysis, useDraftProperties, useRefreshDrafts } from '@/api/ai';
 import { api } from '@/api/client';
-import { prepareDocument, uploadDocument } from '@/api/uploads';
+import { prepareDocument, uploadDocument, type LocalFile } from '@/api/uploads';
 import { errorMessage } from '@/lib/errors';
 import { accents, colors, font, gradients, radius, shadow, space, typography } from '@/theme';
 import { AmbientGlow } from './Celebration';
 import { DeedArt } from './DeedArt';
+import { DeedPhotos } from './DeedPhotos';
 import { PittuAtWork } from './PittuAtWork';
 import { DraftRow } from './DraftRow';
 import { Icon } from './Icon';
@@ -22,6 +23,7 @@ const MAX_UNFINISHED = 2;
 
 type Phase =
   | { kind: 'idle' }
+  | { kind: 'photos' }
   | { kind: 'uploading'; progress: number }
   | { kind: 'handing' }
   | { kind: 'reading'; propertyId: string; documentId: string };
@@ -60,7 +62,11 @@ export function AddPropertyChoice({ onManual }: { onManual: () => void }) {
       setProblem(errorMessage(err));
       return;
     }
+    await handOver(file);
+  };
 
+  // A PDF picked, or photographed pages joined into one: from here on, the same.
+  const handOver = async (file: LocalFile) => {
     setPhase({ kind: 'uploading', progress: 0 });
     let propertyId: string | null = null;
     try {
@@ -101,7 +107,13 @@ export function AddPropertyChoice({ onManual }: { onManual: () => void }) {
       />
       <AmbientGlow />
 
-      {phase.kind !== 'idle' ? (
+      {phase.kind === 'photos' ? (
+        <DeedPhotos
+          bottomInset={insets.bottom}
+          onSend={(file) => void handOver(file)}
+          onCancel={() => setPhase({ kind: 'idle' })}
+        />
+      ) : phase.kind !== 'idle' ? (
         <PittuAtWork
           phase={phase}
           bottomInset={insets.bottom}
@@ -139,13 +151,26 @@ export function AddPropertyChoice({ onManual }: { onManual: () => void }) {
               onPress={() => void uploadDeed()}
               disabled={full}
             />
+            <Pressable
+              onPress={() => {
+                setProblem(null);
+                setPhase({ kind: 'photos' });
+              }}
+              disabled={full}
+              accessibilityRole="button"
+              hitSlop={6}
+              style={({ pressed }) => [styles.photoLink, (pressed || full) && { opacity: 0.6 }]}
+            >
+              <Icon name="camera" size={15} color="#FFFFFF" />
+              <Text style={styles.photoLinkText}>No PDF? Photograph the pages</Text>
+            </Pressable>
             {problem ? <Banner message={problem} /> : null}
             <View style={styles.privacy}>
               <Icon name="lock" size={12} color="rgba(255,255,255,0.8)" />
               <Text style={styles.note}>
                 {full
                   ? 'Finish or remove an unfinished property below first'
-                  : `PDF up to ${formatFileSize(MAX_LONG_DOCUMENT_BYTES)} · stored privately`}
+                  : `PDF up to ${formatFileSize(MAX_LONG_DOCUMENT_BYTES)}, or photos · stored privately`}
               </Text>
             </View>
           </View>
@@ -267,6 +292,13 @@ const styles = StyleSheet.create({
   },
   note: { fontSize: font(12.5), color: 'rgba(255,255,255,0.85)', textAlign: 'center' },
   progress: { gap: space.xs, alignSelf: 'stretch' },
+  photoLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: space.xs,
+  },
+  photoLinkText: { fontSize: font(14.5), fontWeight: '700', color: '#FFFFFF' },
   privacy: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   bottom: {
     flexGrow: 1,

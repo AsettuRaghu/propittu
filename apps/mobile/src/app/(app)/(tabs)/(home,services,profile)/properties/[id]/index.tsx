@@ -19,6 +19,7 @@ import { PropertyMapCard } from '@/components/PropertyMapCard';
 import { PullRefresh } from '@/components/PullRefresh';
 import { DataCredits } from '@/components/DataCredits';
 import { DeedGaps } from '@/components/DeedGaps';
+import { DeedReadRow } from '@/components/DeedReadRow';
 import { ReachNotice } from '@/components/ReachNotice';
 import { RequestRow } from '@/components/ServiceRequestList';
 import { ErrorState, LoadingState } from '@/components/States';
@@ -121,10 +122,11 @@ export default function PropertyDetailsScreen() {
               onPress={() => onStep(item)}
             />
           ))}
+          <DeedReadRow property={property} />
           <PittuRow propertyId={property.id} />
         </ListGroup>
       ) : (
-        <PittuSection propertyId={property.id} />
+        <PittuSection property={property} />
       )}
 
       <Details property={property} onEdit={edit} />
@@ -193,12 +195,14 @@ function PittuRow({ propertyId }: { propertyId: string }) {
 }
 
 /** With the profile complete, Pittu's row gets its own heading (once there is something to show). */
-function PittuSection({ propertyId }: { propertyId: string }) {
-  const { data } = usePittu(propertyId);
-  if (!data) return null;
+function PittuSection({ property }: { property: PropertyDetail }) {
+  const { data } = usePittu(property.id);
+  const unread = !!property.deed_reading && property.deed_reading.status !== 'ready';
+  if (!data && !unread) return null;
   return (
     <ListGroup title="From Pittu" plain>
-      <PittuRow propertyId={propertyId} />
+      <DeedReadRow property={property} />
+      <PittuRow propertyId={property.id} />
     </ListGroup>
   );
 }

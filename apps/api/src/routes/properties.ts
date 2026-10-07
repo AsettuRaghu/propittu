@@ -9,6 +9,7 @@ import {
   type Property,
   type PropertyDetail,
   type PropertySummary,
+  type AnalysisStatus,
   type DeedGap,
   type FactValue,
   deedGaps,
@@ -291,9 +292,10 @@ propertiesRouter.get('/properties/:id', async (req, res) => {
 
   const property = toProperty(row);
   // Pin vs PIN code: the stored check, redone after the response when out of date.
-  const [deed, gaps] = await Promise.all([
+  const [deed, gaps, deedReading] = await Promise.all([
     loadDeedPlaces(db, [id]).then((m) => m.get(id) ?? null),
     loadDeedGaps(db, property),
+    loadDeedReading(db, id),
   ]);
   const check = storedIssue(row.location_check, property, deedKey(deed));
   if (check.stale) waitUntil(refreshLocationCheck(id, property, deed, check.confirmed));
@@ -313,6 +315,7 @@ propertiesRouter.get('/properties/:id', async (req, res) => {
     reach: reach.get(id) ?? null,
     location_issue: check.issue,
     deed_gaps: gaps,
+    deed_reading: deedReading,
   };
 
   ok(res, data);
@@ -434,6 +437,36 @@ propertiesRouter.patch('/properties/:id', async (req, res) => {
   }
   ok(res, toProperty(row));
 });
+
+/** The latest sale deed, and the status of Pittu's reading of it (null: never read). */
+async function loadDeedReading(
+  db: SupabaseClient,
+  propertyId: string,
+): Promise<PropertyDetail['deed_reading']> {
+  const doc = must<{ id: string } | null>(
+    await db
+      .from('property_documents')
+      .select('id')
+      .eq('property_id', propertyId)
+      .eq('document_type', 'sale_deed')
+      .eq('upload_status', 'ready')
+      .eq('mime_type', 'application/pdf')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  );
+  if (!doc) return null;
+  const reading = must<{ status: AnalysisStatus } | null>(
+    await db
+      .from('document_analyses')
+      .select('status')
+      .eq('document_id', doc.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  );
+  return { document_id: doc.id, status: reading?.status ?? null };
+}
 
 /** Where the saved details differ from the deed (its latest reading; the deed's own words). */
 async function loadDeedGaps(db: SupabaseClient, p: Property): Promise<DeedGap[]> {

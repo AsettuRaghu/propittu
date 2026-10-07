@@ -1,4 +1,4 @@
-import type { DeedGap } from './ai';
+import type { AnalysisStatus, DeedGap } from './ai';
 import type { CompletionItem, PropertyCompletion } from './completion';
 import type { PlanSummary } from './plans';
 import type { PropertyReach, ServiceReach } from './reach';
@@ -179,6 +179,11 @@ export interface PropertyDetail extends Property {
   location_issue: LocationIssue | null;
   /** Where the saved details differ from the sale deed (as Pittu read it). */
   deed_gaps: DeedGap[];
+  /**
+   * The property's sale deed and where Pittu's reading of it stands — null
+   * status: never read (e.g. uploaded as a plain document). Null: no deed.
+   */
+  deed_reading: { document_id: string; status: AnalysisStatus | null } | null;
 }
 
 /* ------------------------------------------------------------------ *

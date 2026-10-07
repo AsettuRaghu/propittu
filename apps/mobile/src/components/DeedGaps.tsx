@@ -36,9 +36,30 @@ export function DeedGaps({ property: p }: { property: PropertyDetail }) {
     });
   };
 
+  // Fields that are simply empty can all be filled from the deed in one go.
+  const empty = p.deed_gaps.filter((g) => g.yours === null);
+  const fillEmpty = () =>
+    update.mutate(Object.fromEntries(empty.map((g) => [g.field, g.value])) as never, {
+      onSuccess: () => toast(`${empty.length} details filled in from your deed`),
+      onError: (err) =>
+        void dialog.alert({
+          title: 'Couldn’t fill them in',
+          message: errorMessage(err),
+          tone: 'danger',
+        }),
+    });
+
   const count = p.deed_gaps.length + (pin ? 1 : 0);
   return (
-    <ListGroup title={`Differs from your deed · ${count}`} plain>
+    <ListGroup
+      title={`Differs from your deed · ${count}`}
+      plain
+      action={
+        empty.length > 1 ? (
+          <LinkButton title={`Fill ${empty.length} empty`} onPress={fillEmpty} />
+        ) : undefined
+      }
+    >
       {pin ? (
         <ListRow
           icon="pin"

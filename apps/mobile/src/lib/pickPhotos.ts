@@ -46,12 +46,15 @@ async function fromLibrary(limit: number): Promise<ImagePicker.ImagePickerAsset[
   return result.canceled ? [] : result.assets.slice(0, limit);
 }
 
-async function fromCamera(): Promise<ImagePicker.ImagePickerAsset[]> {
+/** Takes one photo with the camera (asks for access, and explains if it's off). */
+export async function fromCamera(
+  why = 'to take property photos',
+): Promise<ImagePicker.ImagePickerAsset[]> {
   const permission = await ImagePicker.requestCameraPermissionsAsync();
   if (!permission.granted) {
     const open = await dialog.confirm({
       title: 'Camera access is off',
-      message: 'Allow camera access for Propittu in Settings to take property photos.',
+      message: `Allow camera access for Propittu in Settings ${why}.`,
       confirmLabel: 'Open Settings',
       cancelLabel: 'Not now',
       icon: 'camera',
