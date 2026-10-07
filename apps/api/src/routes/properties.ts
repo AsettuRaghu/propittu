@@ -9,7 +9,11 @@ import {
   type Property,
   type PropertyDetail,
   type PropertySummary,
+  type DeedGap,
+  type FactValue,
+  deedGaps,
   locationIssueText,
+  PROPERTY_TYPE_LABELS,
   type ServiceFulfilment,
   type ServiceRequestStatus,
   type ValueSource,
@@ -287,7 +291,10 @@ propertiesRouter.get('/properties/:id', async (req, res) => {
 
   const property = toProperty(row);
   // Pin vs PIN code: the stored check, redone after the response when out of date.
-  const deed = (await loadDeedPlaces(db, [id])).get(id) ?? null;
+  const [deed, gaps] = await Promise.all([
+    loadDeedPlaces(db, [id]).then((m) => m.get(id) ?? null),
+    loadDeedGaps(db, property),
+  ]);
   const check = storedIssue(row.location_check, property, deedKey(deed));
   if (check.stale) waitUntil(refreshLocationCheck(id, property, deed, check.confirmed));
   const [photos, videos, reach] = await Promise.all([
@@ -305,6 +312,7 @@ propertiesRouter.get('/properties/:id', async (req, res) => {
     completion: computePropertyCompletion({ property, photoCount: photos.length, documentTypes }),
     reach: reach.get(id) ?? null,
     location_issue: check.issue,
+    deed_gaps: gaps,
   };
 
   ok(res, data);
@@ -387,7 +395,7 @@ propertiesRouter.patch('/properties/:id', async (req, res) => {
     }
     const deed = (await loadDeedPlaces(db, [id])).get(id) ?? null;
     const issue = await within(findIssue(after, deed, pinConfirmed), 9000);
-    if (issue && pinMoved && !pinConfirmed) {
+    if (issue && !issue.confirmed && pinMoved && !pinConfirmed) {
       const message = locationIssueText(issue);
       throw invalid(message, {
         latitude: message,
@@ -426,6 +434,38 @@ propertiesRouter.patch('/properties/:id', async (req, res) => {
   }
   ok(res, toProperty(row));
 });
+
+/** Where the saved details differ from the deed (its latest reading; the deed's own words). */
+async function loadDeedGaps(db: SupabaseClient, p: Property): Promise<DeedGap[]> {
+  const facts = must<{ key: string; value: FactValue }[]>(
+    await db
+      .from('property_facts')
+      .select('key, value, created_at')
+      .eq('property_id', p.id)
+      .neq('status', 'superseded')
+      .order('created_at', { ascending: true }),
+  );
+  // Later readings win.
+  const latest = [...new Map(facts.map((f) => [f.key, f])).values()];
+  return deedGaps(
+    latest,
+    {
+      property_type: p.property_type,
+      pincode: p.pincode,
+      city: p.city,
+      state: p.state,
+      area_value: p.area_value,
+      khata_number: p.khata_number,
+      property_number: p.property_number,
+    },
+    (field, v) =>
+      field === 'property_type'
+        ? (PROPERTY_TYPE_LABELS[v as keyof typeof PROPERTY_TYPE_LABELS] ?? String(v))
+        : field === 'area_value'
+          ? `${Number(v).toLocaleString('en-IN')}`
+          : String(v),
+  );
+}
 
 const toNum = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 

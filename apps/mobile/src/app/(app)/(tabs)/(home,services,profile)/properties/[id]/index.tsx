@@ -18,6 +18,7 @@ import { PropertyCover } from '@/components/PropertyCover';
 import { PropertyMapCard } from '@/components/PropertyMapCard';
 import { PullRefresh } from '@/components/PullRefresh';
 import { DataCredits } from '@/components/DataCredits';
+import { DeedGaps } from '@/components/DeedGaps';
 import { ReachNotice } from '@/components/ReachNotice';
 import { RequestRow } from '@/components/ServiceRequestList';
 import { ErrorState, LoadingState } from '@/components/States';
@@ -107,6 +108,7 @@ export default function PropertyDetailsScreen() {
       <LocationIssueNotice property={property} />
       <PropertyMapCard property={property} />
       <ReachNotice propertyId={property.id} reach={property.reach} />
+      <DeedGaps property={property} />
 
       {missing.length > 0 ? (
         <ListGroup title={`Complete your profile · ${property.completion.percent}%`} plain>

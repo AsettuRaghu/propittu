@@ -10,6 +10,7 @@ const issue: LocationIssue = {
   pincode: '560064',
   distance_km: 481,
   near: { latitude: 13.14, longitude: 77.57 },
+  confirmed: false,
 };
 const deed = deedKey({
   village: 'Bommasandra',

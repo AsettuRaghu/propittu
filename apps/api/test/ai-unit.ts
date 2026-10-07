@@ -118,7 +118,7 @@ test('task metadata is versioned and the schema has no union types (API limit)',
   assert.ok(!json.includes('"null"') && !json.includes('anyOf'), 'no nullable / anyOf fields');
 });
 
-import { hasUsefulPrefill, prefillFromFacts, sameFactValue } from '@propittu/shared';
+import { deedGaps, hasUsefulPrefill, prefillFromFacts, sameFactValue } from '@propittu/shared';
 
 const facts = (o: Record<string, unknown>) =>
   Object.entries(o).map(([key, value]) => ({ key, value: value as never }));
@@ -211,4 +211,19 @@ test('a reading with nothing about a property counts as empty', () => {
   assert.equal(hasUsefulPrefill(prefillFromFacts([f('buyers', ['A. Kumar'])])), false);
   assert.equal(hasUsefulPrefill(prefillFromFacts([f('khata_number', '123/4')])), true);
   assert.equal(hasUsefulPrefill(prefillFromFacts([f('village', 'Bommasandra')])), true);
+});
+
+test('deed gaps: what the saved property says differently from the deed', () => {
+  const f = (key: string, value: unknown) => ({ key, value }) as never;
+  const facts = [f('pincode', '562106'), f('city', 'Bengaluru'), f('khata_number', '123/4')];
+  const gaps = deedGaps(facts, { pincode: '560064', city: 'bengaluru', khata_number: null });
+  assert.deepEqual(
+    gaps.map((g) => [g.field, g.deed, g.yours]),
+    [
+      ['pincode', '562106', '560064'],
+      ['khata_number', '123/4', null],
+    ],
+    'formatting differences (case) are not gaps; a cleared value is',
+  );
+  assert.deepEqual(deedGaps([], { pincode: '560064' }), [], 'no deed reading, no gaps');
 });

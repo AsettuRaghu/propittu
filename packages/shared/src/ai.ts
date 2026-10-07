@@ -241,6 +241,58 @@ export function sameFactValue(a: unknown, b: unknown): boolean {
   return n(a) === n(b);
 }
 
+/**
+ * The sale deed is the most reliable source we have. Where the saved
+ * property says something different, it is a gap — shown to the customer
+ * (who can take the deed's value with one tap) for as long as it lasts.
+ */
+export interface DeedGap {
+  field: DeedGapField;
+  label: string;
+  /** As the deed says it (formatted for reading). */
+  deed: string;
+  /** As saved now; null when it was cleared. */
+  yours: string | null;
+  /** The deed's raw value, to put back with one tap. */
+  value: string | number;
+}
+
+const GAP_FIELDS = {
+  property_type: 'Property type',
+  pincode: 'PIN code',
+  city: 'City',
+  state: 'State',
+  area_value: 'Area',
+  khata_number: 'Khata number',
+  property_number: 'Plot / property number',
+} as const;
+export type DeedGapField = keyof typeof GAP_FIELDS;
+
+/** Where the saved property differs from its deed (as Pittu read it). */
+export function deedGaps(
+  facts: Pick<PropertyFact, 'key' | 'value'>[],
+  saved: Partial<Record<DeedGapField, string | number | null>>,
+  show: (field: DeedGapField, v: string | number) => string = (_, v) => String(v),
+): DeedGap[] {
+  if (facts.length === 0) return [];
+  const deed = prefillFromFacts(facts);
+  return (Object.keys(GAP_FIELDS) as DeedGapField[]).flatMap((field) => {
+    const d = deed[field];
+    if (d === null || d === undefined || d === '') return [];
+    const mine = saved[field] ?? null;
+    if (sameFactValue(d, mine)) return [];
+    return [
+      {
+        field,
+        label: GAP_FIELDS[field],
+        deed: show(field, d),
+        yours: mine === null || mine === '' ? null : show(field, mine),
+        value: d,
+      },
+    ];
+  });
+}
+
 /** An unfinished deed set-up (GET /properties/drafts). */
 export interface DraftProperty {
   id: string;

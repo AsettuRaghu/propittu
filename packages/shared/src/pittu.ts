@@ -502,6 +502,7 @@ export const REVIEW_REASONS = [
   'not_owner',
   'type_changed',
   'low_confidence',
+  'deed_changed',
 ] as const;
 export type ReviewReason = (typeof REVIEW_REASONS)[number];
 
@@ -510,6 +511,7 @@ export const REVIEW_REASON_LABELS: Record<ReviewReason, string> = {
   not_owner: 'Not the owner (family / manages it)',
   type_changed: 'Property type changed',
   low_confidence: 'Unsure values accepted',
+  deed_changed: 'Changed what the deed says',
 };
 
 /** One deed fact as the review rule needs it. */
@@ -518,6 +520,16 @@ export interface ReviewFact {
   status: string;
   confidence: string | null;
 }
+
+/** Deed facts whose change by the customer is flagged for review. */
+const DEED_CHECKED_KEYS = new Set([
+  'pincode',
+  'city',
+  'state',
+  'area_value',
+  'khata_number',
+  'unit_number',
+]);
 
 export function reviewReasons(
   ctx: PittuContext,
@@ -536,6 +548,14 @@ export function reviewReasons(
   }
   if (facts.some((f) => f.confidence === 'low' && f.status === 'confirmed')) {
     reasons.push('low_confidence');
+  }
+  // The deed is the most reliable source: overriding it is a gap worth a look.
+  if (
+    facts.some(
+      (f) => DEED_CHECKED_KEYS.has(f.key) && (f.status === 'edited' || f.status === 'rejected'),
+    )
+  ) {
+    reasons.push('deed_changed');
   }
   return reasons;
 }

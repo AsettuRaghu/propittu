@@ -17,7 +17,8 @@ import { Button } from './ui';
 export function LocationIssueNotice({ property: p }: { property: PropertyDetail }) {
   const update = useUpdateProperty(p.id);
   const issue = p.location_issue;
-  if (!issue || p.latitude === null || p.longitude === null) return null;
+  // A confirmed gap from the deed is no longer an alert (DeedGaps shows it calmly).
+  if (!issue || issue.confirmed || p.latitude === null || p.longitude === null) return null;
   const lat = p.latitude;
   const lng = p.longitude;
 

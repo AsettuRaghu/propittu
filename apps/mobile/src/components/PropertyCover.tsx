@@ -204,7 +204,8 @@ function LocationButton({
   size: 'md' | 'lg';
 }) {
   const pinned = p.latitude !== null && p.longitude !== null;
-  const issue = p.location_issue;
+  // Only an unresolved issue turns the pin red (a confirmed gap is shown on the property page).
+  const issue = p.location_issue && !p.location_issue.confirmed ? p.location_issue : null;
   const pin = () => router.push(`/properties/${p.id}/location`);
 
   const onPress = async () => {

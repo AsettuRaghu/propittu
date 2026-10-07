@@ -1,3 +1,4 @@
+import type { DeedGap } from './ai';
 import type { CompletionItem, PropertyCompletion } from './completion';
 import type { PlanSummary } from './plans';
 import type { PropertyReach, ServiceReach } from './reach';
@@ -152,6 +153,11 @@ export interface LocationIssue {
   distance_km: number;
   /** Where "Move the pin" should start (the PIN code's area / the deed's village). */
   near: { latitude: number; longitude: number } | null;
+  /**
+   * kind 'deed': the customer said the pin is right anyway. No longer an
+   * alert, but still a gap from the deed — shown calmly for as long as it lasts.
+   */
+  confirmed: boolean;
 }
 
 /** The issue in one plain sentence. */
@@ -171,6 +177,8 @@ export interface PropertyDetail extends Property {
   completion: PropertyCompletion;
   reach: PropertyReach | null;
   location_issue: LocationIssue | null;
+  /** Where the saved details differ from the sale deed (as Pittu read it). */
+  deed_gaps: DeedGap[];
 }
 
 /* ------------------------------------------------------------------ *

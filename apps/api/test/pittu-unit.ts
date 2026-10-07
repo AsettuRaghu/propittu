@@ -162,3 +162,21 @@ test('service reach: visits need a PIN in our areas, paperwork needs a covered s
   assert.equal(reachProblem({ reach: 'area' }, { ...base, visits: true }), null);
   assert.equal(reachProblem({ reach: 'area' }, null), null, 'unknown → the server decides');
 });
+
+test('Review list: changing what the deed says is flagged', () => {
+  const owner = { ...KA_PLOT, account_name: 'Ananya Rao' };
+  assert.deepEqual(
+    reviewReasons(owner, {}, [{ key: 'pincode', status: 'edited', confidence: 'high' }]),
+    ['deed_changed'],
+  );
+  assert.deepEqual(
+    reviewReasons(owner, {}, [{ key: 'khata_number', status: 'rejected', confidence: 'high' }]),
+    ['deed_changed'],
+    'clearing a deed value counts too',
+  );
+  assert.deepEqual(
+    reviewReasons(owner, {}, [{ key: 'village', status: 'edited', confidence: 'high' }]),
+    [],
+    'not every fact is checked',
+  );
+});

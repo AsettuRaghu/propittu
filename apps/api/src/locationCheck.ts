@@ -16,8 +16,9 @@ import { serviceClient } from './supabase.js';
  * with the place the sale deed names. The last check is stored on the
  * property (location_check) so pages never wait on the place lookup; it is
  * redone whenever the pin, the PIN code or the deed's reading has changed.
- * An issue stays until the customer resolves it — moving the pin, fixing
- * the PIN code, or saying "the pin is right".
+ * An issue stays until the customer resolves it — moving the pin or fixing
+ * the PIN code. Saying "the pin is right" against the deed turns the alert
+ * into a quiet, lasting gap (the deed is the most reliable source we have).
  */
 
 /** How far a pin may be from the deed's village (or, failing that, its taluk). */
@@ -40,10 +41,11 @@ export async function findIssue(
         pincode: p.pincode,
         distance_km: m.distance_km,
         near: { latitude: m.area.latitude, longitude: m.area.longitude },
+        confirmed: false,
       };
     }
   }
-  if (!deed || pinConfirmed) return null;
+  if (!deed) return null;
   const named = await findPlace([deed.village, deed.hobli, deed.taluk, deed.district, deed.state]);
   // Only a village- or taluk-level match is precise enough to judge a pin by.
   const radius = named ? DEED_RADIUS_KM[named.dropped] : undefined;
@@ -58,6 +60,8 @@ export async function findIssue(
     pincode: null,
     distance_km: Math.round(km),
     near: { latitude: named.latitude, longitude: named.longitude },
+    // "The pin is right": no longer an alert, but still a gap from the deed.
+    confirmed: pinConfirmed,
   };
 }
 
