@@ -113,14 +113,18 @@ export default function DeleteAccountScreen() {
         </ListGroup>
 
         {problem ? <Banner message={problem} /> : null}
-        <TextField
-          label={`Type ${PHRASE} to confirm`}
-          value={typed}
-          onChangeText={setTyped}
-          autoCapitalize="characters"
-          autoCorrect={false}
-          editable={!busy}
-        />
+        <ListGroup title="Confirm" plain>
+          <View style={styles.field}>
+            <TextField
+              label={`Type ${PHRASE}`}
+              value={typed}
+              onChangeText={setTyped}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              editable={!busy}
+            />
+          </View>
+        </ListGroup>
       </ScrollView>
       <Footer>
         <Button
@@ -147,4 +151,5 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   note: { marginTop: space.sm, marginLeft: space.md },
+  field: { paddingHorizontal: 14, paddingVertical: space.xs },
 });

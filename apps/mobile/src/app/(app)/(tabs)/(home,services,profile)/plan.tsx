@@ -20,7 +20,7 @@ import { useAccountPlan, usePlans, useProperties, useServices } from '@/api/quer
 import { dialog } from '@/components/Dialog';
 import { PageHeader, Strong } from '@/components/PageHeader';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
-import { UsageMeter } from '@/components/UsageMeter';
+import { UsageRow } from '@/components/UsageRow';
 import { Badge, Banner, Button, ListGroup, ListRow, Segmented } from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
@@ -327,7 +327,7 @@ function PlanHeader({
   );
 }
 
-/* ---- Usage: every allowance, measured in full ---- */
+/* ---- Usage: every allowance as a row — used / limit and what's left ---- */
 
 function UsageTab({ state: s }: { state: AccountPlanState }) {
   const l = s.plan?.benefits.limits ?? {};
@@ -335,7 +335,7 @@ function UsageTab({ state: s }: { state: AccountPlanState }) {
   const deleted = u.deleted_still_counted.length;
   return (
     <ListGroup plain>
-      <UsageMeter
+      <UsageRow
         icon="home"
         accent="indigo"
         label="Properties"
@@ -344,7 +344,7 @@ function UsageTab({ state: s }: { state: AccountPlanState }) {
         limit={l.max_properties}
       />
       {u.included.map((i) => (
-        <UsageMeter
+        <UsageRow
           key={i.code}
           icon="compass"
           accent="teal"
@@ -354,7 +354,7 @@ function UsageTab({ state: s }: { state: AccountPlanState }) {
           limit={i.quantity}
         />
       ))}
-      <UsageMeter
+      <UsageRow
         icon="storage"
         accent="violet"
         label="Storage"
@@ -362,7 +362,7 @@ function UsageTab({ state: s }: { state: AccountPlanState }) {
         limit={l.max_storage_mb}
         format={formatStorageMb}
       />
-      <UsageMeter
+      <UsageRow
         icon="document"
         accent="amber"
         label="Documents"
@@ -370,7 +370,7 @@ function UsageTab({ state: s }: { state: AccountPlanState }) {
         used={u.max_documents_on_a_property}
         limit={l.max_documents_per_property}
       />
-      <UsageMeter
+      <UsageRow
         icon="image"
         accent="sky"
         label="Photos"
@@ -378,7 +378,7 @@ function UsageTab({ state: s }: { state: AccountPlanState }) {
         used={u.max_photos_on_a_property}
         limit={l.max_photos_per_property}
       />
-      <UsageMeter
+      <UsageRow
         icon="video"
         accent="rose"
         label="Videos"
@@ -432,7 +432,7 @@ function PlanRow({
   }
   return (
     <ListRow
-      icon={plan.code === 'plus' ? 'gem' : 'home'}
+      icon={plan.code === 'plus' ? 'gem' : 'shield'}
       accent={PLAN_ACCENT[plan.code] ?? 'slate'}
       title={plan.name}
       subtitle={subtitle}
