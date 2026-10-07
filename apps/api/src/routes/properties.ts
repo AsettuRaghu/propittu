@@ -1,13 +1,8 @@
+import { waitUntil } from '@vercel/functions';
 import { Router } from 'express';
 import {
   computePropertyCompletion,
   createPropertySchema,
-  PREFILL_FIELDS,
-  prefillFromFacts,
-  sameFactValue,
-  type DraftProperty,
-  type FactValue,
-  type PrefillField,
   OPEN_REQUEST_STATUSES,
   STORAGE_BUCKETS,
   updatePropertySchema,
@@ -20,15 +15,22 @@ import {
 } from '@propittu/shared';
 import { auth } from '../auth.js';
 import { audit } from '../audit.js';
-import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { assertAiAvailable } from '../ai/jobs.js';
-import { HttpError, must, notFound, ok, uuidParam } from '../errors.js';
+import { invalid, must, notFound, ok, uuidParam } from '../errors.js';
 import { assertOwnsProperty } from '../ownership.js';
 import { enforceLimit, planOf, requireFeature } from '../plan.js';
-import { removeObjects, signDownloads } from '../storage.js';
+import { removeProperty } from '../propertyRemoval.js';
+import { signDownloads } from '../storage.js';
 import { loadReach } from '../reach.js';
-import { refreshReview } from './pittu.js';
+import {
+  addressAt,
+  checkRecord,
+  findIssue,
+  issueMessage,
+  refreshLocationCheck,
+  storedIssue,
+  within,
+} from '../locationCheck.js';
 import { listReadyPhotos } from './photos.js';
 import { listReadyVideos } from './videos.js';
 
@@ -45,7 +47,9 @@ const SUMMARY_COLUMNS =
   'id, property_type, name, city, state, created_at, document_count, service_request_count, ' +
   'cover_photo_path, photo_count, video_count';
 
-type PropertyRow = Property;
+export type PropertyRow = Property & { location_check?: unknown };
+/** The server's last pin-vs-PIN-code check rides along; it is never sent as is. */
+const WITH_CHECK = `${PROPERTY_COLUMNS}, location_check`;
 
 interface SummaryRow extends Omit<
   PropertySummary,
@@ -55,7 +59,7 @@ interface SummaryRow extends Omit<
 }
 
 /** PostgREST returns numeric columns as numbers, but be defensive about strings. */
-export function toProperty(row: PropertyRow): Property {
+export function toProperty({ location_check: _check, ...row }: PropertyRow): Property {
   const num = (v: unknown) => (v === null || v === undefined ? null : Number(v));
   return {
     ...row,
@@ -72,7 +76,7 @@ export function toProperty(row: PropertyRow): Property {
  * values apart and never silently overwrite them. A map pin set by the
  * customer is a user-confirmed location.
  */
-function withProvenance(
+export function withProvenance(
   input: Record<string, unknown>,
   existing: Partial<Record<string, ValueSource>> = {},
 ): Record<string, unknown> {
@@ -101,14 +105,14 @@ propertiesRouter.get('/properties', async (req, res) => {
   const { db, accountId } = auth(req);
 
   // Everything Home needs in four parallel reads (no per-property queries).
-  const [summaryRes, propertyRes, documentRes, requestRes] = await Promise.all([
+  const [summaryRes, propertyRes, documentRes, requestRes, photoRes] = await Promise.all([
     db
       .from('property_summaries')
       .select(SUMMARY_COLUMNS)
       .eq('account_id', accountId)
       .eq('is_draft', false)
       .order('created_at', { ascending: false }),
-    db.from('properties').select(PROPERTY_COLUMNS).eq('account_id', accountId),
+    db.from('properties').select(WITH_CHECK).eq('account_id', accountId),
     db
       .from('property_documents')
       .select('property_id, document_type')
@@ -122,9 +126,23 @@ propertiesRouter.get('/properties', async (req, res) => {
       .eq('account_id', accountId)
       .in('status', OPEN_REQUEST_STATUSES)
       .order('created_at', { ascending: false }),
+    db
+      .from('property_photos')
+      .select('property_id, storage_path')
+      .eq('account_id', accountId)
+      .eq('upload_status', 'ready')
+      .order('created_at', { ascending: true }),
   ]);
   const rows = must<SummaryRow[]>(summaryRes);
-  const properties = new Map(must<PropertyRow[]>(propertyRes).map((p) => [p.id, toProperty(p)]));
+  const propertyRows = must<PropertyRow[]>(propertyRes);
+  const properties = new Map(propertyRows.map((p) => [p.id, toProperty(p)]));
+  const checks = new Map(propertyRows.map((p) => [p.id, p.location_check]));
+  // Up to five photos per property, for the swipeable cover.
+  const photoPaths = new Map<string, string[]>();
+  for (const ph of must<{ property_id: string; storage_path: string }[]>(photoRes)) {
+    const list = photoPaths.get(ph.property_id) ?? [];
+    if (list.length < 5) photoPaths.set(ph.property_id, [...list, ph.storage_path]);
+  }
   const docTypes = new Map<string, string[]>();
   for (const d of must<{ property_id: string; document_type: string }[]>(documentRes)) {
     docTypes.set(d.property_id, [...(docTypes.get(d.property_id) ?? []), d.document_type]);
@@ -154,7 +172,10 @@ propertiesRouter.get('/properties', async (req, res) => {
     });
   }
 
-  const coverPaths = rows.flatMap((r) => (r.cover_photo_path ? [r.cover_photo_path] : []));
+  const coverPaths = [
+    ...rows.flatMap((r) => (r.cover_photo_path ? [r.cover_photo_path] : [])),
+    ...[...photoPaths.values()].flat(),
+  ];
   const [urls, reach] = await Promise.all([
     signDownloads(db, STORAGE_BUCKETS.photos, coverPaths),
     loadReach(db, accountId),
@@ -178,6 +199,10 @@ propertiesRouter.get('/properties', async (req, res) => {
       reach: reach.get(r.id) ?? null,
       latitude: property?.latitude ?? null,
       longitude: property?.longitude ?? null,
+      location_approximate:
+        !!property && property.latitude !== null && property.location_source !== 'user',
+      photo_urls: (photoPaths.get(r.id) ?? []).flatMap((path) => urls.get(path) ?? []),
+      location_issue: property ? storedIssue(checks.get(r.id), property).issue : null,
     };
   });
 
@@ -221,236 +246,16 @@ propertiesRouter.post('/properties', async (req, res) => {
  * property that existed or was added this term, deleted or not, unless staff
  * freed it. Drafts never count.
  */
-async function countConfirmed(db: SupabaseClient, accountId: string): Promise<number> {
+export async function countConfirmed(db: SupabaseClient, accountId: string): Promise<number> {
   return Number(must<number>(await db.rpc('property_slots_used', { p_account: accountId })) ?? 0);
 }
-
-/* ------------------------------------------------------------------ *
- * Sale Deed path (Pittu): draft → deed read → customer confirms
- * ------------------------------------------------------------------ */
-
-const MAX_OPEN_DRAFTS = 3;
-
-/* POST /properties/draft — a placeholder the deed can be stored against */
-propertiesRouter.post('/properties/draft', async (req, res) => {
-  const ctx = auth(req);
-  assertAiAvailable(ctx.accountId);
-  const plan = planOf(req);
-  requireFeature(plan, 'property_profile', 'Adding properties');
-  // Check the limit now, so nobody reads a deed only to be refused at the end.
-  enforceLimit(plan, 'max_properties', await countConfirmed(ctx.db, ctx.accountId), 1, [
-    'property',
-    'properties',
-  ]);
-  const drafts = await ctx.db
-    .from('properties')
-    .select('id', { count: 'exact', head: true })
-    .eq('account_id', ctx.accountId)
-    .eq('is_draft', true);
-  must(drafts);
-  if ((drafts.count ?? 0) >= MAX_OPEN_DRAFTS) {
-    throw new HttpError(
-      409,
-      'CONFLICT',
-      'You have properties waiting to be finished. Finish or remove one of them first.',
-    );
-  }
-  const row = must<PropertyRow>(
-    await ctx.db
-      .from('properties')
-      .insert({
-        account_id: ctx.accountId,
-        user_id: ctx.userId,
-        property_type: 'other',
-        name: 'New property',
-        is_draft: true,
-        field_sources: {},
-      })
-      .select(PROPERTY_COLUMNS)
-      .single(),
-  );
-  await audit(ctx, 'property.draft_created', { type: 'property', id: row.id });
-  ok(res, toProperty(row), 201);
-});
-
-/* GET /properties/drafts — unfinished deed set-ups, for "Finish adding" on Home */
-propertiesRouter.get('/properties/drafts', async (req, res) => {
-  const { db, accountId } = auth(req);
-  const drafts = must<{ id: string; name: string; created_at: string }[]>(
-    await db
-      .from('properties')
-      .select('id, name, created_at')
-      .eq('account_id', accountId)
-      .eq('is_draft', true)
-      .order('created_at', { ascending: false }),
-  );
-  const ids = drafts.map((d) => d.id);
-  const docs =
-    ids.length === 0
-      ? []
-      : must<{ id: string; property_id: string }[]>(
-          await db
-            .from('property_documents')
-            .select('id, property_id')
-            .in('property_id', ids)
-            .eq('document_type', 'sale_deed')
-            .eq('upload_status', 'ready')
-            .order('created_at', { ascending: false }),
-        );
-  const data: DraftProperty[] = drafts.map((d) => ({
-    id: d.id,
-    created_at: d.created_at,
-    document_id: docs.find((x) => x.property_id === d.id)?.id ?? null,
-  }));
-  ok(res, data);
-});
-
-/*
- * POST /properties/:id/setup {property, analysis_id?} — the customer confirms.
- * Turns the draft into a real property, records where each value came from
- * (deed vs typed), and keeps each fact's outcome: confirmed / edited (with
- * the customer's value) / rejected. Nothing Pittu found is applied unless
- * it is in what the customer submitted.
- */
-const setupSchema = z.object({
-  property: createPropertySchema,
-  analysis_id: z.uuid().nullable().optional(),
-});
-
-/** Facts that map one-to-one onto a property field (the rest are confirmed as shown). */
-const FACT_FIELD: Record<string, PrefillField> = {
-  property_kind: 'property_type',
-  city: 'city',
-  state: 'state',
-  pincode: 'pincode',
-  area_value: 'area_value',
-  area_unit: 'area_unit',
-  khata_number: 'khata_number',
-  unit_number: 'property_number',
-};
-
-propertiesRouter.post('/properties/:id/setup', async (req, res) => {
-  const ctx = auth(req);
-  const id = uuidParam(req.params.id, 'Property');
-  const { property: input, analysis_id: analysisId } = setupSchema.parse(req.body);
-
-  const draft = must<{ id: string; is_draft: boolean } | null>(
-    await ctx.db
-      .from('properties')
-      .select('id, is_draft')
-      .eq('id', id)
-      .eq('account_id', ctx.accountId)
-      .maybeSingle(),
-  );
-  if (!draft) throw notFound('Property');
-  if (!draft.is_draft) throw new HttpError(409, 'CONFLICT', 'This property is already set up.');
-  const plan = planOf(req);
-  enforceLimit(plan, 'max_properties', await countConfirmed(ctx.db, ctx.accountId), 1, [
-    'property',
-    'properties',
-  ]);
-
-  const facts = analysisId
-    ? must<{ id: string; key: string; value: FactValue }[]>(
-        await ctx.db
-          .from('property_facts')
-          .select('id, key, value')
-          .eq('analysis_id', analysisId)
-          .eq('property_id', id)
-          .eq('account_id', ctx.accountId),
-      )
-    : [];
-  const prefill = prefillFromFacts(facts);
-
-  // Provenance: unchanged deed values are 'sale_deed'; anything typed is 'user'.
-  const update = withProvenance(input, {});
-  const sources = update.field_sources as Partial<Record<string, ValueSource>>;
-  for (const field of PREFILL_FIELDS) {
-    const deed = prefill[field];
-    if (
-      deed !== null &&
-      deed !== undefined &&
-      sameFactValue(deed, input[field as keyof typeof input])
-    ) {
-      sources[field] = 'sale_deed';
-    }
-  }
-  const row = must<PropertyRow | null>(
-    await ctx.db
-      .from('properties')
-      .update({ ...update, field_sources: sources, is_draft: false })
-      .eq('id', id)
-      .eq('account_id', ctx.accountId)
-      .select(PROPERTY_COLUMNS)
-      .maybeSingle(),
-  );
-  if (!row) throw notFound('Property');
-
-  // The improvement signal: what the customer did with each fact.
-  const now = new Date().toISOString();
-  const confirmed: string[] = [];
-  let edited = 0;
-  let rejected = 0;
-  for (const f of facts) {
-    const field = FACT_FIELD[f.key];
-    if (!field) {
-      confirmed.push(f.id);
-      continue;
-    }
-    const submitted = input[field as keyof typeof input] ?? null;
-    if (sameFactValue(f.value, submitted)) {
-      confirmed.push(f.id);
-    } else {
-      const removed = submitted === null || submitted === '';
-      if (removed) rejected++;
-      else edited++;
-      must(
-        await ctx.db
-          .from('property_facts')
-          .update({
-            status: removed ? 'rejected' : 'edited',
-            final_value: removed ? null : submitted,
-            decided_by: ctx.userId,
-            decided_at: now,
-          })
-          .eq('id', f.id),
-      );
-    }
-  }
-  if (confirmed.length) {
-    must(
-      await ctx.db
-        .from('property_facts')
-        .update({ status: 'confirmed', decided_by: ctx.userId, decided_at: now })
-        .in('id', confirmed),
-    );
-  }
-  await audit(
-    ctx,
-    'property.created_from_deed',
-    { type: 'property', id },
-    {
-      analysis_id: analysisId ?? null,
-      facts_confirmed: confirmed.length,
-      facts_edited: edited,
-      facts_rejected: rejected,
-    },
-  );
-  await refreshReview(ctx, id);
-  ok(res, toProperty(row));
-});
 
 propertiesRouter.get('/properties/:id', async (req, res) => {
   const { db, accountId } = auth(req);
   const id = uuidParam(req.params.id, 'Property');
 
   const [propertyResult, summaryResult, documentsResult] = await Promise.all([
-    db
-      .from('properties')
-      .select(PROPERTY_COLUMNS)
-      .eq('id', id)
-      .eq('account_id', accountId)
-      .maybeSingle(),
+    db.from('properties').select(WITH_CHECK).eq('id', id).eq('account_id', accountId).maybeSingle(),
     db
       .from('property_summaries')
       .select('document_count, service_request_count')
@@ -475,6 +280,9 @@ propertiesRouter.get('/properties/:id', async (req, res) => {
   );
 
   const property = toProperty(row);
+  // Pin vs PIN code: the stored check, redone after the response when out of date.
+  const check = storedIssue(row.location_check, property);
+  if (check.stale) waitUntil(refreshLocationCheck(id, property));
   const [photos, videos, reach] = await Promise.all([
     listReadyPhotos(db, accountId, id),
     listReadyVideos(db, accountId, id),
@@ -489,6 +297,7 @@ propertiesRouter.get('/properties/:id', async (req, res) => {
     service_request_count: counts?.service_request_count ?? 0,
     completion: computePropertyCompletion({ property, photoCount: photos.length, documentTypes }),
     reach: reach.get(id) ?? null,
+    location_issue: check.issue,
   };
 
   ok(res, data);
@@ -521,22 +330,66 @@ propertiesRouter.post('/properties/:id/reach-interest', async (req, res) => {
 propertiesRouter.patch('/properties/:id', async (req, res) => {
   const { db, accountId } = auth(req);
   const id = uuidParam(req.params.id, 'Property');
-  const input = updatePropertySchema.parse(req.body);
+  // "The pin is right" (address_from_pin): take the PIN code, city and state from the pin.
+  const { address_from_pin: addressFromPin, ...input } = updatePropertySchema.parse(req.body);
 
-  const existing = must<{ field_sources: Partial<Record<string, ValueSource>> } | null>(
+  const existing = must<
+    | (Pick<Property, 'pincode' | 'latitude' | 'longitude'> & {
+        field_sources: Partial<Record<string, ValueSource>>;
+      })
+    | null
+  >(
     await db
       .from('properties')
-      .select('field_sources')
+      .select('field_sources, pincode, latitude, longitude')
       .eq('id', id)
       .eq('account_id', accountId)
       .maybeSingle(),
   );
   if (!existing) throw notFound('Property');
 
+  // The pin and the PIN code must describe the same place.
+  const after = {
+    pincode: input.pincode !== undefined ? input.pincode : existing.pincode,
+    latitude: input.latitude !== undefined ? input.latitude : toNum(existing.latitude),
+    longitude: input.longitude !== undefined ? input.longitude : toNum(existing.longitude),
+  };
+  const pinMoved = 'latitude' in input;
+  const pincodeChanged = input.pincode !== undefined && input.pincode !== existing.pincode;
+  let check: ReturnType<typeof checkRecord> | undefined;
+  if (addressFromPin && after.latitude !== null && after.longitude !== null) {
+    const here = await within(addressAt(after.latitude, after.longitude), 8000);
+    if (here?.pincode) {
+      Object.assign(input, {
+        pincode: here.pincode,
+        ...(here.city ? { city: here.city } : {}),
+        ...(here.state ? { state: here.state } : {}),
+      });
+      check = checkRecord({ ...after, pincode: here.pincode }, null);
+    }
+  } else if (pinMoved || pincodeChanged) {
+    const issue = await within(findIssue(after), 8000);
+    if (issue) {
+      const message = issueMessage(issue);
+      throw invalid(
+        message,
+        pinMoved
+          ? { latitude: message, pin_place: issue.pin_place, pincode_place: issue.pincode_place }
+          : {
+              pincode: `PIN code ${issue.pincode} is in ${issue.pincode_place}, about ${issue.distance_km} km from the pin on the map. Check the PIN code, or move the pin.`,
+            },
+      );
+    }
+    if (issue === null) check = checkRecord(after, null);
+  }
+
   const row = must<PropertyRow | null>(
     await db
       .from('properties')
-      .update(withProvenance(input, existing.field_sources ?? {}))
+      .update({
+        ...withProvenance(input, existing.field_sources ?? {}),
+        ...(check !== undefined ? { location_check: check } : {}),
+      })
       .eq('id', id)
       .eq('account_id', accountId)
       .select(PROPERTY_COLUMNS)
@@ -544,50 +397,20 @@ propertiesRouter.patch('/properties/:id', async (req, res) => {
   );
   if (!row) throw notFound('Property');
 
-  if ('latitude' in input) {
+  if (pinMoved) {
     await audit(auth(req), 'property.location_confirmed', { type: 'property', id });
   }
   ok(res, toProperty(row));
 });
 
-/* ------------------------------------------------------------------ *
- * DELETE /properties/:id
- *
- * Storage objects first, then the row. The reverse order risks orphaned
- * files nobody can see or delete. Media/document rows cascade with the
- * property; service requests survive with property_id nulled (§8.4).
- * ------------------------------------------------------------------ */
+const toNum = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 
+/* DELETE /properties/:id */
 propertiesRouter.delete('/properties/:id', async (req, res) => {
   const { db, accountId } = auth(req);
   const id = uuidParam(req.params.id, 'Property');
   await assertOwnsProperty(db, accountId, id);
-
-  const [photos, documents, videos] = await Promise.all([
-    db
-      .from('property_photos')
-      .select('storage_path')
-      .eq('property_id', id)
-      .eq('account_id', accountId),
-    db
-      .from('property_documents')
-      .select('storage_path')
-      .eq('property_id', id)
-      .eq('account_id', accountId),
-    db
-      .from('property_videos')
-      .select('storage_path')
-      .eq('property_id', id)
-      .eq('account_id', accountId),
-  ]);
-
-  const paths = (r: { storage_path: string }[]) => r.map((x) => x.storage_path);
-  await removeObjects(db, STORAGE_BUCKETS.photos, paths(must(photos)));
-  await removeObjects(db, STORAGE_BUCKETS.documents, paths(must(documents)));
-  await removeObjects(db, STORAGE_BUCKETS.videos, paths(must(videos)));
-
-  must(await db.from('properties').delete().eq('id', id).eq('account_id', accountId));
+  await removeProperty(db, accountId, id);
   await audit(auth(req), 'property.deleted', { type: 'property', id });
-
   res.status(204).end();
 });

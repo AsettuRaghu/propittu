@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { openServicesTab } from '@/lib/nav';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text } from 'react-native';
 import {
@@ -45,7 +46,7 @@ export function ServiceRequestList({ propertyId }: { propertyId?: string }) {
         accent="coral"
         title="No requests yet"
         message="Book a visit, an inspection or paperwork help — you'll follow it here."
-        action={<Button title="Browse services" onPress={() => router.push('/services')} />}
+        action={<Button title="Browse services" onPress={() => openServicesTab()} />}
       />
     );
   }

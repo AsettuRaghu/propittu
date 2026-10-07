@@ -19,6 +19,7 @@ import { plansRouter } from './routes/plans.js';
 import { requireActivePlan } from './plan.js';
 import { photosRouter } from './routes/photos.js';
 import { propertiesRouter } from './routes/properties.js';
+import { propertySetupRouter } from './routes/propertySetup.js';
 import { servicesRouter } from './routes/services.js';
 import { videosRouter } from './routes/videos.js';
 import { weatherRouter } from './routes/weather.js';
@@ -83,6 +84,7 @@ export function createApp(): express.Express {
 
   // Normal property-management functionality needs an active Plan or Trial.
   app.use(requireActivePlan);
+  app.use(propertySetupRouter);
   app.use(propertiesRouter);
   app.use(photosRouter);
   app.use(videosRouter);

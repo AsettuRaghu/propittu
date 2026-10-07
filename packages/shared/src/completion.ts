@@ -39,6 +39,7 @@ export interface CompletionInput {
     | 'state'
     | 'pincode'
     | 'latitude'
+    | 'location_source'
     | 'area_value'
     | 'survey_number'
     | 'property_number'
@@ -60,7 +61,11 @@ export function computePropertyCompletion({
       label: 'Address, city, state and PIN',
       done: !!(p.address_line && p.city && p.state && p.pincode),
     },
-    { key: 'location', label: 'Confirm the location on the map', done: p.latitude !== null },
+    {
+      key: 'location',
+      label: 'Confirm the location on the map',
+      done: p.latitude !== null && p.location_source === 'user',
+    },
     { key: 'sale_deed', label: 'Upload the Sale Deed', done: documentTypes.includes('sale_deed') },
     { key: 'photo', label: 'Add a photo of the property', done: photoCount > 0 },
     { key: 'area', label: 'Add the plot / land area', done: p.area_value !== null },

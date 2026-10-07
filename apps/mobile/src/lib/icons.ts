@@ -91,16 +91,6 @@ export const STATUS_TONES: Record<ServiceRequestStatus, Tone> = {
   cancelled: 'neutral',
 };
 
-export const STATUS_ICONS: Record<ServiceRequestStatus, IconName> = {
-  requested: 'clock',
-  confirmed: 'check',
-  scheduled: 'calendar',
-  in_progress: 'bolt',
-  awaiting_customer: 'chat',
-  completed: 'success',
-  cancelled: 'cancelled',
-};
-
 export const TICKET_TONES: Record<TicketStatus, Tone> = {
   open: 'info',
   in_progress: 'brand',

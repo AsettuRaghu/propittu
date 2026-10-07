@@ -128,6 +128,24 @@ export interface PropertySummary {
   /** The map pin, if set (Home shows the site's weather). */
   latitude: number | null;
   longitude: number | null;
+  /** True while the pin is only approximate (placed from the deed's village). */
+  location_approximate: boolean;
+  /** Up to five photos, for the swipeable cover. */
+  photo_urls: string[];
+  location_issue: LocationIssue | null;
+}
+
+/**
+ * The map pin and the PIN code point to different places — one of them is
+ * wrong. Both places are given in words so the customer can tell which.
+ */
+export interface LocationIssue {
+  /** "Manikonda, Ranga Reddy (500089)" */
+  pin_place: string;
+  /** "Yelahanka, Bengaluru Urban" */
+  pincode_place: string;
+  pincode: string;
+  distance_km: number;
 }
 
 /** Property details screen (§18). */
@@ -139,6 +157,7 @@ export interface PropertyDetail extends Property {
   /** Profile completion and next actions (M2). */
   completion: PropertyCompletion;
   reach: PropertyReach | null;
+  location_issue: LocationIssue | null;
 }
 
 /* ------------------------------------------------------------------ *

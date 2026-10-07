@@ -5,11 +5,11 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker, type LatLng, type Region } from 'react-native-maps';
 import { useProperty, useUpdateProperty } from '@/api/queries';
-import { toast } from '@/components/Dialog';
+import { dialog, toast } from '@/components/Dialog';
 import { Icon } from '@/components/Icon';
 import { ErrorState, LoadingState } from '@/components/States';
 import { Banner, Button, IconButton } from '@/components/ui';
-import { errorMessage } from '@/lib/errors';
+import { errorMessage, fieldErrors } from '@/lib/errors';
 import { accents, colors, radius, shadowStrong, space, typography } from '@/theme';
 
 /** The phone's geocoder can stall; never keep the owner waiting on it. */
@@ -105,17 +105,37 @@ export default function PropertyLocationScreen() {
     }
   };
 
-  const save = () => {
+  const save = (addressFromPin = false) => {
     if (!pin) return;
     update.mutate(
-      { latitude: Number(pin.latitude.toFixed(6)), longitude: Number(pin.longitude.toFixed(6)) },
+      {
+        latitude: Number(pin.latitude.toFixed(6)),
+        longitude: Number(pin.longitude.toFixed(6)),
+        ...(addressFromPin ? { address_from_pin: true } : {}),
+      },
       {
         onSuccess: () => {
-          toast('Location saved');
+          toast(addressFromPin ? 'Location and address saved' : 'Location saved');
           router.back();
         },
+        onError: (err) => void onMismatch(err),
       },
     );
+  };
+
+  // The pin is far from the property's PIN code: ask which one is right.
+  const onMismatch = async (err: unknown) => {
+    const details = fieldErrors(err);
+    if (!details.latitude) return;
+    update.reset();
+    const pinIsRight = await dialog.confirm({
+      title: 'This pin is far from the PIN code',
+      message: `The pin is in ${details.pin_place}, but PIN code ${property?.pincode} is in ${details.pincode_place}. If the pin is right, we’ll update the PIN code, city and state to match.`,
+      confirmLabel: 'The pin is right',
+      cancelLabel: 'Move the pin',
+      tone: 'warning',
+    });
+    if (pinIsRight) save(true);
   };
 
   if (isPending) return <LoadingState />;
@@ -189,7 +209,7 @@ export default function PropertyLocationScreen() {
         <Button
           title={pin ? 'Confirm location' : 'Tap the map to place the pin'}
           icon={pin ? 'check' : 'pin'}
-          onPress={save}
+          onPress={() => save()}
           loading={update.isPending}
           disabled={!pin}
         />

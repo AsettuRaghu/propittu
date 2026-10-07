@@ -12,15 +12,19 @@ import {
   type PropertyFact,
   type PropertyType,
 } from '@propittu/shared';
-import { startAnalysis, useAnalysis, useFinishSetup } from '@/api/ai';
+import { startAnalysis, useAnalysis, useFinishSetup, usePlaceSuggestion } from '@/api/ai';
+import { useProperty } from '@/api/queries';
 import { api, ApiError } from '@/api/client';
 import { dialog, toast } from '@/components/Dialog';
 import { Footer } from '@/components/Footer';
 import { DeedFindings, DeedReading } from '@/components/DeedReading';
+import { DuplicateDeed } from '@/components/DuplicateDeed';
+import { LoadingState } from '@/components/States';
 import {
   FormSection,
   PropertyForm,
   emptyPropertyForm,
+  propertyToForm,
   validatePropertyForm,
   type PropertyFormValues,
 } from '@/components/PropertyForm';
@@ -72,6 +76,7 @@ export default function PropertySetupScreen() {
   const [elapsed, setElapsed] = useState(0);
   const [sawReading, setSawReading] = useState(false);
   const [revealed, setRevealed] = useState(false);
+  const [addAnyway, setAddAnyway] = useState(false);
 
   // No reading yet (e.g. the start call was interrupted): start it once.
   useEffect(() => {
@@ -102,7 +107,28 @@ export default function PropertySetupScreen() {
     );
   }
 
-  if (sawReading && !revealed && a?.status === 'ready') {
+  // The same deed is already in the locker: say so before anything else.
+  if (a?.status === 'ready' && a.duplicate_of && !addAnyway) {
+    return (
+      <>
+        <Stack.Screen options={{ title: 'Already in your locker' }} />
+        <DuplicateDeed
+          draftId={id}
+          existing={a.duplicate_of}
+          onAddAnyway={() => {
+            setAddAnyway(true);
+            setRevealed(true);
+          }}
+        />
+      </>
+    );
+  }
+  // Added anyway, with nothing read (the deed was never read for that property): start from it.
+  if (a?.status === 'ready' && a.duplicate_of && a.facts.length === 0) {
+    return <SeededReview propertyId={id} analysis={a} from={a.duplicate_of.id} />;
+  }
+
+  if (sawReading && !revealed && a?.status === 'ready' && a.facts.length > 0) {
     return (
       <>
         <Stack.Screen options={{ title: 'Pittu’s findings' }} />
@@ -118,33 +144,74 @@ export default function PropertySetupScreen() {
   return <Review key={a?.id ?? 'manual'} propertyId={id} analysis={a ?? null} />;
 }
 
+/** "Add as a new property" for a deed already in the locker: start from that property's details. */
+function SeededReview({
+  propertyId,
+  analysis,
+  from,
+}: {
+  propertyId: string;
+  analysis: DocumentAnalysis;
+  from: string;
+}) {
+  const { data } = useProperty(from);
+  if (!data) return <LoadingState />;
+  return (
+    <Review
+      propertyId={propertyId}
+      analysis={analysis}
+      seed={{ ...propertyToForm(data), name: '' }}
+    />
+  );
+}
+
 function Review({
   propertyId,
   analysis,
+  seed,
 }: {
   propertyId: string;
   analysis: DocumentAnalysis | null;
+  seed?: PropertyFormValues;
 }) {
   const ready = analysis?.status === 'ready';
   const facts: PropertyFact[] = ready ? analysis.facts : [];
   const prefill = prefillFromFacts(facts);
-  const [values, setValues] = useState<PropertyFormValues>(() => ({
-    ...emptyPropertyForm,
-    property_type: (prefill.property_type as PropertyType | null) ?? null,
-    name: String(prefill.name ?? ''),
-    address_line: String(prefill.address_line ?? ''),
-    city: String(prefill.city ?? ''),
-    state: String(prefill.state ?? ''),
-    pincode: String(prefill.pincode ?? ''),
-    area_value:
-      prefill.area_value === null || prefill.area_value === undefined
-        ? ''
-        : String(prefill.area_value),
-    area_unit: (prefill.area_unit as AreaUnit | null) ?? null,
-    survey_number: String(prefill.survey_number ?? ''),
-    property_number: String(prefill.property_number ?? ''),
-    khata_number: String(prefill.khata_number ?? ''),
-  }));
+  const [values, setValues] = useState<PropertyFormValues>(
+    () =>
+      seed ?? {
+        ...emptyPropertyForm,
+        property_type: (prefill.property_type as PropertyType | null) ?? null,
+        name: String(prefill.name ?? ''),
+        address_line: String(prefill.address_line ?? ''),
+        city: String(prefill.city ?? ''),
+        state: String(prefill.state ?? ''),
+        pincode: String(prefill.pincode ?? ''),
+        area_value:
+          prefill.area_value === null || prefill.area_value === undefined
+            ? ''
+            : String(prefill.area_value),
+        area_unit: (prefill.area_unit as AreaUnit | null) ?? null,
+        survey_number: String(prefill.survey_number ?? ''),
+        property_number: String(prefill.property_number ?? ''),
+        khata_number: String(prefill.khata_number ?? ''),
+      },
+  );
+  // No PIN code in the deed: suggest the one of its village (the customer checks it).
+  const suggestion = usePlaceSuggestion(propertyId, ready && !seed && !prefill.pincode);
+  const [suggestedNear, setSuggestedNear] = useState<string | null | undefined>(undefined);
+  if (suggestion.data !== undefined && suggestedNear === undefined) {
+    const sg = suggestion.data;
+    setSuggestedNear(sg?.pincode ? sg.near : null);
+    if (sg?.pincode) {
+      setValues((v) => ({
+        ...v,
+        pincode: v.pincode || sg.pincode || '',
+        city: v.city || sg.city || '',
+        state: v.state || sg.state || '',
+      }));
+    }
+  }
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const finish = useFinishSetup(propertyId);
@@ -245,6 +312,13 @@ function Review({
             tone="warning"
             icon="warning"
             message={`Please double-check: ${unsure.map((f) => FIELD_LABELS[f]).join(', ')} — part of it was hard to read.`}
+          />
+        ) : null}
+        {suggestedNear ? (
+          <Banner
+            tone="info"
+            icon="pin"
+            message={`The deed has no PIN code, so we used the one for ${suggestedNear}. Please check it.`}
           />
         ) : null}
         {formError ? <Banner message={formError} /> : null}

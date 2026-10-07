@@ -46,6 +46,25 @@ export const useDraftProperties = (enabled = true) =>
     queryKey: aiKeys.drafts,
     queryFn: () => api<DraftProperty[]>('/properties/drafts'),
     enabled,
+    // While Pittu is reading a deed, check back so Home updates by itself.
+    refetchInterval: (q) =>
+      q.state.data?.some((d) => d.status === 'queued' || d.status === 'reading') ? 5000 : false,
+  });
+
+/** PIN code, city and state of the deed's village — when the deed doesn't say. */
+export const usePlaceSuggestion = (propertyId: string, enabled: boolean) =>
+  useQuery({
+    queryKey: ['properties', propertyId, 'place-suggestion'] as const,
+    queryFn: () =>
+      api<{
+        pincode: string | null;
+        city: string | null;
+        state: string | null;
+        near: string;
+      } | null>(`/properties/${propertyId}/place-suggestion`),
+    enabled,
+    staleTime: Infinity,
+    retry: false,
   });
 
 /** The customer confirms: the draft becomes a real property. */

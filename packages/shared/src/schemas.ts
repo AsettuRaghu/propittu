@@ -120,7 +120,11 @@ export const createPropertySchema = z
 
 /** PATCH semantics: every field optional; an omitted field is left untouched. */
 export const updatePropertySchema = z
-  .object(propertyFields)
+  .object({
+    ...propertyFields,
+    /** With a pin: "the pin is right" — take the PIN code, city and state from it. */
+    address_from_pin: z.boolean(),
+  })
   .partial()
   .refine((p) => Object.keys(p).length > 0, { message: 'Nothing to update' })
   .refine((p) => 'latitude' in p === 'longitude' in p && bothOrNeither(p), {

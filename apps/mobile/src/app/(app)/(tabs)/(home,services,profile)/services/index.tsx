@@ -32,8 +32,14 @@ const book = (service: CatalogueService) =>
  */
 export default function ServicesScreen() {
   // Other screens can open My requests directly (?tab=requests).
-  const { tab } = useLocalSearchParams<{ tab?: string }>();
+  const { tab, at } = useLocalSearchParams<{ tab?: string; at?: string }>();
   const [segment, setSegment] = useState<Segment>(tab === 'requests' ? 'requests' : 'browse');
+  // Opened again from elsewhere (openServicesTab) while already mounted: follow it.
+  const [seen, setSeen] = useState(at);
+  if (at !== seen) {
+    setSeen(at);
+    setSegment(tab === 'requests' ? 'requests' : 'browse');
+  }
   const me = useMe();
   const limited = me.data?.plan.access === 'limited';
 

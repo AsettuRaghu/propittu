@@ -1,8 +1,9 @@
 import { LinearGradient } from 'expo-linear-gradient';
+import { openServicesTab } from '@/lib/nav';
 import { router } from 'expo-router';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import type { PropertySummary } from '@propittu/shared';
+import type { DraftProperty } from '@propittu/shared';
 import { useDraftProperties } from '@/api/ai';
 import { useMe, useProperties } from '@/api/queries';
 import { Icon, type IconName } from '@/components/Icon';
@@ -36,20 +37,18 @@ export default function HomeScreen() {
   const limited = me.data?.plan.access === 'limited';
   const { data, isPending, error, refetch } = useProperties(!limited);
   const drafts = useDraftProperties(!limited && !!me.data?.features.document_reading);
-  const unfinished = (drafts.data ?? []).filter((d) => d.document_id);
+  const unfinished = waitingDrafts(drafts.data ?? []);
   const properties = data ?? [];
   const hasProperties = properties.length > 0;
+  const firstName = me.data?.full_name?.split(' ')[0];
 
   const header = (
     <View style={styles.header}>
       <View style={styles.titleRow}>
-        <View style={styles.flex}>
-          <View style={styles.greetRow}>
-            <Icon name={greetingIcon()} size={18} color={accents.amber.fg} />
-            <Text style={styles.greet}>{greeting()}</Text>
-          </View>
-          <Text style={typography.display} numberOfLines={1}>
-            {me.data?.full_name?.split(' ')[0] ?? 'Welcome'}
+        <View style={[styles.flex, styles.greetRow]}>
+          <Icon name={greetingIcon()} size={24} color={accents.amber.fg} />
+          <Text style={styles.greet} numberOfLines={1} adjustsFontSizeToFit>
+            {firstName ? `${greeting()}, ${firstName}` : greeting()}
           </Text>
         </View>
         {!limited && hasProperties ? (
@@ -63,24 +62,12 @@ export default function HomeScreen() {
         ) : null}
       </View>
 
-      {hasProperties ? <Locker properties={properties} /> : null}
       {me.data && !limited ? <PlanBanner plan={me.data.plan} /> : null}
 
       {unfinished.length > 0 ? (
         <ListGroup title="Waiting for you" plain>
           {unfinished.map((d) => (
-            <ListRow
-              key={d.id}
-              icon="document"
-              title="Finish adding your property"
-              subtitle="Pittu has read your sale deed — check and save"
-              onPress={() =>
-                router.push({
-                  pathname: '/properties/[id]/setup',
-                  params: { id: d.id, doc: d.document_id ?? '' },
-                })
-              }
-            />
+            <DraftRow key={d.id} draft={d} />
           ))}
         </ListGroup>
       ) : null}
@@ -140,31 +127,67 @@ export default function HomeScreen() {
   );
 }
 
-/** The locker at a glance: what's kept, and what's moving. */
-function Locker({ properties }: { properties: PropertySummary[] }) {
-  const documents = properties.reduce((n, p) => n + p.document_count, 0);
-  const photos = properties.reduce((n, p) => n + p.photo_count, 0);
-  const active = properties.filter((p) => p.active_request).length;
-  const items: { icon: IconName; value: number; label: string }[] = [
-    { icon: 'document', value: documents, label: documents === 1 ? 'document' : 'documents' },
-    { icon: 'image', value: photos, label: photos === 1 ? 'photo' : 'photos' },
-    { icon: 'requests', value: active, label: 'in progress' },
-  ];
+/**
+ * Deeds waiting to become properties: the ones Pittu is reading or has
+ * read, and at most one that couldn't be read (older failures are cleared
+ * away by the server, and never pile up here).
+ */
+function waitingDrafts(drafts: DraftProperty[]): DraftProperty[] {
+  const withDeed = drafts.filter((d) => d.document_id);
+  const failed = withDeed.find((d) => d.status === 'failed');
+  return withDeed.filter((d) => d.status !== 'failed' || d === failed);
+}
+
+/** One waiting deed, named the way Pittu read it, picking up where it was left. */
+function DraftRow({ draft: d }: { draft: DraftProperty }) {
+  const open = () =>
+    router.push({
+      pathname: '/properties/[id]/setup',
+      params: { id: d.id, doc: d.document_id ?? '' },
+    });
+  if (d.duplicate_of) {
+    return (
+      <ListRow
+        icon="deed"
+        accent="violet"
+        title={`Already in your locker: ${d.duplicate_of.name}`}
+        subtitle="Same sale deed — open it, or add it as a new property"
+        subtitleLines={2}
+        onPress={open}
+      />
+    );
+  }
+  if (d.status === 'ready') {
+    return (
+      <ListRow
+        icon="deed"
+        accent="teal"
+        title={d.name ?? 'Your new property'}
+        subtitle="Pittu has read your deed — check the details and save"
+        subtitleLines={2}
+        onPress={open}
+      />
+    );
+  }
+  if (d.status === 'failed') {
+    return (
+      <ListRow
+        icon="deed"
+        accent="amber"
+        title="Pittu couldn’t read this deed"
+        subtitle="Fill in the details yourself — it’s quick"
+        onPress={open}
+      />
+    );
+  }
   return (
-    <View style={styles.locker}>
-      <View style={styles.lockerTitle}>
-        <Icon name="lock" size={14} color={colors.primary} />
-        <Text style={styles.lockerLabel}>Your locker</Text>
-      </View>
-      <View style={styles.lockerStats}>
-        {items.map((i) => (
-          <View key={i.label} style={styles.lockerStat}>
-            <Text style={styles.lockerValue}>{i.value}</Text>
-            <Text style={typography.caption}>{i.label}</Text>
-          </View>
-        ))}
-      </View>
-    </View>
+    <ListRow
+      icon="deed"
+      accent="indigo"
+      title="Pittu is reading your deed…"
+      subtitle="It’ll be ready here in a minute"
+      onPress={open}
+    />
   );
 }
 
@@ -178,13 +201,13 @@ function QuickActions() {
           accent="teal"
           title="Book a service"
           subtitle="Visits, inspections, paperwork help"
-          onPress={() => router.push('/services')}
+          onPress={() => openServicesTab()}
         />
         <ListRow
           icon="requests"
           accent="indigo"
           title="My requests"
-          onPress={() => router.push({ pathname: '/services', params: { tab: 'requests' } })}
+          onPress={() => openServicesTab('requests')}
         />
         <ListRow
           icon="support"
@@ -273,15 +296,15 @@ const styles = StyleSheet.create({
   pad: { paddingHorizontal: space.lg },
   header: { paddingTop: space.md, paddingBottom: space.md, gap: space.lg },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  greetRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  greet: { fontSize: font(17), fontWeight: '600', color: colors.textMuted },
+  greetRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  greet: {
+    flex: 1,
+    fontSize: font(26),
+    fontWeight: '800',
+    color: colors.text,
+    letterSpacing: -0.5,
+  },
   count: { color: colors.textSubtle, fontWeight: '700' },
-  locker: { gap: space.sm },
-  lockerTitle: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  lockerLabel: { fontSize: font(13), fontWeight: '700', color: colors.primary },
-  lockerStats: { flexDirection: 'row', gap: space.xl },
-  lockerStat: { gap: 0 },
-  lockerValue: { fontSize: font(22), fontWeight: '800', color: colors.text },
   list: { paddingHorizontal: space.lg, paddingBottom: space.xxl, flexGrow: 1 },
   separator: { height: space.lg },
   skeletons: { gap: space.lg },

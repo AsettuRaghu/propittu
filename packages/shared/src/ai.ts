@@ -51,6 +51,8 @@ export interface DocumentAnalysis {
   created_at: string;
   finished_at: string | null;
   facts: PropertyFact[];
+  /** This deed is already with a property in the locker (same file, or same registration). */
+  duplicate_of: { id: string; name: string } | null;
 }
 
 /* ------------------------------------------------------------------ *
@@ -215,6 +217,12 @@ export interface DraftProperty {
   created_at: string;
   /** The uploaded sale deed, if the upload finished. */
   document_id: string | null;
+  /** Where Pittu's reading of it stands (null: not started). */
+  status: AnalysisStatus | null;
+  /** The name Pittu suggests from the deed ("Plot in Bommasandra"), once read. */
+  name: string | null;
+  /** The property in the locker this deed already belongs to, if any. */
+  duplicate_of: { id: string; name: string } | null;
 }
 
 /* ------------------------------------------------------------------ *

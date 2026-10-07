@@ -3,10 +3,8 @@ import { useState } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   LayoutAnimation,
-  Linking,
   Platform,
   Pressable,
-  Share,
   StyleSheet,
   Text,
   UIManager,
@@ -15,7 +13,7 @@ import {
 import MapView, { Marker } from 'react-native-maps';
 import type { Property } from '@propittu/shared';
 import { accents, colors, font, radius, shadow, space } from '@/theme';
-import { dialog } from './Dialog';
+import { openDirections, shareLocation } from '@/lib/maps';
 import { Icon, type IconName } from './Icon';
 import { Button } from './ui';
 
@@ -26,6 +24,8 @@ if (Platform.OS === 'android') UIManager.setLayoutAnimationEnabledExperimental?.
  *
  *   no pin     a bold prompt to pin it (why it matters, one button)
  *   pinned     the map with Directions · Share · Adjust pin · Expand/Satellite
+ *   approximate  (placed near the deed's village) the map, marked as
+ *              approximate, with "Set the exact spot" first
  *
  * iPhone uses Apple Maps and Android uses Google Maps (react-native-maps).
  * Directions hand off to the user's maps app of choice.
@@ -57,6 +57,7 @@ export function PropertyMapCard({ property }: { property: Property }) {
     );
   }
 
+  const approximate = property.location_source !== 'user';
   const lat = property.latitude as number;
   const lng = property.longitude as number;
 
@@ -65,29 +66,8 @@ export function PropertyMapCard({ property }: { property: Property }) {
     setExpanded((v) => !v);
   };
 
-  const share = () =>
-    void Share.share({
-      message: `${property.name} — https://maps.google.com/?q=${lat},${lng}`,
-    }).catch(() => undefined);
-
-  const directions = async () => {
-    const label = encodeURIComponent(property.name);
-    const choice = await dialog.actions({
-      title: 'Open directions in',
-      actions: [
-        ...(Platform.OS === 'ios'
-          ? [{ label: 'Apple Maps', value: 'apple' as const, icon: 'map' as const }]
-          : []),
-        { label: 'Google Maps', value: 'google' as const, icon: 'navigate' as const },
-      ],
-    });
-    if (!choice) return;
-    const url =
-      choice === 'apple'
-        ? `http://maps.apple.com/?daddr=${lat},${lng}&q=${label}`
-        : `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
-    await Linking.openURL(url).catch(() => undefined);
-  };
+  const share = () => shareLocation(property.name, lat, lng);
+  const directions = () => openDirections(property.name, lat, lng);
 
   return (
     <View style={[styles.card, shadow]}>
@@ -117,6 +97,12 @@ export function PropertyMapCard({ property }: { property: Property }) {
         >
           <Marker coordinate={{ latitude: lat, longitude: lng }} pinColor={colors.primary} />
         </MapView>
+        {approximate ? (
+          <View style={styles.approx} pointerEvents="none">
+            <Icon name="info" size={14} color={colors.warning} />
+            <Text style={styles.approxText}>Approximate — near the area in your deed</Text>
+          </View>
+        ) : null}
         {!expanded ? (
           <View style={styles.expandHint} pointerEvents="none">
             <Icon name="expand" size={14} color={colors.text} />
@@ -137,9 +123,15 @@ export function PropertyMapCard({ property }: { property: Property }) {
       ) : null}
 
       <View style={styles.actions}>
-        <MapAction icon="directions" label="Directions" onPress={() => void directions()} primary />
+        {approximate ? <MapAction icon="pin" label="Exact spot" onPress={adjust} primary /> : null}
+        <MapAction
+          icon="directions"
+          label="Directions"
+          onPress={() => void directions()}
+          primary={!approximate}
+        />
         <MapAction icon="share" label="Share" onPress={share} />
-        <MapAction icon="pin" label="Adjust pin" onPress={adjust} />
+        {approximate ? null : <MapAction icon="pin" label="Adjust pin" onPress={adjust} />}
         {expanded ? (
           <MapAction
             icon={satellite ? 'map' : 'satellite'}
@@ -195,6 +187,19 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   collapse: { top: space.sm, bottom: undefined },
+  approx: {
+    position: 'absolute',
+    left: space.sm,
+    top: space.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    borderRadius: radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  approxText: { fontSize: font(12), fontWeight: '700', color: colors.warning },
   expandText: { fontSize: font(12), fontWeight: '700', color: colors.text },
   actions: {
     flexDirection: 'row',

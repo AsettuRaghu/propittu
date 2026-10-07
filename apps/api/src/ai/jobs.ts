@@ -13,6 +13,8 @@ import { HttpError, invalid, must, notFound } from '../errors.js';
 import { logger } from '../logger.js';
 import { serviceClient } from '../supabase.js';
 import { estimateCostUsd } from './pricing.js';
+import { removeProperty } from '../propertyRemoval.js';
+import { findSameFile, findSameRegistration, sha256 } from './duplicates.js';
 import { provider } from './provider.js';
 import { saleDeedTask } from './tasks/saleDeed.js';
 import { AiOutputError, AiProviderError, type AiTask } from './types.js';
@@ -55,10 +57,11 @@ interface AnalysisRow {
   created_at: string;
   finished_at: string | null;
   updated_at: string;
+  duplicate_of: string | null;
 }
 const ANALYSIS_COLUMNS =
   'id, account_id, property_id, document_id, task, task_version, status, attempts, error_code, ' +
-  'started_at, created_at, finished_at, updated_at';
+  'started_at, created_at, finished_at, updated_at, duplicate_of';
 
 interface DocRow {
   id: string;
@@ -300,17 +303,6 @@ export async function processAnalysis(analysisId: string): Promise<void> {
     return;
   }
 
-  // Hard monthly budget: stop before spending, and tell staff via the log.
-  const spend = Number((await db.rpc('ai_month_spend_usd')).data ?? 0);
-  if (spend >= env.AI_MONTHLY_BUDGET_USD) {
-    await finish({ status: 'failed', error_code: 'unavailable' });
-    log.error(
-      { spendUsd: spend, budgetUsd: env.AI_MONTHLY_BUDGET_USD },
-      'AI monthly budget reached — reading paused',
-    );
-    return;
-  }
-
   const recordOp = (o: {
     model: string;
     providerName: string;
@@ -338,7 +330,7 @@ export async function processAnalysis(analysisId: string): Promise<void> {
   try {
     const { data: doc } = await db
       .from('property_documents')
-      .select('storage_path, document_type')
+      .select('storage_path, document_type, file_size')
       .eq('id', job.document_id)
       .maybeSingle();
     if (!doc) {
@@ -351,6 +343,26 @@ export async function processAnalysis(analysisId: string): Promise<void> {
     if (dlError || !file)
       throw new AiProviderError('download_failed', true, 'Could not fetch the document');
     const bytes = new Uint8Array(await file.arrayBuffer());
+
+    // Seen this exact file before? Reuse that reading — no AI call, no tokens.
+    const hash = sha256(bytes);
+    await db.from('property_documents').update({ content_sha256: hash }).eq('id', job.document_id);
+    const twin = await findSameFile(db, job.account_id, job.document_id, doc.file_size, hash);
+    if (twin && (await reuseReading(db, job, twin, task, finish))) {
+      log.info('same deed seen before — reading reused, no AI call');
+      return;
+    }
+
+    // Hard monthly budget: stop before spending, and tell staff via the log.
+    const spend = Number((await db.rpc('ai_month_spend_usd')).data ?? 0);
+    if (spend >= env.AI_MONTHLY_BUDGET_USD) {
+      await finish({ status: 'failed', error_code: 'unavailable' });
+      log.error(
+        { spendUsd: spend, budgetUsd: env.AI_MONTHLY_BUDGET_USD },
+        'AI monthly budget reached — reading paused',
+      );
+      return;
+    }
 
     const p = provider(task);
     const answer = await p.run({
@@ -402,7 +414,20 @@ export async function processAnalysis(analysisId: string): Promise<void> {
       if (error) throw new AiProviderError('save_failed', true, error.message);
     }
     await recordOp({ ...base, outcome: 'ok' });
-    await finish({ status: 'ready', error_code: null, model: answer.model, result });
+    const registration = facts.find((f) => f.key === 'registration_number')?.value;
+    const duplicateOf = await findSameRegistration(
+      db,
+      job.account_id,
+      job.property_id,
+      registration,
+    );
+    await finish({
+      status: 'ready',
+      error_code: null,
+      model: answer.model,
+      result,
+      duplicate_of: duplicateOf,
+    });
     log.info(
       {
         facts: facts.length,
@@ -442,6 +467,68 @@ export async function processAnalysis(analysisId: string): Promise<void> {
 
 /* ------------------------------------------------------------------ */
 
+/**
+ * The same file was read before (or belongs to a property already in the
+ * locker): copy that reading instead of paying for a new one, and say whose
+ * it is. An older unfinished attempt with the same deed is cleared away.
+ */
+async function reuseReading(
+  db: SupabaseClient,
+  job: AnalysisRow,
+  twin: { id: string; property_id: string },
+  task: AiTask<unknown>,
+  finish: (fields: Record<string, unknown>) => PromiseLike<unknown>,
+): Promise<boolean> {
+  const { data: owner } = await db
+    .from('properties')
+    .select('id, is_draft')
+    .eq('id', twin.property_id)
+    .maybeSingle();
+  if (!owner || owner.id === job.property_id) return false;
+  const duplicateOf = owner.is_draft ? null : (owner.id as string);
+  const { data: prior } = await db
+    .from('document_analyses')
+    .select('id, result, model')
+    .eq('document_id', twin.id)
+    .eq('task', task.name)
+    .eq('task_version', task.version)
+    .eq('status', 'ready')
+    .maybeSingle();
+
+  if (prior) {
+    const { data: facts } = await db
+      .from('property_facts')
+      .select('key, value, pages, confidence')
+      .eq('analysis_id', prior.id);
+    await db.from('property_facts').delete().eq('analysis_id', job.id);
+    if (facts?.length) {
+      await db.from('property_facts').insert(
+        facts.map((f) => ({
+          ...f,
+          account_id: job.account_id,
+          property_id: job.property_id,
+          analysis_id: job.id,
+          document_id: job.document_id,
+        })),
+      );
+    }
+    await finish({
+      status: 'ready',
+      error_code: null,
+      result: prior.result,
+      model: prior.model,
+      duplicate_of: duplicateOf,
+    });
+  } else if (duplicateOf) {
+    // Already in the locker but never read: nothing to copy, nothing to spend.
+    await finish({ status: 'ready', error_code: null, duplicate_of: duplicateOf });
+  } else {
+    return false;
+  }
+  if (owner.is_draft) await removeProperty(db, job.account_id, owner.id as string);
+  return true;
+}
+
 /** What the customer sees (through their own client: RLS applies). */
 export async function loadAnalysis(
   db: SupabaseClient,
@@ -459,6 +546,16 @@ export async function loadAnalysis(
   );
   const row = rows[0];
   if (!row) return null;
+  const duplicate = row.duplicate_of
+    ? must<{ id: string; name: string } | null>(
+        await db
+          .from('properties')
+          .select('id, name')
+          .eq('id', row.duplicate_of)
+          .eq('is_draft', false)
+          .maybeSingle(),
+      )
+    : null;
   const facts =
     row.status === 'ready'
       ? must<PropertyFact[]>(
@@ -481,6 +578,7 @@ export async function loadAnalysis(
       created_at: row.created_at,
       finished_at: row.finished_at,
       facts,
+      duplicate_of: duplicate,
     },
   };
 }

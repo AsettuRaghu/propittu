@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import { openServicesTab } from '@/lib/nav';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { CompletionItem, CompletionKey, PropertyDetail } from '@propittu/shared';
@@ -6,6 +7,7 @@ import { useProperty, useServiceRequests } from '@/api/queries';
 import { DocumentSlots } from '@/components/DocumentSlots';
 import type { IconName } from '@/components/Icon';
 import { PhotoSection, type PhotoSectionHandle } from '@/components/PhotoSection';
+import { LocationIssueNotice } from '@/components/LocationIssueNotice';
 import { PropertyCover } from '@/components/PropertyCover';
 import { PropertyMapCard } from '@/components/PropertyMapCard';
 import { PullRefresh } from '@/components/PullRefresh';
@@ -72,9 +74,10 @@ export default function PropertyDetailsScreen() {
       <View style={[styles.cover, shadow]}>
         <PropertyCover
           property={property}
-          height={230}
-          coverUrl={property.photos[0]?.url ?? null}
-          showWeatherLabel
+          height={250}
+          size="lg"
+          photos={property.photos.flatMap((ph) => (ph.url ? [ph.url] : []))}
+          approximate={property.latitude !== null && property.location_source !== 'user'}
         >
           <IconButton icon="edit" label="Edit property" size={36} onPress={edit} />
         </PropertyCover>
@@ -87,11 +90,14 @@ export default function PropertyDetailsScreen() {
           message={
             failedPhotos > 0
               ? `It’s in your locker. ${failedPhotos} photo${failedPhotos === 1 ? '' : 's'} couldn’t be uploaded — add them again below.`
-              : 'It’s in your locker. Pin the exact location below — it takes a few seconds.'
+              : property.latitude !== null
+                ? 'It’s in your locker. We placed it near the area in your deed — set the exact spot below.'
+                : 'It’s in your locker. Pin the exact location below — it takes a few seconds.'
           }
         />
       ) : null}
 
+      <LocationIssueNotice property={property} />
       <PropertyMapCard property={property} />
       <ReachNotice propertyId={property.id} reach={property.reach} />
 
@@ -171,10 +177,7 @@ function Services({ property }: { property: PropertyDetail }) {
       plain
       action={
         recent.length > 0 ? (
-          <LinkButton
-            title="All requests"
-            onPress={() => router.push({ pathname: '/services', params: { tab: 'requests' } })}
-          />
+          <LinkButton title="All requests" onPress={() => openServicesTab('requests')} />
         ) : undefined
       }
     >
