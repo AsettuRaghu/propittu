@@ -28,6 +28,10 @@ export const ORDER_DISPLAY_LABELS: Record<OrderDisplayStatus, string> = {
 /** A pending checkout older than this is treated as not completed. */
 export const CHECKOUT_STALE_MINUTES = 30;
 
+/** Payments tab: completed payments from the last 4 years; unfinished attempts from the last 2 months. */
+export const PAYMENT_HISTORY_YEARS = 4;
+export const FAILED_PAYMENT_HISTORY_DAYS = 60;
+
 export const PAYMENT_STATUSES = ['created', 'captured', 'failed'] as const;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 

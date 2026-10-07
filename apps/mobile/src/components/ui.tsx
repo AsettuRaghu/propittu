@@ -362,17 +362,31 @@ export function ListRow({
   );
 }
 
-/** Groups ListRows inside one card with hairline separators. */
-export function ListGroup({ children }: { children: ReactNode }) {
+/**
+ * Groups ListRows with hairline separators — inside one card, or `plain`
+ * (no card, flush with the page) under an optional section title.
+ */
+export function ListGroup({
+  children,
+  title,
+  plain = false,
+}: {
+  children: ReactNode;
+  title?: string;
+  plain?: boolean;
+}) {
   const items = (Array.isArray(children) ? children : [children]).filter(Boolean);
   return (
-    <View style={[styles.listGroup, shadow]}>
-      {items.map((child, i) => (
-        <View key={i}>
-          {i > 0 ? <View style={styles.listDivider} /> : null}
-          {child}
-        </View>
-      ))}
+    <View>
+      {title ? <Text style={[typography.overline, styles.listTitle]}>{title}</Text> : null}
+      <View style={plain ? styles.listPlain : [styles.listGroup, shadow]}>
+        {items.map((child, i) => (
+          <View key={i}>
+            {i > 0 ? <View style={[styles.listDivider, plain && styles.listDividerPlain]} /> : null}
+            {child}
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
@@ -731,6 +745,13 @@ const styles = StyleSheet.create({
   },
   listRowPressed: { backgroundColor: colors.surfaceMuted },
   listDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 56 },
+  listDividerPlain: { marginLeft: 0 },
+  listPlain: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  listTitle: { marginBottom: space.xs, marginLeft: 2 },
   rowValue: { maxWidth: '45%' },
   keyValue: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start' },
   divider: {

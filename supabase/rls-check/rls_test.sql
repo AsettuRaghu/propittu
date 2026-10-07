@@ -425,8 +425,12 @@ select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
 select tst.rows('select * from public.plans', 3, 'A can read the Plan catalogue (Trial, Basic, Plus)');
 select tst.rows($$select * from public.plan_version_benefits b
                    join public.plan_versions v on v.id = b.plan_version_id
-                   join public.plans p on p.id = v.plan_id where p.code = 'plus'$$, 10,
-  'Plus v1 has 4 Feature Benefits + 5 Usage Limits + 1 Included Service');
+                   join public.plans p on p.id = v.plan_id where p.code = 'plus' and v.is_current$$, 10,
+  'Plus (current version) has 4 Feature Benefits + 5 Usage Limits + 1 Included Service');
+select tst.ok((select string_agg(p.code || '=' || v.price_paise, ',' order by p.code)
+               from public.plan_versions v join public.plans p on p.id = v.plan_id
+               where v.is_current and p.is_public) = 'basic=149900,plus=499900',
+  'current prices: Basic ₹1,499, Plus ₹4,999 (older versions kept for existing customers)');
 select tst.rows('select * from public.account_plans', 1, 'A sees its own Trial');
 select tst.ok((select property_count from public.account_usage) = 1, 'A''s usage: 1 property');
 select tst.ok((select storage_bytes from public.account_usage) = 1000 + 2000 + 5000000,
@@ -679,8 +683,8 @@ reset role;
 set role authenticated;
 select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
 select public.create_plan_order('plus');
-select tst.ok((select amount_paise = 149900 and status = 'pending' and kind = 'plan' from public.orders),
-  'A creates a Plus order priced from the catalogue (₹1,499)');
+select tst.ok((select amount_paise = 499900 and status = 'pending' and kind = 'plan' from public.orders),
+  'A creates a Plus order priced from the catalogue (₹4,999)');
 select tst.rejects($$select public.create_plan_order('trial')$$, 'the Trial cannot be bought');
 select tst.rejects($$select public.create_plan_order('platinum')$$, 'unknown plan rejected');
 select tst.rejects($$insert into public.orders (account_id, user_id, kind, plan_version_id, description, amount_paise)
@@ -694,7 +698,7 @@ select public.attach_checkout((select id from public.orders where kind = 'plan' 
   'razorpay', 'plink_A1', 'https://rzp.io/test');
 select tst.ok((select status from public.payments) = 'created', 'checkout attached: payment created, not captured');
 select tst.rejects($$select public.record_payment_event('razorpay', 'evt_forged', 'payment.captured',
-                     (select id from public.orders limit 1), 'pay_x', 149900, 'INR')$$,
+                     (select id from public.orders limit 1), 'pay_x', 499900, 'INR')$$,
   'A cannot call record_payment_event (webhook path is server-only)');
 select tst.rejects($$select public.create_service_order(
                      (select id from public.service_requests where description = 'Extra visit please'))$$,
@@ -715,19 +719,19 @@ reset role;
 -- The verified webhook (service_role) is the only path to "paid".
 set role service_role;
 select tst.ok(public.record_payment_event('razorpay', 'evt_1', 'payment.captured',
-  (select id from public.orders where kind = 'plan' and status = 'pending'), 'pay_1', 149900, 'INR', 'upi', 'plink_A1') = 'plan_activated',
+  (select id from public.orders where kind = 'plan' and status = 'pending'), 'pay_1', 499900, 'INR', 'upi', 'plink_A1') = 'plan_activated',
   'captured webhook records the paid Plan');
 select tst.ok(public.record_payment_event('razorpay', 'evt_1', 'payment.captured',
-  (select id from public.orders where kind = 'plan'), 'pay_1', 149900, 'INR') = 'duplicate',
+  (select id from public.orders where kind = 'plan'), 'pay_1', 499900, 'INR') = 'duplicate',
   'replayed webhook is ignored (idempotent)');
 select tst.ok(public.record_payment_event('razorpay', 'evt_2', 'payment.captured',
-  (select id from public.orders where kind = 'plan'), 'pay_1b', 149900, 'INR') = 'already_paid',
+  (select id from public.orders where kind = 'plan'), 'pay_1b', 499900, 'INR') = 'already_paid',
   'second capture for a paid order does not grant twice');
 select tst.ok(public.record_payment_event('razorpay', 'evt_3', 'payment.captured',
   (select id from public.orders where kind = 'extra_service'), 'pay_3', 100, 'INR') = 'amount_mismatch',
   'amount mismatch never marks an order paid');
 select tst.ok((select status from public.orders where kind = 'extra_service') = 'pending', 'mismatched order stays pending');
-select tst.ok(public.record_payment_event('razorpay', 'evt_4', 'refund.processed', null, 'pay_1', 149900, 'INR', null, null, 'rfnd_1') = 'refund_recorded',
+select tst.ok(public.record_payment_event('razorpay', 'evt_4', 'refund.processed', null, 'pay_1', 499900, 'INR', null, null, 'rfnd_1') = 'refund_recorded',
   'refund recorded as a separate event');
 reset role;
 
@@ -748,7 +752,7 @@ select public.create_plan_order('plus');
 reset role;
 set role service_role;
 select public.record_payment_event('razorpay', 'evt_6', 'payment.captured',
-  (select id from public.orders where kind = 'plan' and status = 'pending'), 'pay_6', 149900, 'INR');
+  (select id from public.orders where kind = 'plan' and status = 'pending'), 'pay_6', 499900, 'INR');
 reset role;
 select tst.ok((select count(*) from public.account_plans where account_id = 'acc0000a-0000-0000-0000-00000000000a' and source = 'payment' and starts_at > now()) = 2,
   'a further renewal queues after the previous one');
@@ -760,7 +764,7 @@ select public.create_plan_order('plus');
 reset role;
 set role service_role;
 select tst.ok(public.record_payment_event('razorpay', 'evt_7', 'payment.captured',
-  (select id from public.orders where account_id = 'acc0000b-0000-0000-0000-00000000000b' and status = 'pending'), 'pay_7', 149900, 'INR') = 'plan_activated',
+  (select id from public.orders where account_id = 'acc0000b-0000-0000-0000-00000000000b' and status = 'pending'), 'pay_7', 499900, 'INR') = 'plan_activated',
   'B pays for Plus');
 reset role;
 set role authenticated;
@@ -809,13 +813,13 @@ values ('acc0000b-0000-0000-0000-00000000000b', 'included_service', 'property_vi
 
 set role authenticated;
 select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
-select tst.ok((select (q->>'mode') = 'upgrade' and (q->>'list_price_paise')::int = 149900
-                      and abs((q->>'credit_paise')::int - 25019) < 300
-                      and (q->>'amount_paise')::int = 149900 - (q->>'credit_paise')::int
+select tst.ok((select (q->>'mode') = 'upgrade' and (q->>'list_price_paise')::int = 499900
+                      and abs((q->>'credit_paise')::int - 75154) < 500
+                      and (q->>'amount_paise')::int = 499900 - (q->>'credit_paise')::int
                from (select public.plan_quote('plus') q) x),
   'upgrade Basic → Plus mid-term: unused Basic is credited (prorated)');
 select public.create_plan_order('plus');
-select tst.ok((select amount_paise < 149900 and list_price_paise = 149900 and credit_paise > 0
+select tst.ok((select amount_paise < 499900 and list_price_paise = 499900 and credit_paise > 0
                       and description like '%upgrade from Basic%'
                from public.orders where status = 'pending'),
   'the upgrade order is priced net of the credit');

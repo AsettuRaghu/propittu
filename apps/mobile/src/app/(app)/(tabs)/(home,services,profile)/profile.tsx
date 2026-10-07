@@ -2,24 +2,26 @@ import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   formatIndianMobile,
   PLAN_STATUS_LABELS,
-  STAFF_ROLE_LABELS,
+  updateProfileSchema,
   type Me,
 } from '@propittu/shared';
-import { PullRefresh } from '@/components/PullRefresh';
 import { useMe } from '@/api/queries';
+import { useUpdateProfile } from '@/api/support';
 import { useSession } from '@/auth/SessionProvider';
 import { dialog } from '@/components/Dialog';
 import { Icon } from '@/components/Icon';
+import { InlineEdit } from '@/components/InlineEdit';
+import { PullRefresh } from '@/components/PullRefresh';
 import { ErrorState, LoadingState } from '@/components/States';
-import { Badge, ListGroup, ListRow, type Tone } from '@/components/ui';
+import { Badge, LinkButton, ListGroup, ListRow, type Tone } from '@/components/ui';
 import { BUILD_LABEL } from '@/lib/buildInfo';
 import { env } from '@/lib/env';
-import { colors, radius, shadow, space, typography } from '@/theme';
+import { colors, space, typography } from '@/theme';
 
 function planBadge(me: Me): { label: string; tone: Tone } {
   const p = me.plan;
@@ -29,9 +31,17 @@ function planBadge(me: Me): { label: string; tone: Tone } {
   return { label: PLAN_STATUS_LABELS[p.status], tone: 'danger' };
 }
 
-/** Profile (§25): account at a glance, and the four places people go from here. */
+const openLegal = (page: 'privacy' | 'terms') =>
+  void WebBrowser.openBrowserAsync(`${env.apiUrl}/legal/${page}`);
+
+/**
+ * Profile (§25): plain sections — My profile (name edited in place, the
+ * verified number, plan), Company (help and legal), Log out. Account
+ * deletion is a quiet link at the very end (store requirement).
+ */
 export default function ProfileScreen() {
   const { data: me, isPending, error, refetch } = useMe();
+  const updateProfile = useUpdateProfile();
   const { signOut } = useSession();
   const [signingOut, setSigningOut] = useState(false);
 
@@ -50,15 +60,6 @@ export default function ProfileScreen() {
 
   if (isPending) return <LoadingState />;
 
-  const initials =
-    me?.full_name
-      ?.trim()
-      .split(/\s+/)
-      .map((p) => p[0])
-      .join('')
-      .slice(0, 2)
-      .toUpperCase() || null;
-
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView
@@ -73,86 +74,55 @@ export default function ProfileScreen() {
             <ErrorState error={error} onRetry={() => void refetch()} />
           </View>
         ) : (
-          <>
-            {/* Account */}
-            <Pressable
-              onPress={() => router.push('/profile-edit')}
-              accessibilityRole="button"
-              style={({ pressed }) => [styles.account, shadow, pressed && { opacity: 0.85 }]}
-            >
-              <View style={styles.avatar}>
-                {initials ? (
-                  <Text style={styles.avatarText}>{initials}</Text>
-                ) : (
-                  <Icon name="user" size={22} color={colors.primary} />
-                )}
-              </View>
-              <View style={styles.flex}>
-                <Text style={typography.heading} numberOfLines={1}>
-                  {me.full_name ?? 'Add your name'}
-                </Text>
-                <View style={styles.phoneRow}>
-                  <Text style={typography.small}>{formatIndianMobile(me.phone)}</Text>
-                  <Icon name="verified" size={13} color={colors.success} />
-                </View>
-                <Text style={styles.editLink}>
-                  {me.staff_role ? `${STAFF_ROLE_LABELS[me.staff_role]} · ` : 'Property owner · '}
-                  Edit profile
-                </Text>
-              </View>
-              <Icon name="chevron" size={18} color={colors.textSubtle} />
-            </Pressable>
-
-            <ListGroup>
+          <ListGroup title="My profile" plain>
+            <InlineEdit
+              icon="user"
+              label="Name"
+              value={me.full_name}
+              placeholder="Add your name"
+              validate={(v) => {
+                const r = updateProfileSchema.safeParse({ full_name: v });
+                return r.success ? null : (r.error.issues[0]?.message ?? 'Check the name');
+              }}
+              onSave={(full_name) => updateProfile.mutateAsync({ full_name })}
+              inputProps={{ autoCapitalize: 'words', autoComplete: 'name', maxLength: 120 }}
+            />
+            <ListRow
+              icon="phone"
+              title={formatIndianMobile(me.phone)}
+              subtitle="Verified · used to log in"
+              right={<Icon name="verified" size={16} color={colors.success} />}
+            />
+            <ListRow
+              icon="plan"
+              accent="violet"
+              title="Plan & Usage"
+              right={<Badge {...planBadge(me)} />}
+              onPress={() => router.push('/plan')}
+            />
+            {me.staff_role ? (
               <ListRow
-                icon="plan"
-                accent="violet"
-                title="Plan & Usage"
-                subtitle="Usage, benefits, payments and receipts"
-                right={<Badge {...planBadge(me)} />}
-                onPress={() => router.push('/plan')}
+                icon="staff"
+                accent="slate"
+                title="Backoffice"
+                onPress={() => router.push('/backoffice')}
               />
-              <ListRow
-                icon="requests"
-                accent="coral"
-                title="Service Requests"
-                subtitle={`${me.service_request_count} in total · track status and history`}
-                onPress={() => router.push('/requests')}
-              />
-              <ListRow
-                icon="support"
-                accent="teal"
-                title="Help & Support"
-                subtitle="Call, email or raise a ticket"
-                onPress={() => router.push('/support')}
-              />
-              {me.staff_role ? (
-                <ListRow
-                  icon="staff"
-                  accent="slate"
-                  title="Backoffice"
-                  subtitle="Requests, tickets, customers, payments"
-                  onPress={() => router.push('/backoffice')}
-                />
-              ) : null}
-            </ListGroup>
-          </>
+            ) : null}
+          </ListGroup>
         )}
 
-        <ListGroup>
+        <ListGroup title="Company" plain>
           <ListRow
-            icon="shield"
-            title="Privacy policy"
-            onPress={() => void WebBrowser.openBrowserAsync(`${env.apiUrl}/legal/privacy`)}
+            icon="support"
+            accent="teal"
+            title="Help & Support"
+            onPress={() => router.push('/support')}
           />
-          <ListRow
-            icon="document"
-            title="Terms of use"
-            onPress={() => void WebBrowser.openBrowserAsync(`${env.apiUrl}/legal/terms`)}
-          />
+          <ListRow icon="shield" title="Privacy policy" onPress={() => openLegal('privacy')} />
+          <ListRow icon="document" title="Terms of use" onPress={() => openLegal('terms')} />
         </ListGroup>
 
-        <ListGroup>
+        <ListGroup plain>
           <ListRow
             icon="logout"
             title={signingOut ? 'Logging out…' : 'Log out'}
@@ -160,19 +130,20 @@ export default function ProfileScreen() {
             showChevron={false}
             onPress={() => void confirmLogout()}
           />
+        </ListGroup>
+
+        <View style={styles.footer}>
+          <Text style={typography.caption}>
+            Propittu {Constants.expoConfig?.version ?? ''} · {BUILD_LABEL}
+          </Text>
           {me && !me.staff_role ? (
-            <ListRow
-              icon="delete"
+            <LinkButton
               title="Delete account"
-              destructive
+              tone="muted"
               onPress={() => router.push('/account-delete')}
             />
           ) : null}
-        </ListGroup>
-
-        <Text style={[typography.caption, styles.version]}>
-          Propittu {Constants.expoConfig?.version ?? ''} · {BUILD_LABEL}
-        </Text>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -180,27 +151,7 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  flex: { flex: 1, minWidth: 0 },
-  content: { padding: space.lg, paddingTop: space.md, gap: space.md, paddingBottom: space.xxl },
+  content: { padding: space.lg, paddingTop: space.md, gap: space.xl, paddingBottom: space.xxl },
   error: { minHeight: 240 },
-  account: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: 14,
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: { color: colors.primary, fontSize: 17, fontWeight: '800' },
-  phoneRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 },
-  editLink: { fontSize: 12, fontWeight: '700', color: colors.primary, marginTop: 3 },
-  version: { textAlign: 'center', marginTop: space.sm },
+  footer: { alignItems: 'center', gap: space.sm, marginTop: space.md },
 });

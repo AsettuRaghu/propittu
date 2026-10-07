@@ -3,15 +3,12 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   BILLING_PERIOD_LABELS,
-  FEATURE_LABELS,
   formatPrice,
   formatStorageMb,
   INCLUDED_SERVICE_LABELS,
-  LIMIT_CODES,
   LIMIT_LABELS,
   ORDER_DISPLAY_LABELS,
   PLAN_STATUS_LABELS,
-  SUPPORT_EMAIL,
   type AccountPlanState,
   type LimitCode,
   type Order,
@@ -22,29 +19,12 @@ import { PullRefresh } from '@/components/PullRefresh';
 import { fetchPlanQuote, useOrders, usePlanCheckout } from '@/api/billing';
 import { useAccountPlan, usePlans, useProperties, useServices } from '@/api/queries';
 import { dialog } from '@/components/Dialog';
-import { Icon, type IconName } from '@/components/Icon';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
-import {
-  Badge,
-  Banner,
-  Card,
-  GradientCard,
-  IconTile,
-  ProgressBar,
-  Segmented,
-} from '@/components/ui';
+import { UsageMeter } from '@/components/UsageMeter';
+import { Badge, Banner, Card, GradientCard, IconTile, Segmented } from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
-import {
-  accents,
-  colors,
-  gradients,
-  radius,
-  shadow,
-  space,
-  typography,
-  type Accent,
-} from '@/theme';
+import { accents, colors, gradients, radius, space, typography, type Accent } from '@/theme';
 
 type Tab = 'usage' | 'plans' | 'payments';
 
@@ -237,44 +217,32 @@ export default function PlanScreen() {
       />
 
       {tab === 'usage' ? (
-        <UsageTab state={s} onTop={!!code && code === topCode} onUpgrade={() => setTab('plans')} />
+        <UsageTab state={s} />
       ) : tab === 'plans' ? (
         plans.isPending ? (
           <LoadingState />
         ) : plans.error ? (
           <ErrorState error={plans.error} onRetry={() => void plans.refetch()} />
         ) : (
-          <View style={styles.list}>
-            {plans.data.map((p) => (
-              <PlanCard
-                key={p.code}
-                plan={p}
-                state={cardState(p)}
-                laterDate={s.current ? formatDate(s.current.ends_at) : null}
-                owned={owned}
-                popular={!paidPlan && p.code === topCode}
-                busy={checkout.isPending && checkout.variables === p.code}
-                disabled={checkout.isPending}
-                onChoose={() => void choose(p)}
-              />
-            ))}
-          </View>
+          <PlanComparison
+            plans={plans.data}
+            stateOf={cardState}
+            laterDate={s.current ? formatDate(s.current.ends_at) : null}
+            popular={paidPlan ? null : (topCode ?? null)}
+            busyCode={checkout.isPending ? (checkout.variables ?? null) : null}
+            onChoose={(p) => void choose(p)}
+          />
         )
       ) : orders.isPending ? (
         <LoadingState />
       ) : (
         <Payments orders={orders.data ?? []} />
       )}
-
-      <View style={styles.secure}>
-        <Icon name="lock" size={12} color={colors.textSubtle} />
-        <Text style={typography.caption}>Secure payments by Razorpay · {SUPPORT_EMAIL}</Text>
-      </View>
     </ScrollView>
   );
 }
 
-/* ---- Current plan: compact, with the one action that matters ---- */
+/* ---- Current plan: one slim card with the one action that matters ---- */
 
 function CurrentPlan({
   state: s,
@@ -286,33 +254,22 @@ function CurrentPlan({
   onAction: () => void;
 }) {
   const code = s.plan?.code ?? '';
-  const paid = s.plan && s.plan.price_paise > 0;
   const trial = s.status === 'trialing';
   // No "Upgrade" on the top plan — renewing early is the only thing to do.
-  const cta = s.status === 'expired' || trial ? 'Choose a plan' : onTop ? 'Renew early' : 'Upgrade';
+  const cta = s.status === 'expired' || trial ? 'Choose a plan' : onTop ? 'Renew' : 'Upgrade';
   return (
     <GradientCard colors={PLAN_GRADIENT[code] ?? gradients.limited} style={styles.hero}>
-      <View style={styles.heroRow}>
-        <View style={styles.flex}>
-          <Text style={styles.heroOver}>Current plan</Text>
-          <Text style={styles.heroTitle} numberOfLines={1}>
-            {s.plan?.name ?? 'No active plan'}
-          </Text>
-        </View>
-        <View style={styles.heroPill}>
-          <Text style={styles.heroPillText}>{PLAN_STATUS_LABELS[s.status]}</Text>
-        </View>
-      </View>
-      {s.current ? (
-        <Text style={styles.heroLine}>
-          {paid
-            ? `${formatPrice(s.plan?.price_paise ?? 0)} ${BILLING_PERIOD_LABELS[s.plan?.billing_period ?? 'year']} · `
-            : ''}
-          {formatDate(s.current.starts_at)} – {formatDate(s.current.ends_at)}
+      <View style={styles.flex}>
+        <Text style={styles.heroOver}>{PLAN_STATUS_LABELS[s.status]}</Text>
+        <Text style={styles.heroTitle} numberOfLines={1}>
+          {s.plan?.name ?? 'No active plan'}
         </Text>
-      ) : (
-        <Text style={styles.heroLine}>Your data is safe — choose a plan to carry on</Text>
-      )}
+        <Text style={styles.heroLine} numberOfLines={1}>
+          {s.current
+            ? `${formatDate(s.current.starts_at)} – ${formatDate(s.current.ends_at)}`
+            : 'Your data is safe — choose a plan to carry on'}
+        </Text>
+      </View>
       <Pressable
         onPress={onAction}
         accessibilityRole="button"
@@ -445,327 +402,180 @@ function gains(next: PlanBenefits, cur: PlanBenefits | undefined, upgrade: boole
   return out.slice(0, 4);
 }
 
-/* ---- Usage ---- */
+/* ---- Usage: every allowance, measured in full ---- */
 
-function UsageTab({
-  state: s,
-  onTop,
-  onUpgrade,
-}: {
-  state: AccountPlanState;
-  onTop: boolean;
-  onUpgrade: () => void;
-}) {
+function UsageTab({ state: s }: { state: AccountPlanState }) {
   const l = s.plan?.benefits.limits ?? {};
   const u = s.usage;
-  const visits = u.included.find((i) => i.code === 'property_visit');
-  const visitsLeft = visits ? Math.max(0, visits.quantity - visits.used) : 0;
-
+  const deleted = u.deleted_still_counted.length;
   return (
-    <View style={styles.list}>
-      <Card style={styles.usageCard}>
-        <UsageRow
-          icon="home"
-          accent="indigo"
-          label="Properties"
-          hint={
-            u.deleted_still_counted.length
-              ? `this term · incl. ${u.deleted_still_counted.length} deleted`
-              : 'this term'
-          }
-          used={u.property_slots_used}
-          limit={l.max_properties}
-        />
-        <UsageRow
-          icon="document"
-          accent="amber"
-          label="Documents"
-          hint={`${u.documents} in total · per property`}
-          used={u.max_documents_on_a_property}
-          limit={l.max_documents_per_property}
-        />
-        <UsageRow
-          icon="image"
-          accent="sky"
-          label="Photos"
-          hint={`${u.photos} in total · per property`}
-          used={u.max_photos_on_a_property}
-          limit={l.max_photos_per_property}
-        />
-        <UsageRow
-          icon="video"
-          accent="rose"
-          label="Videos"
-          hint={`${u.videos} in total · per property`}
-          used={u.max_videos_on_a_property}
-          limit={l.max_videos_per_property}
-        />
-        <UsageRow
-          icon="storage"
-          accent="violet"
-          label="Storage"
-          used={Math.ceil(u.storage_bytes / (1024 * 1024))}
-          limit={l.max_storage_mb}
-          format={formatStorageMb}
-        />
-        {u.included.map((i) => (
-          <UsageRow
-            key={i.code}
-            icon="compass"
-            accent="teal"
-            label={INCLUDED_SERVICE_LABELS[i.code] ?? i.code}
-            hint="included this year"
-            used={i.used}
-            limit={i.quantity}
-            last
-          />
-        ))}
-      </Card>
-
-      <Card style={styles.received}>
-        <Text style={typography.overline}>Received from Propittu</Text>
-        <View style={styles.receivedRow}>
-          <Received value={s.received.services_completed} label="Services done" />
-          <Received value={s.received.visit_reports} label="Visit reports" />
-          <Received value={s.received.paid_orders} label="Payments" />
-        </View>
-      </Card>
-
-      {visitsLeft > 0 ? (
-        <Nudge
+    <Card style={styles.usage}>
+      <UsageMeter
+        icon="home"
+        accent="indigo"
+        label="Properties"
+        hint={deleted ? `This term · incl. ${deleted} deleted` : 'This term'}
+        used={u.property_slots_used}
+        limit={l.max_properties}
+      />
+      {u.included.map((i) => (
+        <UsageMeter
+          key={i.code}
           icon="compass"
           accent="teal"
-          title={`${visitsLeft} included visit${visitsLeft === 1 ? '' : 's'} left`}
-          text="Book a property visit — photos and a report included."
-          cta="Book"
-          onPress={() => router.push('/services/request')}
+          label={INCLUDED_SERVICE_LABELS[i.code] ?? i.code}
+          hint="Included this year"
+          used={i.used}
+          limit={i.quantity}
         />
-      ) : (
-        <Nudge
-          icon="services"
-          accent="teal"
-          title="Need help at your property?"
-          text="Inspections, cleaning, repairs and more as extra services."
-          cta="Browse"
-          onPress={() => router.push('/services')}
-        />
-      )}
-      {!onTop && s.status !== 'trialing' ? (
-        <Nudge
-          icon="gem"
-          accent="violet"
-          title="Need more room?"
-          text="Plus: up to 10 properties, more storage and 2 visits a year."
-          cta="Upgrade"
-          onPress={onUpgrade}
-        />
-      ) : null}
-    </View>
+      ))}
+      <UsageMeter
+        icon="storage"
+        accent="violet"
+        label="Storage"
+        used={Math.ceil(u.storage_bytes / (1024 * 1024))}
+        limit={l.max_storage_mb}
+        format={formatStorageMb}
+      />
+      <UsageMeter
+        icon="document"
+        accent="amber"
+        label="Documents"
+        hint={`${u.documents} in total · fullest property`}
+        used={u.max_documents_on_a_property}
+        limit={l.max_documents_per_property}
+      />
+      <UsageMeter
+        icon="image"
+        accent="sky"
+        label="Photos"
+        hint={`${u.photos} in total · fullest property`}
+        used={u.max_photos_on_a_property}
+        limit={l.max_photos_per_property}
+      />
+      <UsageMeter
+        icon="video"
+        accent="rose"
+        label="Videos"
+        hint={`${u.videos} in total · fullest property`}
+        used={u.max_videos_on_a_property}
+        limit={l.max_videos_per_property}
+      />
+    </Card>
   );
 }
 
-function UsageRow({
-  icon,
-  accent,
-  label,
-  hint,
-  used,
-  limit,
-  format = String,
-  last = false,
-}: {
-  icon: IconName;
-  accent: Accent;
-  label: string;
-  hint?: string;
-  used: number;
-  limit: number | undefined;
-  format?: (n: number) => string;
-  last?: boolean;
-}) {
-  const a = accents[accent];
-  const pct = limit ? Math.min(100, Math.round((used / limit) * 100)) : null;
-  const over = limit !== undefined && used > limit;
-  return (
-    <View style={[styles.usageRow, !last && styles.usageBorder]}>
-      <View style={styles.usageTop}>
-        <Icon name={icon} size={16} color={a.fg} />
-        <Text style={[typography.bodyStrong, styles.flex]} numberOfLines={1}>
-          {label}
-          {hint ? <Text style={typography.caption}> {hint}</Text> : null}
-        </Text>
-        <Text style={[styles.usageNum, over && { color: colors.warning }]}>
-          {format(used)}
-          {limit !== undefined ? <Text style={styles.usageOf}> / {format(limit)}</Text> : null}
-        </Text>
-      </View>
-      {pct !== null ? (
-        <View style={styles.usageBar}>
-          <View style={styles.flex}>
-            <ProgressBar
-              progress={used / (limit as number)}
-              height={5}
-              color={over ? colors.warning : a.fg}
-              track={a.bg}
-            />
-          </View>
-          <Text style={styles.usagePct}>{pct}%</Text>
-        </View>
-      ) : null}
-    </View>
-  );
-}
+/* ---- Plans: side by side, only what matters when choosing ---- */
 
-function Received({ value, label }: { value: number; label: string }) {
-  return (
-    <View style={styles.receivedItem}>
-      <Text style={styles.receivedValue}>{value}</Text>
-      <Text style={typography.caption}>{label}</Text>
-    </View>
-  );
-}
+/** The four things people compare plans on. */
+const COMPARE: { label: string; value: (b: PlanBenefits) => string }[] = [
+  { label: 'Properties', value: (b) => String(b.limits.max_properties ?? '—') },
+  {
+    label: 'Storage',
+    value: (b) => (b.limits.max_storage_mb ? formatStorageMb(b.limits.max_storage_mb) : '—'),
+  },
+  {
+    label: 'Documents per property',
+    value: (b) => String(b.limits.max_documents_per_property ?? '—'),
+  },
+  {
+    label: 'Property visits a year',
+    value: (b) => String(b.included.find((i) => i.code === 'property_visit')?.quantity ?? 0),
+  },
+];
 
-function Nudge({
-  icon,
-  accent,
-  title,
-  text,
-  cta,
-  onPress,
-}: {
-  icon: IconName;
-  accent: Accent;
-  title: string;
-  text: string;
-  cta: string;
-  onPress: () => void;
-}) {
-  const a = accents[accent];
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      style={({ pressed }) => [styles.nudge, shadow, pressed && { opacity: 0.85 }]}
-    >
-      <IconTile icon={icon} accent={accent} size={34} />
-      <View style={styles.flex}>
-        <Text style={typography.bodyStrong} numberOfLines={1}>
-          {title}
-        </Text>
-        <Text style={typography.small} numberOfLines={1}>
-          {text}
-        </Text>
-      </View>
-      <View style={[styles.nudgeCta, { backgroundColor: a.bg }]}>
-        <Text style={[styles.nudgeCtaText, { color: a.fg }]}>{cta}</Text>
-      </View>
-    </Pressable>
-  );
-}
-
-/* ---- Plans ---- */
-
-function PlanCard({
-  plan,
-  state,
+function PlanComparison({
+  plans,
+  stateOf,
   laterDate,
-  owned,
   popular,
-  busy,
-  disabled,
+  busyCode,
   onChoose,
 }: {
-  plan: PublicPlan;
-  state: CardState;
+  plans: PublicPlan[];
+  stateOf: (p: PublicPlan) => CardState;
   laterDate: string | null;
-  popular: boolean;
-  busy: boolean;
-  disabled: boolean;
-  onChoose: () => void;
-  owned: number;
+  popular: string | null;
+  busyCode: string | null;
+  onChoose: (p: PublicPlan) => void;
 }) {
-  const a = accents[PLAN_ACCENT[plan.code] ?? 'slate'];
-  const current = state === 'current';
-  const later = state === 'later' || state === 'too_small';
-  const label = busy
-    ? 'Opening payment…'
-    : current
+  const label = (p: PublicPlan, st: CardState) =>
+    st === 'current'
       ? 'Renew'
-      : state === 'upgrade'
-        ? `Upgrade to ${plan.name}`
-        : state === 'too_small'
-          ? `Covers ${plan.benefits.limits.max_properties} — you have ${owned} properties`
-          : later
-            ? `Available after ${laterDate ?? 'your plan ends'}`
-            : `Choose ${plan.name}`;
+      : st === 'upgrade'
+        ? 'Upgrade'
+        : st === 'too_small'
+          ? `Holds ${p.benefits.limits.max_properties}`
+          : st === 'later'
+            ? `After ${laterDate ?? 'renewal'}`
+            : 'Choose';
   return (
-    <View style={[styles.planCard, shadow, current && { borderColor: a.fg }]}>
-      <View style={styles.planHead}>
-        <View style={styles.flex}>
-          <View style={styles.planNameRow}>
-            <Text style={typography.title}>{plan.name}</Text>
-            {current ? <Badge label="Your plan" tone="success" icon="check" /> : null}
-            {popular ? <Badge label="Most popular" tone="brand" icon="sparkles" /> : null}
-          </View>
-          {plan.description ? (
-            <Text style={typography.small} numberOfLines={2}>
-              {plan.description}
-            </Text>
-          ) : null}
+    <View style={styles.list}>
+      <Card style={styles.compare}>
+        <View style={styles.compareRow}>
+          <View style={styles.compareLabel} />
+          {plans.map((p) => {
+            const a = accents[PLAN_ACCENT[p.code] ?? 'slate'];
+            const st = stateOf(p);
+            return (
+              <View key={p.code} style={styles.compareCol}>
+                <Text style={[styles.planName, { color: a.fg }]}>{p.name}</Text>
+                <Text style={styles.price}>{formatPrice(p.price_paise)}</Text>
+                <Text style={typography.caption}>
+                  {p.billing_period === 'month' ? 'a month' : 'a year'}
+                </Text>
+                {st === 'current' ? (
+                  <Badge label="Your plan" tone="success" />
+                ) : popular === p.code ? (
+                  <Badge label="Popular" tone="brand" />
+                ) : null}
+              </View>
+            );
+          })}
         </View>
-        <Text style={styles.price}>
-          {formatPrice(plan.price_paise)}
-          <Text style={styles.per}>/{plan.billing_period === 'month' ? 'mo' : 'yr'}</Text>
-        </Text>
-      </View>
-      <BenefitList benefits={plan.benefits} color={a.fg} />
-      {state === 'upgrade' ? (
-        <Text style={typography.caption}>
-          Pay only the difference — unused days on your current plan are credited.
+        {COMPARE.map((c) => (
+          <View key={c.label} style={[styles.compareRow, styles.compareLine]}>
+            <Text style={[typography.small, styles.compareLabel]}>{c.label}</Text>
+            {plans.map((p) => (
+              <Text key={p.code} style={[typography.bodyStrong, styles.compareCol]}>
+                {c.value(p.benefits)}
+              </Text>
+            ))}
+          </View>
+        ))}
+        <View style={[styles.compareRow, styles.compareLine]}>
+          <View style={styles.compareLabel} />
+          {plans.map((p) => {
+            const st = stateOf(p);
+            const a = accents[PLAN_ACCENT[p.code] ?? 'slate'];
+            const muted = st === 'current' || st === 'later' || st === 'too_small';
+            return (
+              <View key={p.code} style={styles.compareCol}>
+                <Pressable
+                  onPress={() => onChoose(p)}
+                  disabled={busyCode !== null || st === 'later' || st === 'too_small'}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${label(p, st)} ${p.name}`}
+                  style={({ pressed }) => [
+                    styles.cta,
+                    { backgroundColor: muted ? a.bg : a.fg },
+                    pressed && { opacity: 0.8 },
+                  ]}
+                >
+                  <Text style={[styles.ctaText, muted && { color: a.fg }]} numberOfLines={1}>
+                    {busyCode === p.code ? '…' : label(p, st)}
+                  </Text>
+                </Pressable>
+              </View>
+            );
+          })}
+        </View>
+      </Card>
+      {plans.some((p) => stateOf(p) === 'upgrade') ? (
+        <Text style={[typography.caption, styles.centerText]}>
+          Upgrading? You pay only the difference — unused days are credited.
         </Text>
       ) : null}
-      <Pressable
-        onPress={onChoose}
-        disabled={disabled || later}
-        accessibilityRole="button"
-        style={({ pressed }) => [
-          styles.cta,
-          { backgroundColor: current || later ? a.bg : a.fg },
-          (pressed || disabled) && { opacity: 0.8 },
-        ]}
-      >
-        <Text
-          style={[styles.ctaText, (current || later) && { color: a.fg }, later && styles.ctaLater]}
-        >
-          {label}
-        </Text>
-      </Pressable>
-    </View>
-  );
-}
-
-function BenefitList({ benefits, color }: { benefits: PlanBenefits; color: string }) {
-  const limitText = (c: LimitCode, v: number) =>
-    c === 'max_storage_mb'
-      ? `${formatStorageMb(v)} storage`
-      : `${v} ${LIMIT_LABELS[c].toLowerCase()}`;
-  const lines = [
-    ...LIMIT_CODES.filter((c) => benefits.limits[c] !== undefined).map((c) =>
-      limitText(c, benefits.limits[c] as number),
-    ),
-    ...benefits.included.map(
-      (i) => `${i.quantity} ${(INCLUDED_SERVICE_LABELS[i.code] ?? i.code).toLowerCase()} a year`,
-    ),
-    ...benefits.features.filter((f) => f in FEATURE_LABELS).map((f) => FEATURE_LABELS[f]),
-  ];
-  return (
-    <View style={styles.benefits}>
-      {lines.map((l) => (
-        <View key={l} style={styles.benefit}>
-          <Icon name="check" size={14} color={color} strokeWidth={3} />
-          <Text style={[typography.small, styles.benefitText]}>{l}</Text>
-        </View>
-      ))}
     </View>
   );
 }
@@ -775,8 +585,7 @@ const styles = StyleSheet.create({
   content: { padding: space.lg, paddingTop: space.xs, gap: space.md, paddingBottom: space.xxl },
   list: { gap: space.md },
   empty: { minHeight: 260 },
-  hero: { gap: space.sm, padding: space.lg },
-  heroRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  hero: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md },
   heroOver: {
     color: 'rgba(255,255,255,0.8)',
     fontSize: 11,
@@ -784,74 +593,30 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
-  heroTitle: { color: '#FFFFFF', fontSize: 21, fontWeight: '800', letterSpacing: -0.4 },
-  heroPill: {
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    borderRadius: radius.pill,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  heroPillText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
-  heroLine: { color: 'rgba(255,255,255,0.9)', fontSize: 13 },
+  heroTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
+  heroLine: { color: 'rgba(255,255,255,0.9)', fontSize: 12 },
   heroCta: {
     backgroundColor: '#FFFFFF',
+    borderRadius: radius.pill,
+    paddingVertical: 8,
+    paddingHorizontal: space.lg,
+  },
+  heroCtaText: { color: colors.primary, fontSize: 13, fontWeight: '800' },
+  usage: { paddingVertical: 0 },
+  compare: { paddingVertical: space.xs },
+  compareRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingVertical: 10 },
+  compareLine: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  compareLabel: { flex: 1.3 },
+  compareCol: { flex: 1, alignItems: 'center', textAlign: 'center', gap: 2 },
+  planName: { fontSize: 15, fontWeight: '800' },
+  price: { fontSize: 20, fontWeight: '800', color: colors.text },
+  cta: {
+    alignSelf: 'stretch',
     borderRadius: radius.md,
     paddingVertical: 10,
     alignItems: 'center',
-    marginTop: space.xs,
   },
-  heroCtaText: { color: colors.primary, fontSize: 14, fontWeight: '800' },
-  usageCard: { paddingVertical: space.xs },
-  usageRow: { paddingVertical: 10, gap: 6 },
-  usageBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-  usageTop: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  usageNum: { fontSize: 14, fontWeight: '800', color: colors.text },
-  usageOf: { fontSize: 12, fontWeight: '600', color: colors.textSubtle },
-  usageBar: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingLeft: 24 },
-  usagePct: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.textSubtle,
-    width: 32,
-    textAlign: 'right',
-  },
-  received: { gap: space.sm },
-  receivedRow: { flexDirection: 'row' },
-  receivedItem: { flex: 1, gap: 1 },
-  receivedValue: { fontSize: 20, fontWeight: '800', color: colors.text },
-  nudge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: space.md,
-  },
-  nudgeCta: { borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: 6 },
-  nudgeCtaText: { fontSize: 13, fontWeight: '800' },
-  planCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: 14,
-    gap: space.md,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-  },
-  planHead: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },
-  planNameRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' },
-  price: { fontSize: 22, fontWeight: '800', color: colors.text },
-  per: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
-  benefits: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 6 },
-  benefit: {
-    width: '50%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingRight: space.xs,
-  },
-  benefitText: { flex: 1, color: colors.text },
-  cta: { borderRadius: radius.md, paddingVertical: 12, alignItems: 'center' },
-  ctaText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
+  ctaText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
   history: { paddingVertical: space.xs },
   payment: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 10 },
   paymentBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
@@ -859,12 +624,4 @@ const styles = StyleSheet.create({
   muted: { opacity: 0.75 },
   struck: { color: colors.textSubtle, textDecorationLine: 'line-through' },
   centerText: { textAlign: 'center' },
-  ctaLater: { fontSize: 13, fontWeight: '700' },
-  secure: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    marginTop: space.sm,
-  },
 });
