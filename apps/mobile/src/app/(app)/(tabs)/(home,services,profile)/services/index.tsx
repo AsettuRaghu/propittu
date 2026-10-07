@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -31,7 +31,9 @@ const book = (service: CatalogueService) =>
  * line, and its price.
  */
 export default function ServicesScreen() {
-  const [segment, setSegment] = useState<Segment>('browse');
+  // Other screens can open My requests directly (?tab=requests).
+  const { tab } = useLocalSearchParams<{ tab?: string }>();
+  const [segment, setSegment] = useState<Segment>(tab === 'requests' ? 'requests' : 'browse');
   const me = useMe();
   const limited = me.data?.plan.access === 'limited';
 

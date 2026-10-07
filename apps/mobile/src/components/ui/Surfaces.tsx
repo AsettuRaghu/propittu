@@ -1,4 +1,3 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { Children, useState, type ReactNode } from 'react';
 import {
   LayoutAnimation,
@@ -9,16 +8,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import {
-  accents,
-  colors,
-  gradients,
-  radius,
-  shadow,
-  space,
-  typography,
-  type Accent,
-} from '@/theme';
+import { accents, colors, radius, shadow, space, typography, type Accent } from '@/theme';
 import { Icon, type IconName } from '../Icon';
 
 /* ------------------------------------------------------------------ *
@@ -45,40 +35,6 @@ export function Card({
       style={({ pressed }) => [base, pressed && styles.cardPressed, style]}
     >
       {children}
-    </Pressable>
-  );
-}
-
-/** A card painted with one of the brand gradients — for a few heroes only. */
-export function GradientCard({
-  children,
-  colors: palette = gradients.brand,
-  onPress,
-  style,
-}: {
-  children: ReactNode;
-  colors?: readonly [string, string];
-  onPress?: () => void;
-  style?: StyleProp<ViewStyle>;
-}) {
-  const body = (
-    <LinearGradient
-      colors={palette}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={[styles.gradient, style]}
-    >
-      {children}
-    </LinearGradient>
-  );
-  if (!onPress) return body;
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      style={({ pressed }) => pressed && { opacity: 0.92 }}
-    >
-      {body}
     </Pressable>
   );
 }
@@ -315,7 +271,6 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   cardPressed: { opacity: 0.88 },
-  gradient: { borderRadius: radius.lg, padding: space.lg, overflow: 'hidden' },
   iconTile: { alignItems: 'center', justifyContent: 'center' },
   sectionTitle: {
     flexDirection: 'row',

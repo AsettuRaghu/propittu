@@ -88,6 +88,15 @@ import {
   X,
   Zap,
   type LucideIcon,
+  Cloud,
+  CloudDrizzle,
+  CloudFog,
+  CloudLightning,
+  CloudMoon,
+  CloudRain,
+  CloudSnow,
+  CloudSun,
+  Share2,
 } from 'lucide-react-native';
 import { colors } from '@/theme';
 
@@ -171,6 +180,18 @@ const ICONS = {
   afternoon: Sun,
   evening: Sunset,
   night: Moon,
+  // Weather at the site
+  'weather-clear': Sun,
+  'weather-clear-night': Moon,
+  'weather-partly': CloudSun,
+  'weather-partly-night': CloudMoon,
+  'weather-cloudy': Cloud,
+  'weather-fog': CloudFog,
+  'weather-drizzle': CloudDrizzle,
+  'weather-rain': CloudRain,
+  'weather-storm': CloudLightning,
+  'weather-snow': CloudSnow,
+  share: Share2,
 
   // account, plan & money
   user: User,

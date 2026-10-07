@@ -1,31 +1,46 @@
 import { useRef } from 'react';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import {
-  PROPERTY_TYPE_LABELS,
-  requestStatusLabel,
-  type CompletionItem,
-  type PropertyDetail,
-} from '@propittu/shared';
-import { PullRefresh } from '@/components/PullRefresh';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import type { CompletionItem, CompletionKey, PropertyDetail } from '@propittu/shared';
 import { useProperty, useServiceRequests } from '@/api/queries';
-import { CompletionCard } from '@/components/CompletionCard';
 import { DocumentSlots } from '@/components/DocumentSlots';
-import { Icon, type IconName } from '@/components/Icon';
+import type { IconName } from '@/components/Icon';
 import { PhotoSection, type PhotoSectionHandle } from '@/components/PhotoSection';
+import { PropertyCover } from '@/components/PropertyCover';
 import { PropertyMapCard } from '@/components/PropertyMapCard';
+import { PullRefresh } from '@/components/PullRefresh';
 import { ReachNotice } from '@/components/ReachNotice';
+import { RequestRow } from '@/components/ServiceRequestList';
 import { ErrorState, LoadingState } from '@/components/States';
 import { VideoSection } from '@/components/VideoSection';
-import { Badge, Card, IconButton, IconTile, LinkButton, SectionTitle } from '@/components/ui';
-import { formatArea, formatDate, formatLocation } from '@/lib/format';
+import { Banner, IconButton, KeyValue, LinkButton, ListGroup, ListRow } from '@/components/ui';
+import { formatArea } from '@/lib/format';
 import { goToCompletionStep } from '@/lib/propertySteps';
-import { PROPERTY_TYPE_ICONS, STATUS_TONES, serviceVisual } from '@/lib/icons';
-import { accents, colors, font, radius, shadow, space, typography, type Accent } from '@/theme';
+import { radius, shadow, space, typography } from '@/theme';
 
-/** Property details (§18, M2/M3): map first, everything one tap away. */
+const STEP_ICONS: Record<CompletionKey, IconName> = {
+  basics: 'home',
+  address: 'pin',
+  location: 'pin',
+  sale_deed: 'deed',
+  photo: 'camera',
+  area: 'area',
+  identifiers: 'tag',
+  property_tax: 'receipt',
+};
+
+/**
+ * The property page — everything about one property, flat like Profile:
+ * its cover (photo, place, live weather), where it is (map with Directions
+ * and Share, or a bold prompt to pin it), what's still missing, the
+ * details, documents, photos, videos and services.
+ */
 export default function PropertyDetailsScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, welcome, failed } = useLocalSearchParams<{
+    id: string;
+    welcome?: string;
+    failed?: string;
+  }>();
   const { data: property, isPending, error, refetch } = useProperty(id);
   const photosRef = useRef<PhotoSectionHandle>(null);
 
@@ -40,12 +55,11 @@ export default function PropertyDetailsScreen() {
   }
 
   const edit = () => router.push(`/properties/${property.id}/edit`);
-
-  // Next actions from the completion card (photos open the picker right here).
-  const onAction = (item: CompletionItem) =>
+  const onStep = (item: CompletionItem) =>
     item.key === 'photo' ? photosRef.current?.add() : goToCompletionStep(property.id, item.key);
-
-  const location = formatLocation(property);
+  // The map prompt already asks for the pin, so it isn't repeated in the list.
+  const missing = property.completion.next.filter((i) => i.key !== 'location');
+  const failedPhotos = Number(failed) || 0;
 
   return (
     <ScrollView
@@ -53,265 +67,136 @@ export default function PropertyDetailsScreen() {
       showsVerticalScrollIndicator={false}
       refreshControl={<PullRefresh onRefresh={() => refetch()} />}
     >
-      <Stack.Screen
-        options={{
-          title: '',
-          headerRight: () => (
-            <IconButton icon="edit" label="Edit property" onPress={edit} size={36} />
-          ),
-        }}
-      />
+      <Stack.Screen options={{ title: '' }} />
 
-      {/* Name, type and place — compact */}
-      <View style={styles.header}>
-        <Text style={typography.display} numberOfLines={2}>
-          {property.name}
-        </Text>
-        <View style={styles.meta}>
-          <Badge
-            label={PROPERTY_TYPE_LABELS[property.property_type].split(' / ')[0] ?? ''}
-            icon={PROPERTY_TYPE_ICONS[property.property_type]}
-            tone="brand"
-          />
-          {location ? (
-            <View style={styles.place}>
-              <Icon name="pin" size={14} color={colors.textMuted} />
-              <Text style={typography.small} numberOfLines={1}>
-                {location}
-              </Text>
-            </View>
-          ) : null}
-        </View>
+      <View style={[styles.cover, shadow]}>
+        <PropertyCover
+          property={property}
+          height={230}
+          coverUrl={property.photos[0]?.url ?? null}
+          showWeatherLabel
+        >
+          <IconButton icon="edit" label="Edit property" size={36} onPress={edit} />
+        </PropertyCover>
       </View>
 
-      <PropertyMapCard property={property} />
-
-      {/* Quick actions. Edit lives in the header; location in the map card. */}
-      <View style={styles.quick}>
-        <Quick
-          icon="document"
-          label="Documents"
-          accent="amber"
-          onPress={() => router.push(`/properties/${property.id}/documents`)}
-        />
-        <Quick
-          icon="services"
-          label="Book service"
-          accent="teal"
-          onPress={() =>
-            router.push({ pathname: '/services/request', params: { propertyId: property.id } })
+      {welcome === '1' ? (
+        <Banner
+          tone="success"
+          icon="success"
+          message={
+            failedPhotos > 0
+              ? `It’s in your locker. ${failedPhotos} photo${failedPhotos === 1 ? '' : 's'} couldn’t be uploaded — add them again below.`
+              : 'It’s in your locker. Pin the exact location below — it takes a few seconds.'
           }
         />
-        <Quick
-          icon="camera"
-          label="Add photos"
-          accent="sky"
-          onPress={() => photosRef.current?.add()}
-        />
-      </View>
-
-      <ReachNotice propertyId={property.id} reach={property.reach} />
-
-      {/* Once complete there is nothing to do here — no card. */}
-      {property.completion.percent < 100 ? (
-        <CompletionCard completion={property.completion} onAction={onAction} />
       ) : null}
 
-      <Facts property={property} />
+      <PropertyMapCard property={property} />
+      <ReachNotice propertyId={property.id} reach={property.reach} />
 
-      <View>
-        <SectionTitle
-          title="Documents"
-          action={
-            <LinkButton
-              title="See all"
-              onPress={() => router.push(`/properties/${property.id}/documents`)}
+      {missing.length > 0 ? (
+        <ListGroup title={`Complete your profile · ${property.completion.percent}%`} plain>
+          {missing.map((item) => (
+            <ListRow
+              key={item.key}
+              icon={STEP_ICONS[item.key]}
+              accent="amber"
+              title={item.label}
+              onPress={() => onStep(item)}
             />
-          }
-        />
-        <DocumentSlots propertyId={property.id} />
-      </View>
+          ))}
+        </ListGroup>
+      ) : null}
 
-      <View>
-        <SectionTitle title="Photos" subtitle={`${property.photos.length} added`} />
-        <PhotoSection ref={photosRef} propertyId={property.id} photos={property.photos} />
-      </View>
+      <Details property={property} onEdit={edit} />
 
-      <View>
-        <SectionTitle title="Videos" subtitle="Up to 60 seconds each" />
-        <VideoSection propertyId={property.id} videos={property.videos} />
-      </View>
+      <DocumentSlots
+        propertyId={property.id}
+        action={
+          <LinkButton
+            title="All documents"
+            onPress={() => router.push(`/properties/${property.id}/documents`)}
+          />
+        }
+      />
 
-      <RecentRequests property={property} />
+      <ListGroup title={`Photos · ${property.photos.length}`} plain>
+        <View style={styles.inner}>
+          <PhotoSection ref={photosRef} propertyId={property.id} photos={property.photos} />
+        </View>
+      </ListGroup>
+
+      <ListGroup title="Videos" plain>
+        <View style={styles.inner}>
+          <VideoSection propertyId={property.id} videos={property.videos} />
+        </View>
+      </ListGroup>
+
+      <Services property={property} />
+
+      {property.latitude !== null ? (
+        <Text style={[typography.caption, styles.credit]}>
+          Weather data: MET Norway (CC BY 4.0)
+        </Text>
+      ) : null}
     </ScrollView>
   );
 }
 
-function Quick({
-  icon,
-  label,
-  accent,
-  onPress,
-}: {
-  icon: IconName;
-  label: string;
-  accent: Accent;
-  onPress: () => void;
-}) {
+/** What we know about the property; empty facts are simply left out. */
+function Details({ property: p, onEdit }: { property: PropertyDetail; onEdit: () => void }) {
+  const address = [p.address_line, p.city, p.state, p.pincode].filter(Boolean).join(', ');
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      style={({ pressed }) => [styles.quickItem, shadow, pressed && { opacity: 0.8 }]}
-    >
-      <IconTile icon={icon} accent={accent} size={38} />
-      <Text style={styles.quickLabel} numberOfLines={1}>
-        {label}
-      </Text>
-    </Pressable>
+    <ListGroup title="Details" plain action={<LinkButton title="Edit" onPress={onEdit} />}>
+      <View style={[styles.inner, styles.facts]}>
+        <KeyValue icon="pin" label="Address" value={address || 'Not added yet'} />
+        <KeyValue icon="area" label="Area" value={formatArea(p.area_value, p.area_unit)} />
+        <KeyValue icon="tag" label="Survey number" value={p.survey_number} />
+        <KeyValue icon="deed" label="Khata / Property ID" value={p.khata_number} />
+        <KeyValue icon="home" label="Plot / Property number" value={p.property_number} />
+        <KeyValue icon="document" label="Notes" value={p.notes} />
+      </View>
+    </ListGroup>
   );
 }
 
-/** Key facts as a compact two-column grid; empty facts are simply hidden. */
-function Facts({ property }: { property: PropertyDetail }) {
-  const all: { icon: IconName; label: string; value: string | null }[] = [
-    { icon: 'area', label: 'Area', value: formatArea(property.area_value, property.area_unit) },
-    { icon: 'tag', label: 'Survey no.', value: property.survey_number },
-    { icon: 'deed', label: 'Khata / Property ID', value: property.khata_number },
-    { icon: 'home', label: 'Plot / Property no.', value: property.property_number },
-  ];
-  const facts = all.filter((f) => f.value);
-  const address = [property.address_line, property.city, property.state, property.pincode]
-    .filter(Boolean)
-    .join(', ');
-
-  if (facts.length === 0 && !address && !property.notes) return null;
-  return (
-    <Card style={styles.facts}>
-      {facts.length > 0 ? (
-        <View style={styles.factGrid}>
-          {facts.map((f) => (
-            <View key={f.label} style={styles.fact}>
-              <Text style={typography.caption}>{f.label}</Text>
-              <Text style={typography.bodyStrong} numberOfLines={1}>
-                {f.value}
-              </Text>
-            </View>
-          ))}
-        </View>
-      ) : null}
-      {address ? (
-        <View style={styles.factRow}>
-          <Icon name="pin" size={16} color={accents.teal.fg} />
-          <Text style={[typography.body, styles.flex]}>{address}</Text>
-        </View>
-      ) : null}
-      {property.notes ? (
-        <View style={styles.factRow}>
-          <Icon name="document" size={16} color={accents.amber.fg} />
-          <Text style={[typography.small, styles.flex]}>{property.notes}</Text>
-        </View>
-      ) : null}
-    </Card>
-  );
-}
-
-function RecentRequests({ property }: { property: PropertyDetail }) {
+/** Recent requests for this property, and booking one — the rest is in the Services tab. */
+function Services({ property }: { property: PropertyDetail }) {
   const { data } = useServiceRequests(property.id);
   const recent = (data ?? []).slice(0, 3);
   return (
-    <View>
-      <SectionTitle
-        title="Services"
-        action={
-          recent.length > 0 ? (
-            <LinkButton
-              title="See all"
-              onPress={() =>
-                router.push({ pathname: '/requests', params: { propertyId: property.id } })
-              }
-            />
-          ) : undefined
+    <ListGroup
+      title="Services"
+      plain
+      action={
+        recent.length > 0 ? (
+          <LinkButton
+            title="All requests"
+            onPress={() => router.push({ pathname: '/services', params: { tab: 'requests' } })}
+          />
+        ) : undefined
+      }
+    >
+      {recent.map((r) => (
+        <RequestRow key={r.id} request={r} />
+      ))}
+      <ListRow
+        icon="add"
+        title="Book a service for this property"
+        onPress={() =>
+          router.push({ pathname: '/services/request', params: { propertyId: property.id } })
         }
       />
-      <Card style={styles.requests}>
-        {recent.map((r) => {
-          const v = serviceVisual(r.service.code, r.service.category);
-          return (
-            <Pressable
-              key={r.id}
-              onPress={() => router.push(`/requests/${r.id}`)}
-              style={({ pressed }) => [styles.requestRow, pressed && { opacity: 0.7 }]}
-              accessibilityRole="button"
-            >
-              <IconTile icon={v.icon} accent={v.accent} size={36} />
-              <View style={styles.flex}>
-                <Text style={typography.bodyStrong} numberOfLines={1}>
-                  {r.service.name}
-                </Text>
-                <Text style={typography.caption}>{formatDate(r.created_at)}</Text>
-              </View>
-              <Badge
-                label={requestStatusLabel(r.status, r.fulfilment)}
-                tone={STATUS_TONES[r.status]}
-              />
-            </Pressable>
-          );
-        })}
-        <Pressable
-          onPress={() =>
-            router.push({ pathname: '/services/request', params: { propertyId: property.id } })
-          }
-          style={({ pressed }) => [styles.bookRow, pressed && { opacity: 0.7 }]}
-          accessibilityRole="button"
-        >
-          <View style={styles.bookIcon}>
-            <Icon name="add" size={18} color={colors.primary} strokeWidth={2.5} />
-          </View>
-          <Text style={styles.bookText}>Book a service for this property</Text>
-        </Pressable>
-      </Card>
-    </View>
+    </ListGroup>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, minWidth: 0 },
   content: { padding: space.lg, paddingTop: space.xs, gap: space.xl, paddingBottom: space.xxl },
-  header: { gap: space.sm },
-  meta: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-  place: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
-  quick: { flexDirection: 'row', gap: space.sm },
-  quickItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: space.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-  },
-  quickLabel: { fontSize: font(12), fontWeight: '700', color: colors.text },
-  facts: { gap: space.md },
-  factGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: space.md },
-  fact: { width: '50%', gap: 2, paddingRight: space.sm },
-  factRow: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start' },
-  requests: { gap: space.xs, paddingVertical: space.sm },
-  requestRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-    paddingVertical: space.sm,
-  },
-  bookRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.sm },
-  bookIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: colors.primaryBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bookText: { fontSize: font(14), fontWeight: '700', color: colors.primary },
+  cover: { borderRadius: radius.lg, overflow: 'hidden' },
+  // Same 14 pt inset as list rows, so content lines up under each heading.
+  inner: { paddingHorizontal: 14, paddingVertical: space.xs },
+  facts: { gap: space.sm },
+  credit: { textAlign: 'center' },
 });

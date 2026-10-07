@@ -31,7 +31,6 @@ const SCREENS: { name: string; options: Record<string, unknown> }[] = [
   { name: 'profile', options: { headerShown: false, title: 'Profile' } },
 
   { name: 'properties/new', options: { title: 'Add property' } },
-  { name: 'properties/added', options: { headerShown: false, gestureEnabled: false } },
   { name: 'properties/[id]/setup', options: { title: 'Check the details' } },
   {
     name: 'properties/[id]/pittu',
@@ -43,7 +42,6 @@ const SCREENS: { name: string; options: Record<string, unknown> }[] = [
   { name: 'properties/[id]/documents', options: { title: 'Documents' } },
   { name: 'properties/[id]/add-document', options: { title: 'Add document' } },
   { name: 'services/request', options: { title: 'Request a service' } },
-  { name: 'requests/index', options: { title: 'Service requests' } },
   { name: 'requests/[id]', options: { title: 'Service request' } },
   { name: 'plan', options: { title: 'Plan & Usage' } },
   { name: 'account-delete', options: { title: 'Delete account' } },

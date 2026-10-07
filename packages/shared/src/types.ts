@@ -125,6 +125,9 @@ export interface PropertySummary {
   } | null;
   /** Which kinds of service reach this property (by PIN code / state). */
   reach: PropertyReach | null;
+  /** The map pin, if set (Home shows the site's weather). */
+  latitude: number | null;
+  longitude: number | null;
 }
 
 /** Property details screen (§18). */

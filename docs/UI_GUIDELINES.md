@@ -62,6 +62,10 @@ reworked screen, and check them before handing anything over.
 | Expected date | `requestExpectedBy()` (shared) — the visit date, else start + the service's usual days |
 | "About this…" explainer | `dialog.alert` with `highlights` (✓ list) and `summary` rows |
 | Choosing a day / time | `Select variant="flat"` with the options (no pill grids) |
+| A property's cover | `PropertyCover` (photo or type colours, name, place, live weather) — Home card and property page |
+| Weather at a site | `WeatherChip` (MET Norway via our API; shows nothing without a pin) |
+| Where a property is | `PropertyMapCard` (Directions · Share · Adjust pin; a bold prompt when there's no pin) |
+| Documents of a property | `DocumentSlots` (its own "Documents" section: one row per type, Upload when missing) |
 
 Never copy a component into a screen; extend the shared one with an option instead.
 
@@ -75,6 +79,8 @@ Never copy a component into a screen; extend the shared one with an option inste
 - Badges carry status at a glance: Trial orange, paid plan green, Locked red; Incomplete only
   when something is missing (no "Complete"/"Verified" noise).
 - Show only what matters (plans compare on properties only; payments are one list).
+- Reuse pages instead of adding near-duplicates (e.g. "All requests" opens the Services tab on
+  My requests; adding a property lands on its own page, not a separate "added" screen).
 - After an action that ends a flow (booking, cancelling), go back to the list — no extra
   "done" pop-up when the list already shows the result.
 - Names can be long (property names may become community / city / custom names): let them wrap

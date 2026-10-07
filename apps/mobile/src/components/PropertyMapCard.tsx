@@ -1,10 +1,12 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
   LayoutAnimation,
   Linking,
   Platform,
   Pressable,
+  Share,
   StyleSheet,
   Text,
   UIManager,
@@ -15,14 +17,15 @@ import type { Property } from '@propittu/shared';
 import { accents, colors, font, radius, shadow, space } from '@/theme';
 import { dialog } from './Dialog';
 import { Icon, type IconName } from './Icon';
+import { Button } from './ui';
 
 if (Platform.OS === 'android') UIManager.setLayoutAnimationEnabledExperimental?.(true);
 
 /**
  * The property on the map, right under its name.
  *
- *   collapsed  a calm preview (no gestures) — tap to expand
- *   expanded   a live map + Directions / Satellite / Adjust pin / Collapse
+ *   no pin     a bold prompt to pin it (why it matters, one button)
+ *   pinned     the map with Directions · Share · Adjust pin · Expand/Satellite
  *
  * iPhone uses Apple Maps and Android uses Google Maps (react-native-maps).
  * Directions hand off to the user's maps app of choice.
@@ -35,22 +38,22 @@ export function PropertyMapCard({ property }: { property: Property }) {
 
   if (!hasPin) {
     return (
-      <Pressable
-        onPress={adjust}
-        accessibilityRole="button"
-        style={({ pressed }) => [styles.card, shadow, styles.empty, pressed && { opacity: 0.85 }]}
+      <LinearGradient
+        colors={[accents.teal.fg, accents.sky.fg]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.card, styles.prompt]}
       >
-        <View style={styles.emptyIcon}>
-          <Icon name="pin" size={18} color={accents.teal.fg} />
+        <View style={styles.promptIcon}>
+          <Icon name="pin" size={24} color="#FFFFFF" />
         </View>
-        <View style={styles.flex}>
-          <Text style={styles.emptyTitle}>Pin the exact location</Text>
-          <Text style={styles.emptyText}>Helps our team find it for visits.</Text>
-        </View>
-        <View style={styles.emptyCta}>
-          <Text style={styles.emptyCtaText}>Set pin</Text>
-        </View>
-      </Pressable>
+        <Text style={styles.promptTitle}>Pin the exact location</Text>
+        <Text style={styles.promptText}>
+          So our team finds it first time — and you can navigate there, share it with family and see
+          the weather at the site.
+        </Text>
+        <Button title="Pin it now" icon="pin" variant="secondary" onPress={adjust} />
+      </LinearGradient>
     );
   }
 
@@ -61,6 +64,11 @@ export function PropertyMapCard({ property }: { property: Property }) {
     LayoutAnimation.configureNext(LayoutAnimation.create(260, 'easeInEaseOut', 'scaleY'));
     setExpanded((v) => !v);
   };
+
+  const share = () =>
+    void Share.share({
+      message: `${property.name} — https://maps.google.com/?q=${lat},${lng}`,
+    }).catch(() => undefined);
 
   const directions = async () => {
     const label = encodeURIComponent(property.name);
@@ -116,24 +124,32 @@ export function PropertyMapCard({ property }: { property: Property }) {
           </View>
         ) : null}
       </Pressable>
-
       {expanded ? (
-        <View style={styles.actions}>
-          <MapAction
-            icon="directions"
-            label="Directions"
-            onPress={() => void directions()}
-            primary
-          />
+        <Pressable
+          onPress={toggle}
+          accessibilityRole="button"
+          accessibilityLabel="Collapse map"
+          style={[styles.expandHint, styles.collapse]}
+        >
+          <Icon name="collapse" size={14} color={colors.text} />
+          <Text style={styles.expandText}>Collapse</Text>
+        </Pressable>
+      ) : null}
+
+      <View style={styles.actions}>
+        <MapAction icon="directions" label="Directions" onPress={() => void directions()} primary />
+        <MapAction icon="share" label="Share" onPress={share} />
+        <MapAction icon="pin" label="Adjust pin" onPress={adjust} />
+        {expanded ? (
           <MapAction
             icon={satellite ? 'map' : 'satellite'}
             label={satellite ? 'Map' : 'Satellite'}
             onPress={() => setSatellite((v) => !v)}
           />
-          <MapAction icon="pin" label="Adjust pin" onPress={adjust} />
-          <MapAction icon="collapse" label="Collapse" onPress={toggle} />
-        </View>
-      ) : null}
+        ) : (
+          <MapAction icon="expand" label="Expand" onPress={toggle} />
+        )}
+      </View>
     </View>
   );
 }
@@ -178,6 +194,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
+  collapse: { top: space.sm, bottom: undefined },
   expandText: { fontSize: font(12), fontWeight: '700', color: colors.text },
   actions: {
     flexDirection: 'row',
@@ -196,22 +213,15 @@ const styles = StyleSheet.create({
   },
   actionIconPrimary: { backgroundColor: accents.teal.fg },
   actionText: { fontSize: font(12), fontWeight: '600', color: colors.text },
-  empty: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md },
-  emptyIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: accents.teal.bg,
+  prompt: { padding: space.xl, gap: space.md },
+  promptIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyTitle: { color: colors.text, fontSize: font(15), fontWeight: '700' },
-  emptyText: { color: colors.textMuted, fontSize: font(12), marginTop: 1 },
-  emptyCta: {
-    backgroundColor: accents.teal.bg,
-    borderRadius: radius.pill,
-    paddingHorizontal: space.md,
-    paddingVertical: 6,
-  },
-  emptyCtaText: { color: accents.teal.fg, fontSize: font(13), fontWeight: '800' },
+  promptTitle: { fontSize: font(22), fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.4 },
+  promptText: { fontSize: font(15), lineHeight: font(21), color: 'rgba(255,255,255,0.92)' },
 });

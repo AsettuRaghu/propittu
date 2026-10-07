@@ -95,7 +95,8 @@ use it for advertising.</p>
 Access is limited by role and recorded.</li>
 <li><strong>Processors that run Propittu for us</strong>, under contract and only for that purpose: database and file
 storage (Supabase — stored in Mumbai, India), application servers (Vercel — Mumbai region), payments (Razorpay),
-SMS delivery, app updates (Expo), and document reading (Anthropic — USA, as described above).</li>
+SMS delivery, app updates (Expo), document reading (Anthropic — USA, as described above), and
+local weather (MET Norway — only the property's approximate location, rounded to about a kilometre).</li>
 <li>Government authorities, where the law requires it.</li>
 </ul>
 

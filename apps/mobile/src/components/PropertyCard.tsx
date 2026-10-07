@@ -1,21 +1,18 @@
-import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
-import { PROPERTY_TYPE_LABELS, requestStatusLabel, type PropertySummary } from '@propittu/shared';
-import { formatDate, formatLocation } from '@/lib/format';
-import { PROPERTY_TYPE_GRADIENTS, PROPERTY_TYPE_ICONS, STATUS_ICONS } from '@/lib/icons';
+import { requestStatusLabel, type PropertySummary } from '@propittu/shared';
+import { formatDate } from '@/lib/format';
+import { STATUS_ICONS } from '@/lib/icons';
 import { goToCompletionStep } from '@/lib/propertySteps';
-import { signedImage } from '@/lib/image';
-import { accents, colors, font, radius, shadow, space, typography } from '@/theme';
+import { colors, font, radius, shadow, space, typography } from '@/theme';
 import { Icon, type IconName } from './Icon';
-import { ProgressBar } from './ui';
+import { PropertyCover } from './PropertyCover';
 
 /**
- * Home tile (§15): a property snapshot — picture, name, type, place, what's
- * there (docs / photos / requests) and the one thing that needs attention:
- * an open service request, or the next profile step.
+ * Home: one property in the locker. A photo (or its type's colours) with
+ * the name, place and live weather over a soft fade; below, the one thing
+ * that needs attention and what's stored — documents, photos, requests.
  */
 export function PropertyCard({
   property: p,
@@ -24,10 +21,7 @@ export function PropertyCard({
   property: PropertySummary;
   onPress: () => void;
 }) {
-  const location = formatLocation(p);
-  const type = PROPERTY_TYPE_LABELS[p.property_type].split(' / ')[0];
   const r = p.active_request;
-  const complete = p.completion_percent >= 100;
 
   return (
     <Pressable
@@ -36,92 +30,28 @@ export function PropertyCard({
       accessibilityLabel={p.name}
       style={({ pressed }) => [styles.card, shadow, pressed && styles.pressed]}
     >
-      <View style={styles.media}>
-        {p.cover_photo_url ? (
-          <Image
-            source={signedImage(p.cover_photo_url)}
-            style={StyleSheet.absoluteFill}
-            contentFit="cover"
-            transition={200}
-            cachePolicy="memory-disk"
-            recyclingKey={p.id}
-            accessibilityIgnoresInvertColors
-          />
-        ) : (
-          <LinearGradient
-            colors={PROPERTY_TYPE_GRADIENTS[p.property_type]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[StyleSheet.absoluteFill, styles.placeholder]}
-          >
-            <Icon
-              name={PROPERTY_TYPE_ICONS[p.property_type]}
-              size={44}
-              color="rgba(255,255,255,0.35)"
-              strokeWidth={1.5}
-            />
-          </LinearGradient>
-        )}
-        <View style={styles.typeChip}>
-          <Icon name={PROPERTY_TYPE_ICONS[p.property_type]} size={12} color={colors.text} />
-          <Text style={styles.typeText}>{type}</Text>
-        </View>
-      </View>
+      <PropertyCover property={p} height={176} coverUrl={p.cover_photo_url} />
 
       <View style={styles.body}>
-        <View style={styles.titleRow}>
-          <View style={styles.flex}>
-            <Text style={typography.heading} numberOfLines={1}>
-              {p.name}
-            </Text>
-            {location ? (
-              <View style={styles.locationRow}>
-                <Icon name="pin" size={12} color={colors.textMuted} />
-                <Text style={typography.caption} numberOfLines={1}>
-                  {location}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-          <Icon name="chevron" size={18} color={colors.textSubtle} />
-        </View>
-
         {r ? (
           <Attention
             icon={STATUS_ICONS[r.status]}
-            accent="teal"
+            tone={colors.primary}
             text={`${r.service_name} · ${requestStatusLabel(r.status, r.fulfilment)}${
               r.scheduled_for ? ` ${formatDate(r.scheduled_for)}` : ''
             }`}
             onPress={() => router.push(`/requests/${r.id}`)}
           />
-        ) : null}
-        {!complete ? (
-          <View style={styles.progressRow}>
-            <Text style={styles.progressLabel}>
-              Profile <Text style={styles.progressPct}>{p.completion_percent}%</Text>
-            </Text>
-            <View style={styles.flex}>
-              <ProgressBar
-                progress={p.completion_percent / 100}
-                height={4}
-                color={colors.primary}
-                track={colors.primarySoft}
-              />
-            </View>
-          </View>
-        ) : null}
-        {!r && p.next_step ? (
+        ) : p.next_step ? (
           <Attention
             icon="add"
-            accent="amber"
-            text={p.next_step.label}
+            tone={colors.warning}
+            text={`${p.next_step.label} · profile ${p.completion_percent}%`}
             onPress={() => p.next_step && goToCompletionStep(p.id, p.next_step.key)}
           />
         ) : null}
-
         <View style={styles.stats}>
-          <Stat icon="document" value={p.document_count} label="Docs" />
+          <Stat icon="document" value={p.document_count} label="Documents" />
           <Stat icon="image" value={p.photo_count} label="Photos" />
           <Stat icon="requests" value={p.service_request_count} label="Requests" />
         </View>
@@ -130,34 +60,30 @@ export function PropertyCard({
   );
 }
 
-/** One tappable "needs attention" line inside the tile. */
+/** The one tappable "needs attention" line under the photo. */
 function Attention({
   icon,
-  accent,
+  tone,
   text,
   onPress,
 }: {
   icon: IconName;
-  accent: 'teal' | 'amber';
+  tone: string;
   text: string;
   onPress: () => void;
 }) {
-  const a = accents[accent];
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      style={({ pressed }) => [
-        styles.attention,
-        { backgroundColor: a.bg },
-        pressed && { opacity: 0.8 },
-      ]}
+      hitSlop={6}
+      style={({ pressed }) => [styles.attention, pressed && { opacity: 0.7 }]}
     >
-      <Icon name={icon} size={13} color={a.fg} strokeWidth={2.5} />
-      <Text style={[styles.attentionText, { color: a.fg }]} numberOfLines={1}>
+      <Icon name={icon} size={15} color={tone} strokeWidth={2.5} />
+      <Text style={[styles.attentionText, { color: tone }]} numberOfLines={1}>
         {text}
       </Text>
-      <Icon name="chevron" size={14} color={a.fg} />
+      <Icon name="chevron" size={15} color={tone} />
     </Pressable>
   );
 }
@@ -165,7 +91,7 @@ function Attention({
 function Stat({ icon, value, label }: { icon: IconName; value: number; label: string }) {
   return (
     <View style={styles.stat}>
-      <Icon name={icon} size={13} color={colors.textMuted} />
+      <Icon name={icon} size={14} color={colors.textMuted} />
       <Text style={styles.statValue}>{value}</Text>
       <Text style={typography.caption}>{label}</Text>
     </View>
@@ -189,51 +115,23 @@ export function PropertyCardSkeleton() {
     <Animated.View style={[styles.card, shadow, { opacity: pulse }]} accessibilityLabel="Loading">
       <View style={[styles.media, styles.bone]} />
       <View style={styles.body}>
-        <View style={[styles.boneLine, { width: '55%', height: 14 }]} />
-        <View style={[styles.boneLine, { width: '35%' }]} />
-        <View style={[styles.boneLine, { width: '80%', marginTop: 6 }]} />
+        <View style={[styles.boneLine, { width: '70%' }]} />
+        <View style={[styles.boneLine, { width: '45%' }]} />
       </View>
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, minWidth: 0 },
   card: { backgroundColor: colors.surface, borderRadius: radius.lg, overflow: 'hidden' },
   pressed: { opacity: 0.94, transform: [{ scale: 0.995 }] },
-  media: { height: 112, backgroundColor: colors.surfaceMuted },
-  placeholder: { alignItems: 'flex-end', justifyContent: 'center', paddingRight: space.lg },
-  typeChip: {
-    position: 'absolute',
-    top: space.sm,
-    left: space.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.94)',
-    borderRadius: radius.pill,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  typeText: { fontSize: font(11), fontWeight: '700', color: colors.text },
-  body: { paddingHorizontal: space.md, paddingTop: 10, paddingBottom: space.md, gap: 8 },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 },
-  progressRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  progressLabel: { fontSize: font(12), fontWeight: '600', color: colors.textMuted },
-  progressPct: { fontWeight: '800', color: colors.primary },
-  attention: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderRadius: radius.sm,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-  },
-  attentionText: { flex: 1, fontSize: font(12.5), fontWeight: '700' },
+  media: { height: 176, backgroundColor: colors.surfaceMuted },
+  body: { paddingHorizontal: space.md, paddingVertical: space.md, gap: space.md },
+  attention: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  attentionText: { flex: 1, fontSize: font(14), fontWeight: '700' },
   stats: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
   stat: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  statValue: { fontSize: font(13), fontWeight: '800', color: colors.text },
+  statValue: { fontSize: font(14), fontWeight: '800', color: colors.text },
   bone: { backgroundColor: colors.surfaceMuted },
   boneLine: { height: 10, borderRadius: 5, backgroundColor: colors.surfaceMuted },
 });

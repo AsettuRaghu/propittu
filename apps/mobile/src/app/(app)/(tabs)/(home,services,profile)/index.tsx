@@ -1,7 +1,8 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import type { PropertySummary } from '@propittu/shared';
 import { useDraftProperties } from '@/api/ai';
 import { useMe, useProperties } from '@/api/queries';
 import { Icon, type IconName } from '@/components/Icon';
@@ -9,19 +10,9 @@ import { PlanBanner } from '@/components/PlanBanner';
 import { PropertyCard, PropertyCardSkeleton } from '@/components/PropertyCard';
 import { PullRefresh } from '@/components/PullRefresh';
 import { ErrorState, LimitedAccessState } from '@/components/States';
-import { Button, IconButton, IconTile } from '@/components/ui';
+import { Button, IconButton, ListGroup, ListRow } from '@/components/ui';
 import { greeting } from '@/lib/format';
-import {
-  accents,
-  colors,
-  font,
-  gradients,
-  radius,
-  shadow,
-  space,
-  typography,
-  type Accent,
-} from '@/theme';
+import { accents, colors, font, gradients, radius, shadow, space, typography } from '@/theme';
 
 function greetingIcon(now = new Date()): IconName {
   const h = now.getHours();
@@ -31,31 +22,34 @@ function greetingIcon(now = new Date()): IconName {
   return 'night';
 }
 
+const addProperty = () => router.push('/properties/new');
+
 /**
- * Home (§15) answers three things: what properties do I have, what needs my
- * attention (on each tile), and what can I do next (the actions below).
+ * Home — the property locker. A clear greeting, the locker at a glance,
+ * anything waiting for you, your properties (photo, place, live weather,
+ * what needs attention) and quick ways onward. With no properties yet, a
+ * bold welcome that says what Propittu does and starts the first one.
  */
 export default function HomeScreen() {
   const me = useMe();
   // Strict Limited Access (M6): property data is not even fetched.
   const limited = me.data?.plan.access === 'limited';
   const { data, isPending, error, refetch } = useProperties(!limited);
-  const addProperty = () => router.push('/properties/new');
-  const name = me.data?.full_name?.split(' ')[0];
-  const hasProperties = !!data && data.length > 0;
   const drafts = useDraftProperties(!limited && !!me.data?.features.document_reading);
   const unfinished = (drafts.data ?? []).filter((d) => d.document_id);
+  const properties = data ?? [];
+  const hasProperties = properties.length > 0;
 
   const header = (
     <View style={styles.header}>
       <View style={styles.titleRow}>
         <View style={styles.flex}>
           <View style={styles.greetRow}>
-            <Icon name={greetingIcon()} size={14} color={accents.amber.fg} />
-            <Text style={styles.greet}>{greeting()},</Text>
+            <Icon name={greetingIcon()} size={18} color={accents.amber.fg} />
+            <Text style={styles.greet}>{greeting()}</Text>
           </View>
           <Text style={typography.display} numberOfLines={1}>
-            {name ?? 'Welcome'}
+            {me.data?.full_name?.split(' ')[0] ?? 'Welcome'}
           </Text>
         </View>
         {!limited && hasProperties ? (
@@ -63,35 +57,37 @@ export default function HomeScreen() {
             icon="add"
             label="Add property"
             variant="solid"
-            size={40}
+            size={44}
             onPress={addProperty}
           />
         ) : null}
       </View>
+
+      {hasProperties ? <Locker properties={properties} /> : null}
       {me.data && !limited ? <PlanBanner plan={me.data.plan} /> : null}
-      {unfinished.map((d) => (
-        <Pressable
-          key={d.id}
-          onPress={() =>
-            router.push({
-              pathname: '/properties/[id]/setup',
-              params: { id: d.id, doc: d.document_id ?? '' },
-            })
-          }
-          accessibilityRole="button"
-          style={({ pressed }) => [styles.draft, shadow, pressed && { opacity: 0.85 }]}
-        >
-          <IconTile icon="document" accent="indigo" size={36} />
-          <View style={styles.flex}>
-            <Text style={typography.bodyStrong}>Finish adding your property</Text>
-            <Text style={typography.caption}>Pittu has read your sale deed — check and save.</Text>
-          </View>
-          <Icon name="chevron" size={16} color={colors.textSubtle} />
-        </Pressable>
-      ))}
+
+      {unfinished.length > 0 ? (
+        <ListGroup title="Waiting for you" plain>
+          {unfinished.map((d) => (
+            <ListRow
+              key={d.id}
+              icon="document"
+              title="Finish adding your property"
+              subtitle="Pittu has read your sale deed — check and save"
+              onPress={() =>
+                router.push({
+                  pathname: '/properties/[id]/setup',
+                  params: { id: d.id, doc: d.document_id ?? '' },
+                })
+              }
+            />
+          ))}
+        </ListGroup>
+      ) : null}
+
       {hasProperties ? (
-        <Text style={styles.section}>
-          My properties <Text style={styles.count}>· {data.length}</Text>
+        <Text style={typography.heading}>
+          Your properties <Text style={styles.count}>· {properties.length}</Text>
         </Text>
       ) : null}
     </View>
@@ -127,126 +123,146 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <FlatList
-        data={data}
+        data={properties}
         keyExtractor={(p) => p.id}
         ListHeaderComponent={header}
         contentContainerStyle={styles.list}
-        ItemSeparatorComponent={() => <View style={{ height: space.md }} />}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
         showsVerticalScrollIndicator={false}
         refreshControl={<PullRefresh onRefresh={() => Promise.all([refetch(), me.refetch()])} />}
         renderItem={({ item }) => (
           <PropertyCard property={item} onPress={() => router.push(`/properties/${item.id}`)} />
         )}
-        ListFooterComponent={hasProperties ? <NextActions /> : null}
-        ListEmptyComponent={<Welcome onAdd={addProperty} />}
+        ListFooterComponent={hasProperties ? <QuickActions /> : null}
+        ListEmptyComponent={<Welcome />}
       />
     </SafeAreaView>
   );
 }
 
-/* ---- What can I do next ---- */
-
-function NextActions() {
+/** The locker at a glance: what's kept, and what's moving. */
+function Locker({ properties }: { properties: PropertySummary[] }) {
+  const documents = properties.reduce((n, p) => n + p.document_count, 0);
+  const photos = properties.reduce((n, p) => n + p.photo_count, 0);
+  const active = properties.filter((p) => p.active_request).length;
+  const items: { icon: IconName; value: number; label: string }[] = [
+    { icon: 'document', value: documents, label: documents === 1 ? 'document' : 'documents' },
+    { icon: 'image', value: photos, label: photos === 1 ? 'photo' : 'photos' },
+    { icon: 'requests', value: active, label: 'in progress' },
+  ];
   return (
-    <View style={styles.next}>
-      <Text style={styles.section}>Do more</Text>
-      <View style={styles.actions}>
-        <Action
-          icon="services"
-          accent="teal"
-          label="Book a service"
-          onPress={() => router.push('/services')}
-        />
-        <Action
-          icon="requests"
-          accent="indigo"
-          label="My requests"
-          onPress={() => router.push('/requests')}
-        />
-        <Action
-          icon="support"
-          accent="sky"
-          label="Get help"
-          onPress={() => router.push('/support')}
-        />
+    <View style={styles.locker}>
+      <View style={styles.lockerTitle}>
+        <Icon name="lock" size={14} color={colors.primary} />
+        <Text style={styles.lockerLabel}>Your locker</Text>
+      </View>
+      <View style={styles.lockerStats}>
+        {items.map((i) => (
+          <View key={i.label} style={styles.lockerStat}>
+            <Text style={styles.lockerValue}>{i.value}</Text>
+            <Text style={typography.caption}>{i.label}</Text>
+          </View>
+        ))}
       </View>
     </View>
   );
 }
 
-function Action({
-  icon,
-  accent,
-  label,
-  onPress,
-}: {
-  icon: IconName;
-  accent: Accent;
-  label: string;
-  onPress: () => void;
-}) {
+/** Onward from Home, using the pages that already exist. */
+function QuickActions() {
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      style={({ pressed }) => [styles.action, shadow, pressed && { opacity: 0.85 }]}
-    >
-      <IconTile icon={icon} accent={accent} size={30} />
-      <Text style={styles.actionLabel} numberOfLines={1}>
-        {label}
-      </Text>
-    </Pressable>
+    <View style={styles.footer}>
+      <ListGroup title="Quick actions" plain>
+        <ListRow
+          icon="services"
+          accent="teal"
+          title="Book a service"
+          subtitle="Visits, inspections, paperwork help"
+          onPress={() => router.push('/services')}
+        />
+        <ListRow
+          icon="requests"
+          accent="indigo"
+          title="My requests"
+          onPress={() => router.push({ pathname: '/services', params: { tab: 'requests' } })}
+        />
+        <ListRow
+          icon="support"
+          accent="sky"
+          title="Help & Support"
+          onPress={() => router.push('/support')}
+        />
+      </ListGroup>
+    </View>
   );
 }
 
 /* ---- No properties yet: the start of the Propittu experience ---- */
 
-const BENEFITS: { icon: IconName; accent: Accent; title: string; text: string }[] = [
-  { icon: 'document', accent: 'amber', title: 'Documents', text: 'Sale deed, tax, Khata — safe' },
-  { icon: 'images', accent: 'sky', title: 'Photos & videos', text: 'See it from anywhere' },
-  { icon: 'services', accent: 'teal', title: 'Services', text: 'Visits, cleaning, repairs' },
+const PROMISES: { icon: IconName; accent: keyof typeof accents; title: string; text: string }[] = [
+  {
+    icon: 'document',
+    accent: 'amber',
+    title: 'Documents at your fingertips',
+    text: 'Sale deed, tax receipts, Khata — safe, and always with you',
+  },
+  {
+    icon: 'map',
+    accent: 'teal',
+    title: 'The exact location',
+    text: 'See it on the map, navigate there, share it with anyone',
+  },
+  {
+    icon: 'bell',
+    accent: 'violet',
+    title: 'Only what matters',
+    text: 'Verified updates about your property — none of the noise',
+  },
+  {
+    icon: 'services',
+    accent: 'indigo',
+    title: 'Trusted help on call',
+    text: 'Visits, inspections and paperwork, done by our team',
+  },
 ];
 
-function Welcome({ onAdd }: { onAdd: () => void }) {
+function Welcome() {
   return (
     <View style={styles.welcome}>
-      <View style={[styles.hero, shadow]}>
-        <LinearGradient
-          colors={[accents.indigo.bg, colors.surface]}
-          style={styles.heroArt}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-        >
-          <View style={[styles.float, styles.floatLeft]}>
-            <Icon name="document" size={16} color={accents.amber.fg} />
-          </View>
-          <LinearGradient colors={gradients.brand} style={styles.houseTile}>
-            <Icon name="home" size={38} color="#FFFFFF" strokeWidth={1.8} />
-          </LinearGradient>
-          <View style={[styles.float, styles.floatRight]}>
-            <Icon name="image" size={16} color={accents.sky.fg} />
-          </View>
-        </LinearGradient>
-        <View style={styles.heroBody}>
-          <Text style={[typography.title, styles.center]}>Let&apos;s add your first property</Text>
-          <Text style={[typography.small, styles.center]}>
-            Keep its documents, photos, location and services together — so you always know
-            it&apos;s in good hands.
-          </Text>
-          <Button title="Add property" icon="add" onPress={onAdd} />
+      <LinearGradient
+        colors={gradients.brand}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.hero, shadow]}
+      >
+        <View style={styles.heroBadge}>
+          <Icon name="lock" size={26} color="#FFFFFF" />
         </View>
-      </View>
+        <Text style={styles.heroTitle}>Your property locker</Text>
+        <Text style={styles.heroText}>
+          Everything about your property, verified and in one place. Add it once — we take it from
+          there.
+        </Text>
+        <Button
+          title="Add your first property"
+          icon="add"
+          variant="secondary"
+          onPress={addProperty}
+        />
+      </LinearGradient>
 
-      <Text style={styles.section}>What you&apos;ll get</Text>
-      <View style={styles.benefits}>
-        {BENEFITS.map((b) => (
-          <View key={b.title} style={[styles.benefit, shadow]}>
-            <IconTile icon={b.icon} accent={b.accent} size={32} />
-            <Text style={styles.benefitTitle}>{b.title}</Text>
-            <Text style={styles.benefitText}>{b.text}</Text>
-          </View>
+      <ListGroup title="What you get" plain>
+        {PROMISES.map((p) => (
+          <ListRow
+            key={p.title}
+            icon={p.icon}
+            accent={p.accent}
+            title={p.title}
+            subtitle={p.text}
+            subtitleLines={2}
+          />
         ))}
-      </View>
+      </ListGroup>
     </View>
   );
 }
@@ -255,71 +271,31 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1, minWidth: 0 },
   pad: { paddingHorizontal: space.lg },
-  header: { paddingTop: space.md, paddingBottom: space.md, gap: space.md },
+  header: { paddingTop: space.md, paddingBottom: space.md, gap: space.lg },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  greetRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  greet: { fontSize: font(14), fontWeight: '600', color: colors.textMuted },
-  section: { ...typography.heading, marginTop: space.xs },
-  draft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: space.md,
-    borderWidth: 1.5,
-    borderColor: colors.primaryBorder,
-  },
+  greetRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  greet: { fontSize: font(17), fontWeight: '600', color: colors.textMuted },
   count: { color: colors.textSubtle, fontWeight: '700' },
+  locker: { gap: space.sm },
+  lockerTitle: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  lockerLabel: { fontSize: font(13), fontWeight: '700', color: colors.primary },
+  lockerStats: { flexDirection: 'row', gap: space.xl },
+  lockerStat: { gap: 0 },
+  lockerValue: { fontSize: font(22), fontWeight: '800', color: colors.text },
   list: { paddingHorizontal: space.lg, paddingBottom: space.xxl, flexGrow: 1 },
-  skeletons: { gap: space.md },
-  next: { marginTop: space.xl, gap: space.md },
-  actions: { flexDirection: 'row', gap: space.sm },
-  action: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: space.md,
-    gap: space.sm,
-  },
-  actionLabel: { fontSize: font(13), fontWeight: '700', color: colors.text },
-  welcome: { gap: space.md },
-  hero: { backgroundColor: colors.surface, borderRadius: radius.lg, overflow: 'hidden' },
-  heroArt: {
-    height: 128,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: space.lg,
-  },
-  houseTile: {
-    width: 76,
-    height: 76,
-    borderRadius: 22,
+  separator: { height: space.lg },
+  skeletons: { gap: space.lg },
+  footer: { marginTop: space.xl },
+  welcome: { gap: space.xl },
+  hero: { borderRadius: radius.lg, padding: space.xl, gap: space.md },
+  heroBadge: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  float: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadow,
-  },
-  floatLeft: { marginTop: 36 },
-  floatRight: { marginBottom: 36 },
-  heroBody: { padding: space.lg, paddingTop: space.sm, gap: space.md },
-  center: { textAlign: 'center' },
-  benefits: { flexDirection: 'row', gap: space.sm },
-  benefit: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: space.md,
-    gap: 6,
-  },
-  benefitTitle: { fontSize: font(13), fontWeight: '800', color: colors.text },
-  benefitText: { fontSize: font(11.5), color: colors.textMuted, lineHeight: font(15) },
+  heroTitle: { fontSize: font(26), fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5 },
+  heroText: { fontSize: font(15), lineHeight: font(21), color: 'rgba(255,255,255,0.9)' },
 });

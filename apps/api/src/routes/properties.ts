@@ -176,6 +176,8 @@ propertiesRouter.get('/properties', async (req, res) => {
       next_step: completion?.next[0] ?? null,
       active_request: activeRequest.get(r.id) ?? null,
       reach: reach.get(r.id) ?? null,
+      latitude: property?.latitude ?? null,
+      longitude: property?.longitude ?? null,
     };
   });
 

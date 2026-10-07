@@ -12,7 +12,7 @@
     "test": "node test/smoke.mjs",
     "test:bundle": "npm run build && SMOKE_TARGET=bundle node test/smoke.mjs",
     "build": "node scripts/build-vercel.mjs",
-    "test:ai": "tsx --test test/ai-unit.ts test/pittu-unit.ts"
+    "test:ai": "tsx --test test/ai-unit.ts test/pittu-unit.ts test/weather-unit.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.131.0",

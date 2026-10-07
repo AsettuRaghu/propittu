@@ -9,3 +9,4 @@ export * from './support';
 export * from './ai';
 export * from './pittu';
 export * from './reach';
+export * from './weather';

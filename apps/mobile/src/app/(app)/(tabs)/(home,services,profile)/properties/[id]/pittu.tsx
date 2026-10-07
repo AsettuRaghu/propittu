@@ -238,7 +238,7 @@ function Summary({
     }
     setSending(false);
     toast(sent ? `${sent} service${sent === 1 ? '' : 's'} requested` : 'Property saved');
-    router.replace(`/properties/${propertyId}`);
+    router.replace({ pathname: '/properties/[id]', params: { id: propertyId, welcome: '1' } });
   };
 
   return (
@@ -316,14 +316,24 @@ function Summary({
                 : 'Done'
             }
             onPress={() =>
-              chosen.length ? void send() : router.replace(`/properties/${propertyId}`)
+              chosen.length
+                ? void send()
+                : router.replace({
+                    pathname: '/properties/[id]',
+                    params: { id: propertyId, welcome: '1' },
+                  })
             }
             loading={sending}
           />
           <Button
             title="Decide later"
             variant="ghost"
-            onPress={() => router.replace(`/properties/${propertyId}`)}
+            onPress={() =>
+              router.replace({
+                pathname: '/properties/[id]',
+                params: { id: propertyId, welcome: '1' },
+              })
+            }
           />
           <Text style={[typography.caption, styles.center]}>
             Included services use your plan; others are priced before you pay — nothing is charged
@@ -333,7 +343,12 @@ function Summary({
       ) : (
         <Button
           title="Go to my property"
-          onPress={() => router.replace(`/properties/${propertyId}`)}
+          onPress={() =>
+            router.replace({
+              pathname: '/properties/[id]',
+              params: { id: propertyId, welcome: '1' },
+            })
+          }
         />
       )}
     </ScrollView>

@@ -83,7 +83,8 @@ export function ServiceRequestList({ propertyId }: { propertyId?: string }) {
   );
 }
 
-function RequestRow({ request: r }: { request: ServiceRequest }) {
+/** One request as a row (service, property, dates, status) — also used on the property page. */
+export function RequestRow({ request: r }: { request: ServiceRequest }) {
   const expected = OPEN_REQUEST_STATUSES.includes(r.status) ? requestExpectedBy(r) : null;
   const done = r.completed_at ?? r.cancelled_at;
   const detail = [

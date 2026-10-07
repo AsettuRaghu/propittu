@@ -21,6 +21,7 @@ import { photosRouter } from './routes/photos.js';
 import { propertiesRouter } from './routes/properties.js';
 import { servicesRouter } from './routes/services.js';
 import { videosRouter } from './routes/videos.js';
+import { weatherRouter } from './routes/weather.js';
 
 export function createApp(): express.Express {
   const app = express();
@@ -89,6 +90,7 @@ export function createApp(): express.Express {
   app.use(analysisRouter);
   app.use(pittuRouter);
   app.use(servicesRouter);
+  app.use(weatherRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

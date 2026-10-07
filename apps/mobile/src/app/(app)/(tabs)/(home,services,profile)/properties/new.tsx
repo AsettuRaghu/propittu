@@ -136,9 +136,10 @@ function AddPropertyForm() {
     }
     if (photos.length > 0) invalidateProperty(propertyId);
 
+    // Straight to the property, which asks for what's still missing (the pin first).
     router.replace({
-      pathname: '/properties/added',
-      params: { id: propertyId, failed: String(failed) },
+      pathname: '/properties/[id]',
+      params: { id: propertyId, welcome: '1', failed: String(failed) },
     });
   };
 
