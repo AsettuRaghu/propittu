@@ -24,7 +24,6 @@ registration is through.
 Waiting on the owner:
 - Photographing deed pages instead of a PDF: proposed (in-app camera, 1–10 pages, server joins them into one PDF); waiting for go-ahead.
 - Configurable Pittu questions + configurable service templates: design together (recommended) or separately.
-- Pittu reading screen: owner feedback to come; "More from your deed" could move above the form.
 - Publishing to testers (EAS preview): ask each time.
 
 Loose ends noted:
