@@ -1387,6 +1387,54 @@ delete from public.properties where id = 'a1a1a1a1-0000-0000-0000-0000000000f1';
 
 -- =====================================================================
 \echo
+\echo '== Service payment and cancellation rules =='
+-- =====================================================================
+
+update public.services set cancel_policy = 'never' where code = 'property_cleaning';
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select public.create_service_request('a1a1a1a1-0000-0000-0000-000000000001',
+  (select id from public.services where code = 'site_inspection'), '') as sr_up \gset
+select tst.ok((select payment_timing from public.service_requests where id = :'sr_up') = 'upfront',
+  'a fixed-price visit is paid upfront (rule copied onto the request)');
+select public.create_service_order(:'sr_up') as ord_up \gset
+select tst.ok((select description from public.orders where id = :'ord_up') = 'Site Inspection',
+  'payment descriptions name the service only (no internal codes)');
+select public.create_service_request('a1a1a1a1-0000-0000-0000-000000000001',
+  (select id from public.services where code = 'repair'), 'Leaking tap') as sr_quote \gset
+select tst.rejects(format('select public.create_service_order(%L)', :'sr_quote'),
+  'an on-quote request has nothing to pay until it is priced');
+select tst.rejects(format('select public.staff_set_request_price(%L, 250000)', :'sr_quote'),
+  'customers cannot set a price');
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+select public.staff_set_request_price(:'sr_quote', 250000);
+select tst.ok((select price_paise from public.service_requests where id = :'sr_quote') = 250000,
+  'staff set the quote on the request');
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rejects(format('select public.create_service_order(%L)', :'sr_quote'),
+  'a quote is paid only once we have confirmed the request');
+select public.create_service_request('a1a1a1a1-0000-0000-0000-000000000001',
+  (select id from public.services where code = 'site_inspection'), 'plan visit') as sr_inc \gset
+reset role;
+update public.service_requests set coverage = 'included', price_paise = null where id = :'sr_inc';
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rejects(format('select public.cancel_service_request(%L)', :'sr_inc'),
+  'a request covered by the plan cannot be cancelled by the customer');
+select public.create_service_request('a1a1a1a1-0000-0000-0000-000000000001',
+  (select id from public.services where code = 'property_cleaning'), '') as sr_never \gset
+select tst.rejects(format('select public.cancel_service_request(%L)', :'sr_never'),
+  'a service set to "never" cannot be cancelled');
+select public.cancel_service_request(:'sr_up');
+select tst.ok((select status from public.service_requests where id = :'sr_up') = 'cancelled',
+  'an extra service can be cancelled while Requested (no refund in the app)');
+reset role;
+update public.services set cancel_policy = 'until_confirmed' where code = 'property_cleaning';
+delete from public.orders where service_request_id in (:'sr_up', :'sr_quote', :'sr_never', :'sr_inc');
+delete from public.service_requests where id in (:'sr_up', :'sr_quote', :'sr_never', :'sr_inc');
+
+-- =====================================================================
+\echo
 \echo '== Deleting a property =='
 -- =====================================================================
 

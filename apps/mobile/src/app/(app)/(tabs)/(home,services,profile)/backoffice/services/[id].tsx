@@ -6,9 +6,14 @@ import {
   SERVICE_FULFILMENTS,
   SERVICE_REACH_LABELS,
   SERVICE_REACHES,
+  CANCEL_POLICIES,
+  PAYMENT_TIMING_LABELS,
+  PAYMENT_TIMINGS,
   staffCan,
   type ServiceFulfilment,
   type ServiceReach,
+  type CancelPolicy,
+  type PaymentTiming,
   type StaffService,
 } from '@propittu/shared';
 import { useBoServices, useBoUpdateService } from '@/api/backoffice';
@@ -47,6 +52,11 @@ function ServiceForm({ service }: { service: StaffService }) {
   const [reach, setReach] = useState<ServiceReach>(service.reach);
   const [includes, setIncludes] = useState(service.includes.join('\n'));
   const [turnaround, setTurnaround] = useState(service.turnaround ?? '');
+  const [paymentTiming, setPaymentTiming] = useState<PaymentTiming>(service.payment_timing);
+  const [cancelPolicy, setCancelPolicy] = useState<CancelPolicy>(service.cancel_policy);
+  const [expectedDays, setExpectedDays] = useState(
+    service.expected_days !== null ? String(service.expected_days) : '',
+  );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -72,6 +82,9 @@ function ServiceForm({ service }: { service: StaffService }) {
           .map((l) => l.trim())
           .filter(Boolean),
         turnaround: turnaround.trim() || null,
+        payment_timing: paymentTiming,
+        cancel_policy: cancelPolicy,
+        expected_days: expectedDays.trim() ? Number(expectedDays) : null,
       },
       {
         onSuccess: () => router.back(),
@@ -158,6 +171,46 @@ function ServiceForm({ service }: { service: StaffService }) {
             New requests use this; existing ones keep theirs.
           </Text>
         </View>
+        <View style={styles.type}>
+          <Text style={typography.overline}>When it is paid</Text>
+          <Segmented
+            options={PAYMENT_TIMINGS.map((t) => ({
+              value: t,
+              label: t === 'upfront' ? 'Booking' : t === 'on_confirmation' ? 'Confirmed' : 'Done',
+            }))}
+            value={paymentTiming}
+            onChange={(v) => canEdit && setPaymentTiming(v)}
+          />
+          <Text style={typography.caption}>
+            {PAYMENT_TIMING_LABELS[paymentTiming]}. Only for extras with a price; quotes are paid
+            once priced and confirmed. New requests use this; existing ones keep theirs.
+          </Text>
+        </View>
+        <View style={styles.type}>
+          <Text style={typography.overline}>Customer can cancel</Text>
+          <Segmented
+            options={CANCEL_POLICIES.map((c) => ({
+              value: c,
+              label: c === 'until_confirmed' ? 'Until confirmed' : 'Never',
+            }))}
+            value={cancelPolicy}
+            onChange={(v) => canEdit && setCancelPolicy(v)}
+          />
+          <Text style={typography.caption}>
+            Never refunded in the app. Requests covered by a plan can never be cancelled by the
+            customer.
+          </Text>
+        </View>
+        <TextField
+          label="Usual working days"
+          optional
+          keyboardType="number-pad"
+          value={expectedDays}
+          onChangeText={setExpectedDays}
+          hint="For “Expected by” on the customer's request. Leave empty to confirm a date instead."
+          error={errors.expected_days}
+          editable={canEdit}
+        />
         <View style={styles.type}>
           <Text style={typography.overline}>Where we offer it</Text>
           <Segmented

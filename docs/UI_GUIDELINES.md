@@ -56,7 +56,10 @@ reworked screen, and check them before handing anything over.
 | Log out anywhere | `useLogout` |
 | Plan badge, plan purchase | `planBadge`, `usePlanPurchase` (`src/lib/plans.ts`) |
 | A service in a list | `ServiceRow` (icon, name, short line, price) |
-| A request in a list | `ServiceRequestList` rows (service, property · date, status badge) |
+| A request in a list | `ServiceRequestList` rows: `ListRow` with `subtitleLines={2}` (long property / community names wrap) and a `detail` line for dates |
+| Payment state of a request | `requestPayment()` (shared) → included · quote pending · pay later · pay now · paid |
+| Can the customer cancel? | `canCustomerCancel()` (shared) — show the action only when it is true; no refunds |
+| Expected date | `requestExpectedBy()` (shared) — the visit date, else start + the service's usual days |
 | "About this…" explainer | `dialog.alert` with `highlights` (✓ list) and `summary` rows |
 | Choosing a day / time | `Select variant="flat"` with the options (no pill grids) |
 
@@ -72,6 +75,10 @@ Never copy a component into a screen; extend the shared one with an option inste
 - Badges carry status at a glance: Trial orange, paid plan green, Locked red; Incomplete only
   when something is missing (no "Complete"/"Verified" noise).
 - Show only what matters (plans compare on properties only; payments are one list).
+- After an action that ends a flow (booking, cancelling), go back to the list — no extra
+  "done" pop-up when the list already shows the result.
+- Names can be long (property names may become community / city / custom names): let them wrap
+  to two lines rather than squeeze them.
 
 ## 6. Before handing over (checklist)
 

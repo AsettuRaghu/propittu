@@ -121,15 +121,18 @@ export function usePlanCheckout() {
   });
 }
 
+/** Pays for an extra service request in the browser (also used right after booking). */
+export const payForServiceRequest = async (requestId: string) =>
+  payInBrowser(
+    await api<CheckoutSession>(`/billing/service-requests/${requestId}/checkout`, {
+      method: 'POST',
+    }),
+  );
+
 export function useServiceCheckout(requestId: string) {
   const refresh = useRefreshAfterPayment();
   return useMutation({
-    mutationFn: async () =>
-      payInBrowser(
-        await api<CheckoutSession>(`/billing/service-requests/${requestId}/checkout`, {
-          method: 'POST',
-        }),
-      ),
+    mutationFn: () => payForServiceRequest(requestId),
     onSettled: refresh,
   });
 }

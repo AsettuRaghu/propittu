@@ -99,6 +99,78 @@ export function requestStatusLabel(
   return SERVICE_REQUEST_STATUS_LABELS[status];
 }
 
+/* ------------------------------------------------------------------ *
+ * Per-service payment and cancellation rules (migration 20261007000005)
+ * ------------------------------------------------------------------ */
+
+export const PAYMENT_TIMINGS = ['upfront', 'on_confirmation', 'on_completion'] as const;
+export type PaymentTiming = (typeof PAYMENT_TIMINGS)[number];
+export const PAYMENT_TIMING_LABELS: Record<PaymentTiming, string> = {
+  upfront: 'Pay when booking',
+  on_confirmation: 'Pay once we confirm',
+  on_completion: 'Pay after the work is done',
+};
+
+export const CANCEL_POLICIES = ['until_confirmed', 'never'] as const;
+export type CancelPolicy = (typeof CANCEL_POLICIES)[number];
+export const CANCEL_POLICY_LABELS: Record<CancelPolicy, string> = {
+  until_confirmed: 'Can be cancelled until we confirm',
+  never: 'Cannot be cancelled once requested',
+};
+
+/** Where a request's payment stands, for the customer. */
+export type RequestPayment =
+  | { state: 'included' }
+  | { state: 'quote_pending' }
+  | { state: 'due'; amount: number }
+  | { state: 'later'; amount: number; timing: PaymentTiming }
+  | { state: 'paid'; amount: number; orderId: string }
+  | { state: 'none' };
+
+export function requestPayment(r: {
+  coverage: 'included' | 'extra';
+  price_paise: number | null;
+  status: ServiceRequestStatus;
+  payment_timing: PaymentTiming;
+  order?: { id: string; status: string } | null;
+}): RequestPayment {
+  if (r.coverage === 'included') return { state: 'included' };
+  if (r.order?.status === 'paid')
+    return { state: 'paid', amount: r.price_paise ?? 0, orderId: r.order.id };
+  if (r.status === 'cancelled') return { state: 'none' };
+  if (r.price_paise === null) return { state: 'quote_pending' };
+  const open =
+    r.payment_timing === 'upfront' ||
+    (r.payment_timing === 'on_confirmation' && r.status !== 'requested') ||
+    (r.payment_timing === 'on_completion' && r.status === 'completed');
+  return open
+    ? { state: 'due', amount: r.price_paise }
+    : { state: 'later', amount: r.price_paise, timing: r.payment_timing };
+}
+
+/** When the work should be done: the visit date once scheduled, else start + usual days. */
+export function requestExpectedBy(r: {
+  scheduled_for: string | null;
+  confirmed_at: string | null;
+  created_at: string;
+  service: { expected_days: number | null };
+}): string | null {
+  if (r.scheduled_for) return r.scheduled_for;
+  const days = r.service.expected_days;
+  if (!days) return null;
+  return new Date(
+    new Date(r.confirmed_at ?? r.created_at).getTime() + days * 86_400_000,
+  ).toISOString();
+}
+
+/** The customer may cancel only while Requested, if the request allows it, and never plan-included ones. */
+export const canCustomerCancel = (r: {
+  status: ServiceRequestStatus;
+  coverage: 'included' | 'extra';
+  cancel_policy: CancelPolicy;
+}) =>
+  r.status === 'requested' && r.coverage !== 'included' && r.cancel_policy === 'until_confirmed';
+
 export const OPEN_REQUEST_STATUSES: ServiceRequestStatus[] = [
   'requested',
   'confirmed',
@@ -282,6 +354,11 @@ export const releaseSlotSchema = z.object({
   reason: z.string().trim().min(3, 'Say why the slot is freed').max(500),
 });
 
+/** Staff: price an "On quote" request (POST /backoffice/requests/:id/price). */
+export const requestPriceSchema = z.object({
+  price_paise: z.number().int().min(100, 'Enter a price').max(100_000_000),
+});
+
 /** Staff decision on a Pittu review (POST /backoffice/properties/:id/review). */
 export const reviewDecisionSchema = z.object({
   status: z.enum(['open', 'done']),
@@ -405,6 +482,9 @@ const serviceFields = {
     .max(10)
     .default([]),
   turnaround: z.string().trim().max(80).nullable().default(null),
+  payment_timing: z.enum(PAYMENT_TIMINGS).default('on_confirmation'),
+  cancel_policy: z.enum(CANCEL_POLICIES).default('until_confirmed'),
+  expected_days: z.number().int().min(1).max(365).nullable().default(null),
   sort_order: z.number().int().min(0).max(10_000),
 };
 

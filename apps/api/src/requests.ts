@@ -20,7 +20,8 @@ import { signDownloads } from './storage.js';
 export const REQUEST_COLUMNS =
   'id, reference, status, fulfilment, description, coverage, price_paise, preferred_date, preferred_slot, scheduled_for, ' +
   'status_note, confirmed_at, completed_at, cancelled_at, cancelled_by, created_at, updated_at, ' +
-  'service:services(id, code, name, category), ' +
+  'payment_timing, cancel_policy, ' +
+  'service:services(id, code, name, category, includes, turnaround, expected_days), ' +
   'property:properties(id, name, city)';
 
 interface ReportRow {

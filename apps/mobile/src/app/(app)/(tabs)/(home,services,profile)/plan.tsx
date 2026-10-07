@@ -11,6 +11,7 @@ import {
   type AccountPlanState,
   type Order,
   type PublicPlan,
+  withoutCodes,
 } from '@propittu/shared';
 import { PullRefresh } from '@/components/PullRefresh';
 import { useOrders } from '@/api/billing';
@@ -356,7 +357,7 @@ function PaymentRow({ order: o }: { order: Order }) {
     <ListRow
       icon="receipt"
       accent={st === 'paid' ? 'teal' : st === 'processing' ? 'amber' : 'slate'}
-      title={o.description}
+      title={withoutCodes(o.description)}
       subtitle={
         (o.period
           ? `${formatDate(o.period.starts_at)} – ${formatDate(o.period.ends_at)}`

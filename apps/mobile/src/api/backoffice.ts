@@ -232,6 +232,15 @@ export function useBoSaveReport(id: string) {
 }
 
 /** Shared shape for request mutations that answer with the fresh detail. */
+/** Set or change the quote of an extra service request. */
+export const useBoSetRequestPrice = (id: string) =>
+  useRequestMutation(id, (price_paise: number) =>
+    api<BackofficeRequestDetail>(`/backoffice/requests/${id}/price`, {
+      method: 'POST',
+      body: { price_paise },
+    }),
+  );
+
 function useRequestMutation<T>(id: string, fn: (input: T) => Promise<BackofficeRequestDetail>) {
   const qc = useQueryClient();
   const refresh = useRefresh();

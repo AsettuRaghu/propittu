@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { formatPrice, ORDER_DISPLAY_LABELS, SUPPORT_EMAIL } from '@propittu/shared';
+import { formatPrice, ORDER_DISPLAY_LABELS, SUPPORT_EMAIL, withoutCodes } from '@propittu/shared';
 import { useOrder } from '@/api/support';
 import { Icon } from '@/components/Icon';
 import { ErrorState, LoadingState } from '@/components/States';
@@ -18,7 +18,7 @@ export default function ReceiptScreen() {
   const paid = o.status === 'paid';
   const failed = o.display_status === 'failed';
   const rows: [string, string | null][] = [
-    ['For', o.description],
+    ['For', withoutCodes(o.description)],
     ['Order', o.reference],
     [paid ? 'Paid on' : 'Started on', formatDate(o.paid_at ?? o.created_at)],
     [

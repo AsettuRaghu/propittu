@@ -1,55 +1,49 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
+  canCustomerCancel,
   formatPrice,
+  PAYMENT_TIMING_LABELS,
   PREFERRED_SLOT_LABELS,
+  requestExpectedBy,
+  requestPayment,
   requestStatusLabel,
   type ServiceRequestDetail,
 } from '@propittu/shared';
-import { PullRefresh } from '@/components/PullRefresh';
 import { showPaymentOutcome, useServiceCheckout } from '@/api/billing';
 import { useCancelServiceRequest, useServiceRequest } from '@/api/queries';
-import { dialog, toast } from '@/components/Dialog';
+import { dialog } from '@/components/Dialog';
 import { Icon, type IconName } from '@/components/Icon';
-import { ErrorState, LoadingState } from '@/components/States';
-import { Badge, Button, Card, IconTile, SectionTitle } from '@/components/ui';
 import { OutcomeView } from '@/components/OutcomeView';
+import { PageHeader } from '@/components/PageHeader';
+import { PullRefresh } from '@/components/PullRefresh';
+import { ErrorState, LoadingState } from '@/components/States';
 import { VisitReportView } from '@/components/VisitReportView';
+import { Badge, Button, KeyValue, ListGroup, ListRow } from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
-import { serviceVisual, STATUS_ICONS, STATUS_TONES } from '@/lib/icons';
-import { accents, colors, font, space, typography } from '@/theme';
+import { STATUS_TONES } from '@/lib/icons';
+import { colors, space, typography } from '@/theme';
 
 /**
- * Service request (M4): what, where, its timeline step by step, the cost
- * and payment, and — once completed — the visit report.
+ * A service request, flat like Profile: what and where, anything we need
+ * from you, the details, payment, the steps, what's included, your notes,
+ * the result — and help (cancel only where this request allows it).
  */
 export default function ServiceRequestScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { data: request, isPending, error, refetch } = useServiceRequest(id);
-  const cancel = useCancelServiceRequest(id);
+  const { data: r, isPending, error, refetch } = useServiceRequest(id);
 
   if (isPending) return <LoadingState />;
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
 
-  const v = serviceVisual(request.service.code, request.service.category);
-
-  const confirmCancel = async () => {
-    const ok = await dialog.confirm({
-      title: 'Cancel this request?',
-      message: 'You can always book again later.',
-      confirmLabel: 'Cancel request',
-      cancelLabel: 'Keep it',
-      tone: 'danger',
-      icon: 'cancelled',
-    });
-    if (!ok) return;
-    cancel.mutate(undefined, {
-      onSuccess: () => toast('Request cancelled', 'info'),
-      onError: (err) =>
-        void dialog.alert({ title: "Couldn't cancel", message: errorMessage(err), tone: 'danger' }),
-    });
-  };
+  const expected = requestExpectedBy(r);
+  const preferred = [
+    r.preferred_date ? formatDate(r.preferred_date) : null,
+    r.preferred_slot ? PREFERRED_SLOT_LABELS[r.preferred_slot] : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <ScrollView
@@ -57,138 +51,98 @@ export default function ServiceRequestScreen() {
       showsVerticalScrollIndicator={false}
       refreshControl={<PullRefresh onRefresh={() => refetch()} />}
     >
-      {/* Hero */}
-      <Card style={styles.hero}>
-        <View style={styles.heroTop}>
-          <IconTile icon={v.icon} accent={v.accent} size={52} />
-          <View style={styles.flex}>
-            <Text style={typography.title} numberOfLines={1}>
-              {request.service.name}
-            </Text>
-            <Text style={typography.small} numberOfLines={1}>
-              {request.property?.name ?? 'Property removed'} · {formatDate(request.created_at)}
-            </Text>
-          </View>
-        </View>
-        <View style={styles.heroRow}>
+      <PageHeader
+        title={r.service.name}
+        badge={
           <Badge
-            label={requestStatusLabel(request.status, request.fulfilment)}
-            tone={STATUS_TONES[request.status]}
-            icon={STATUS_ICONS[request.status]}
+            label={requestStatusLabel(r.status, r.fulfilment)}
+            tone={STATUS_TONES[r.status]}
+            size="lg"
           />
-          <Text style={styles.cost}>{costLabel(request)}</Text>
-        </View>
-        {request.status_note && request.status !== 'awaiting_customer' ? (
-          <View style={styles.note}>
-            <Icon name="chat" size={16} color={colors.primary} />
-            <Text style={[typography.body, styles.flex]}>{request.status_note}</Text>
+        }
+        subtitle={r.property?.name ?? 'Property removed'}
+      />
+
+      {r.status === 'awaiting_customer' ? (
+        <ListGroup title="We need something from you" plain>
+          <View style={styles.inner}>
+            {r.status_note ? <Text style={typography.body}>{r.status_note}</Text> : null}
+            {r.info_ticket ? (
+              <Button
+                title="Reply"
+                icon="chat"
+                size="sm"
+                onPress={() => router.push(`/support/${r.info_ticket?.id}`)}
+              />
+            ) : null}
           </View>
-        ) : null}
-      </Card>
-
-      {request.status === 'awaiting_customer' ? <NeedsYou request={request} /> : null}
-
-      <PaymentCard request={request} />
-
-      <View>
-        <SectionTitle title="Progress" />
-        <Card>
-          <Timeline request={request} />
-        </Card>
-      </View>
-
-      {request.description ? (
-        <View>
-          <SectionTitle title="Your notes" />
-          <Card>
-            <Text style={typography.body}>{request.description}</Text>
-          </Card>
-        </View>
+        </ListGroup>
+      ) : r.status_note ? (
+        <ListGroup title="Update from our team" plain>
+          <View style={styles.inner}>
+            <Text style={typography.body}>{r.status_note}</Text>
+          </View>
+        </ListGroup>
       ) : null}
 
-      {request.report ? <VisitReportView report={request.report} /> : null}
-      {request.outcome ? <OutcomeView outcome={request.outcome} /> : null}
+      <ListGroup title="Details" plain>
+        <View style={[styles.inner, styles.facts]}>
+          <KeyValue label="Requested" value={formatDate(r.created_at)} />
+          <KeyValue label="Preferred" value={preferred || null} />
+          {r.status !== 'cancelled' && r.status !== 'completed' ? (
+            <KeyValue
+              label={r.scheduled_for ? 'Visit on' : 'Expected by'}
+              value={expected ? formatDate(expected) : 'We’ll confirm a date with you'}
+            />
+          ) : null}
+          {r.service.turnaround ? (
+            <KeyValue label="Usually takes" value={r.service.turnaround} />
+          ) : null}
+        </View>
+      </ListGroup>
 
-      <View style={styles.actions}>
-        {request.status === 'requested' ? (
-          <Button
-            title="Cancel request"
-            variant="outline"
-            onPress={() => void confirmCancel()}
-            style={styles.flex}
-          />
-        ) : null}
-        <Button
-          title="Contact support"
-          variant="secondary"
-          icon="support"
-          style={styles.flex}
-          onPress={() =>
-            router.push({
-              pathname: '/support/new',
-              params: {
-                requestId: request.id,
-                category: 'service_request',
-                subject: `${request.service.name}${request.property ? ` · ${request.property.name}` : ''}`,
-              },
-            })
-          }
-        />
-      </View>
+      <Payment request={r} />
+
+      <ListGroup title="Steps" plain>
+        <View style={styles.inner}>
+          <Steps request={r} />
+        </View>
+      </ListGroup>
+
+      {r.service.includes.length ? (
+        <ListGroup title="What’s included" plain>
+          <View style={[styles.inner, styles.facts]}>
+            {r.service.includes.map((line) => (
+              <View key={line} style={styles.point}>
+                <Icon name="check" size={16} color={colors.success} strokeWidth={2.5} />
+                <Text style={[typography.body, styles.flex]}>{line}</Text>
+              </View>
+            ))}
+          </View>
+        </ListGroup>
+      ) : null}
+
+      {r.description ? (
+        <ListGroup title="Your notes" plain>
+          <View style={styles.inner}>
+            <Text style={typography.body}>{r.description}</Text>
+          </View>
+        </ListGroup>
+      ) : null}
+
+      {r.report ? <VisitReportView report={r.report} /> : null}
+      {r.outcome ? <OutcomeView outcome={r.outcome} /> : null}
+
+      <Help request={r} />
     </ScrollView>
   );
 }
 
-function costLabel(r: ServiceRequestDetail): string {
-  if (r.coverage === 'included') return 'Included in plan';
-  return r.price_paise !== null ? formatPrice(r.price_paise) : 'On quote';
-}
-
-/** Extra Services: pay only after Propittu confirms (no refunds for unconfirmed slots). */
-function PaymentCard({ request }: { request: ServiceRequestDetail }) {
-  const pay = useServiceCheckout(request.id);
-  if (
-    request.coverage !== 'extra' ||
-    request.price_paise === null ||
-    request.status === 'cancelled'
-  ) {
-    return null;
-  }
-  const price = formatPrice(request.price_paise);
-
-  if (request.order?.status === 'paid') {
-    const orderId = request.order.id;
-    return (
-      <Pressable
-        onPress={() => router.push(`/receipts/${orderId}`)}
-        accessibilityRole="button"
-        style={[styles.payBox, { backgroundColor: accents.teal.bg }]}
-      >
-        <Icon name="success" size={22} color={accents.teal.fg} />
-        <View style={styles.flex}>
-          <Text style={[styles.payTitle, { color: accents.teal.fg }]}>Paid {price}</Text>
-          <Text style={typography.small}>View receipt</Text>
-        </View>
-        <Icon name="chevron" size={18} color={accents.teal.fg} />
-      </Pressable>
-    );
-  }
-
-  if (request.status === 'requested') {
-    return (
-      <View style={[styles.payBox, { backgroundColor: accents.sky.bg }]}>
-        <Icon name="wallet" size={22} color={accents.sky.fg} />
-        <View style={styles.flex}>
-          <Text style={[styles.payTitle, { color: accents.sky.fg }]}>
-            {price} · pay after we confirm
-          </Text>
-          <Text style={typography.small}>
-            Nothing to pay yet. We&apos;ll confirm the slot first.
-          </Text>
-        </View>
-      </View>
-    );
-  }
+/** Where the payment stands, and the Pay button when it's time. */
+function Payment({ request: r }: { request: ServiceRequestDetail }) {
+  const pay = useServiceCheckout(r.id);
+  const p = requestPayment(r);
+  if (p.state === 'none') return null;
 
   const start = () =>
     pay.mutate(undefined, {
@@ -202,44 +156,97 @@ function PaymentCard({ request }: { request: ServiceRequestDetail }) {
     });
 
   return (
-    <Card style={styles.payCard}>
-      <View style={styles.payRow}>
-        <IconTile icon="card" accent="sky" size={40} />
-        <View style={styles.flex}>
-          <Text style={typography.bodyStrong}>
-            {request.fulfilment === 'assistance'
-              ? 'We’ve accepted your request'
-              : 'Your visit is confirmed'}
-          </Text>
-          <Text style={typography.small}>Pay {price} securely by UPI or card.</Text>
-        </View>
-      </View>
-      <Button title={`Pay ${price}`} icon="lock" onPress={start} loading={pay.isPending} />
-    </Card>
+    <ListGroup title="Payment" plain>
+      {p.state === 'included' ? (
+        <ListRow icon="success" accent="teal" title="Included in your plan" />
+      ) : p.state === 'quote_pending' ? (
+        <ListRow
+          icon="rupee"
+          accent="sky"
+          title="Price on quote"
+          subtitle="We’ll share the price here before any work starts"
+          subtitleLines={2}
+        />
+      ) : p.state === 'later' ? (
+        <ListRow
+          icon="rupee"
+          accent="sky"
+          title={formatPrice(p.amount)}
+          subtitle={PAYMENT_TIMING_LABELS[p.timing]}
+        />
+      ) : p.state === 'paid' ? (
+        <ListRow
+          icon="success"
+          accent="teal"
+          title={`Paid ${formatPrice(p.amount)}`}
+          subtitle="View receipt"
+          onPress={() => router.push(`/receipts/${p.orderId}`)}
+        />
+      ) : (
+        <ListRow
+          icon="card"
+          accent="sky"
+          title={`${formatPrice(p.amount)} to pay`}
+          subtitle="Secure UPI or card payment"
+          right={<Button title="Pay" size="sm" loading={pay.isPending} onPress={start} />}
+        />
+      )}
+    </ListGroup>
   );
 }
 
-/** "Need info from you": what Propittu asked, and one tap to reply (with files). */
-function NeedsYou({ request }: { request: ServiceRequestDetail }) {
-  const ticket = request.info_ticket;
+/** Contact support, and — only where this request allows it — cancel (no refunds). */
+function Help({ request: r }: { request: ServiceRequestDetail }) {
+  const cancel = useCancelServiceRequest(r.id);
+  const paid = requestPayment(r).state === 'paid';
+
+  const confirmCancel = async () => {
+    const ok = await dialog.confirm({
+      title: 'Cancel this request?',
+      message: paid
+        ? 'Payments are not refunded when you cancel. You can book again any time.'
+        : 'You can book again any time.',
+      confirmLabel: 'Cancel request',
+      cancelLabel: 'Keep it',
+      tone: 'danger',
+      icon: 'cancelled',
+    });
+    if (!ok) return;
+    cancel.mutate(undefined, {
+      // Straight back to My requests — no extra message.
+      onSuccess: () => (router.canGoBack() ? router.back() : router.replace('/services')),
+      onError: (err) =>
+        void dialog.alert({ title: "Couldn't cancel", message: errorMessage(err), tone: 'danger' }),
+    });
+  };
+
   return (
-    <Card style={styles.needs}>
-      <View style={styles.payRow}>
-        <IconTile icon="chat" accent="coral" size={40} />
-        <View style={styles.flex}>
-          <Text style={typography.bodyStrong}>We need something from you</Text>
-          <Text style={typography.small}>Reply so we can carry on — you can attach files.</Text>
-        </View>
-      </View>
-      {request.status_note ? (
-        <View style={styles.ask}>
-          <Text style={typography.body}>{request.status_note}</Text>
-        </View>
+    <ListGroup title="Need help?" plain>
+      <ListRow
+        icon="support"
+        accent="teal"
+        title="Contact support"
+        onPress={() =>
+          router.push({
+            pathname: '/support/new',
+            params: {
+              requestId: r.id,
+              category: 'service_request',
+              subject: `${r.service.name}${r.property ? ` · ${r.property.name}` : ''}`,
+            },
+          })
+        }
+      />
+      {canCustomerCancel(r) ? (
+        <ListRow
+          icon="cancelled"
+          title={cancel.isPending ? 'Cancelling…' : 'Cancel request'}
+          destructive
+          showChevron={false}
+          onPress={() => void confirmCancel()}
+        />
       ) : null}
-      {ticket ? (
-        <Button title="Reply" icon="chat" onPress={() => router.push(`/support/${ticket.id}`)} />
-      ) : null}
-    </Card>
+    </ListGroup>
   );
 }
 
@@ -252,36 +259,31 @@ interface Step {
   current?: boolean;
 }
 
-function Timeline({ request }: { request: ServiceRequestDetail }) {
-  const s = request.status;
-  const assistance = request.fulfilment === 'assistance';
+/** The steps for this kind of request, with dates as they happen. */
+function Steps({ request: r }: { request: ServiceRequestDetail }) {
+  const s = r.status;
+  const assistance = r.fulfilment === 'assistance';
   const order = assistance
     ? ['requested', 'confirmed', 'in_progress', 'completed']
     : ['requested', 'confirmed', 'scheduled', 'in_progress', 'completed'];
   // "Need info from you" sits on the "Working on it" step.
   const at = s === 'awaiting_customer' ? 'in_progress' : s;
   const reached = (k: string) => s !== 'cancelled' && order.indexOf(at) >= order.indexOf(k);
-  const when = [
-    request.preferred_date ? formatDate(request.preferred_date) : null,
-    request.preferred_slot ? PREFERRED_SLOT_LABELS[request.preferred_slot] : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
-  const result = request.report ? ' · report below' : request.outcome ? ' · outcome below' : '';
+  const result = r.report ? ' · report below' : r.outcome ? ' · result below' : '';
 
   const steps: Step[] = [
     {
       key: 'requested',
       icon: 'clock',
       title: 'Requested',
-      detail: `${formatDate(request.created_at)}${when ? ` · preferred ${when}` : ''}`,
+      detail: formatDate(r.created_at),
       done: true,
     },
     {
       key: 'confirmed',
       icon: 'check',
       title: 'Accepted by our team',
-      detail: request.confirmed_at ? formatDate(request.confirmed_at) : 'Usually within a day',
+      detail: r.confirmed_at ? formatDate(r.confirmed_at) : 'Usually within a working day',
       done: reached('confirmed'),
     },
     ...(assistance
@@ -291,27 +293,22 @@ function Timeline({ request }: { request: ServiceRequestDetail }) {
             key: 'scheduled',
             icon: 'calendar' as const,
             title: 'Visit scheduled',
-            detail: request.scheduled_for ? formatDate(request.scheduled_for) : null,
+            detail: r.scheduled_for ? formatDate(r.scheduled_for) : null,
             done: reached('scheduled'),
           },
         ]),
     {
       key: 'in_progress',
       icon: s === 'awaiting_customer' ? 'chat' : 'bolt',
-      title: assistance ? 'Working on it' : 'In progress',
-      detail:
-        s === 'awaiting_customer'
-          ? 'Waiting for your reply'
-          : s === 'in_progress'
-            ? 'Our team is on it'
-            : null,
+      title: assistance ? 'Working on it' : 'Visit in progress',
+      detail: s === 'awaiting_customer' ? 'Waiting for your reply' : null,
       done: reached('in_progress'),
     },
     {
       key: 'completed',
       icon: 'success',
       title: 'Completed',
-      detail: request.completed_at ? `${formatDate(request.completed_at)}${result}` : null,
+      detail: r.completed_at ? `${formatDate(r.completed_at)}${result}` : null,
       done: reached('completed'),
     },
   ];
@@ -319,8 +316,8 @@ function Timeline({ request }: { request: ServiceRequestDetail }) {
     steps.splice(1, steps.length - 1, {
       key: 'cancelled',
       icon: 'cancelled',
-      title: request.cancelled_by === 'customer' ? 'Cancelled by you' : 'Cancelled',
-      detail: request.cancelled_at ? formatDate(request.cancelled_at) : null,
+      title: r.cancelled_by === 'customer' ? 'Cancelled by you' : 'Cancelled',
+      detail: r.cancelled_at ? formatDate(r.cancelled_at) : null,
       done: true,
     });
   }
@@ -378,30 +375,11 @@ function Timeline({ request }: { request: ServiceRequestDetail }) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
-  content: { padding: space.lg, paddingTop: space.xs, gap: space.xl, paddingBottom: space.xxl },
-  hero: { gap: space.md },
-  heroTop: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-  heroRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  cost: { fontSize: font(15), fontWeight: '800', color: colors.text },
-  note: {
-    flexDirection: 'row',
-    gap: space.sm,
-    padding: space.md,
-    borderRadius: 14,
-    backgroundColor: colors.primarySoft,
-  },
-  payBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-    padding: space.lg,
-    borderRadius: 20,
-  },
-  payTitle: { fontSize: font(15), fontWeight: '800' },
-  payCard: { gap: space.md },
-  needs: { gap: space.md, borderWidth: 1.5, borderColor: accents.coral.fg },
-  ask: { backgroundColor: colors.surfaceMuted, borderRadius: 14, padding: space.md },
-  payRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  content: { padding: space.lg, paddingTop: space.md, gap: space.xl, paddingBottom: space.xxl },
+  // Same 14 pt inset as list rows, so content lines up under each heading.
+  inner: { paddingHorizontal: 14, paddingVertical: space.xs, gap: space.md },
+  facts: { gap: space.sm },
+  point: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
   step: { flexDirection: 'row', gap: space.md },
   rail: { alignItems: 'center', width: 24 },
   dot: {
@@ -416,6 +394,4 @@ const styles = StyleSheet.create({
   dotCurrent: { borderColor: colors.primary, borderWidth: 3 },
   line: { flex: 1, width: 2, backgroundColor: colors.border, marginVertical: 2 },
   stepBody: { flex: 1, gap: 2, paddingTop: 2 },
-  cancel: { alignItems: 'center' },
-  actions: { flexDirection: 'row', gap: space.sm },
 });

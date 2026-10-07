@@ -10,10 +10,14 @@ import {
   reachProblem,
   SERVICE_CATEGORIES,
   SERVICE_CATEGORY_LABELS,
+  CANCEL_POLICY_LABELS,
+  requestPayment,
   SERVICE_FULFILMENT_LABELS,
   type CatalogueService,
+  type PaymentTiming,
   type PreferredSlot,
 } from '@propittu/shared';
+import { payForServiceRequest } from '@/api/billing';
 import { useCreateServiceRequest, useProperties, useServices } from '@/api/queries';
 import { toIsoDate } from '@/components/DateField';
 import { dialog } from '@/components/Dialog';
@@ -65,9 +69,18 @@ function costOf(s: CatalogueService): { title: string; text: string } {
   if (s.coverage === 'unavailable') {
     return { title: 'Not on your plan', text: 'Upgrade your plan to request this service.' };
   }
-  return s.price_paise !== null
-    ? { title: servicePrice(s), text: 'Pay after we confirm — by UPI or card, in the app.' }
-    : { title: 'Price on quote', text: 'We share the price before any work starts.' };
+  if (s.price_paise === null) {
+    return {
+      title: 'Price on quote',
+      text: 'We share the price here before any work starts; you pay it in the app.',
+    };
+  }
+  const when: Record<PaymentTiming, string> = {
+    upfront: 'Paid when you book — by UPI or card, in the app.',
+    on_confirmation: 'Pay once we confirm — by UPI or card, in the app.',
+    on_completion: 'Pay after the work is done — by UPI or card, in the app.',
+  };
+  return { title: servicePrice(s), text: when[s.payment_timing] };
 }
 
 /** "About this service": what it includes, what it costs, how long it takes. */
@@ -83,6 +96,7 @@ function showAbout(s: CatalogueService) {
       { label: 'Cost', value: costOf(s).title },
       ...(s.turnaround ? [{ label: 'Usually takes', value: s.turnaround }] : []),
       { label: 'How', value: SERVICE_FULFILMENT_LABELS[s.fulfilment] },
+      { label: 'Cancelling', value: CANCEL_POLICY_LABELS[s.cancel_policy] },
     ],
     buttonLabel: 'Got it',
   });
@@ -162,13 +176,24 @@ export default function RequestServiceScreen() {
         preferred_slot: onSite && slot !== ANY ? (slot as PreferredSlot) : null,
       },
       {
-        onSuccess: async () => {
+        onSuccess: async (request) => {
+          // Pay-when-booking services go straight to payment.
+          let paid: boolean | null = null;
+          if (requestPayment(request).state === 'due') {
+            try {
+              paid = (await payForServiceRequest(request.id)).checkout_state === 'paid';
+            } catch {
+              paid = false;
+            }
+          }
           await dialog.alert({
-            title: 'Request registered',
+            title: paid === false ? 'Request registered — payment pending' : 'Request registered',
             message:
-              'We’ll confirm it with you. Follow it any time in My requests on the Services tab.',
-            icon: 'success',
-            tone: 'success',
+              paid === false
+                ? 'Complete the payment from My requests on the Services tab so we can start.'
+                : 'We’ll confirm it with you. Follow it any time in My requests on the Services tab.',
+            icon: paid === false ? 'wallet' : 'success',
+            tone: paid === false ? 'warning' : 'success',
           });
           if (router.canGoBack()) router.back();
           else router.replace('/services');
@@ -278,7 +303,13 @@ export default function RequestServiceScreen() {
 
       <Footer>
         <Button
-          title="Request this service"
+          title={
+            service.coverage === 'extra' &&
+            service.payment_timing === 'upfront' &&
+            service.price_paise !== null
+              ? `Request and pay ${servicePrice(service)}`
+              : 'Request this service'
+          }
           icon="arrow"
           onPress={submit}
           loading={create.isPending}

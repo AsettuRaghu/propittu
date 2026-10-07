@@ -38,7 +38,7 @@ import {
 export const servicesRouter = Router();
 
 const SERVICE_COLUMNS =
-  'id, code, name, category, description, sort_order, price_paise, is_extra_available, fulfilment, reach, includes, turnaround';
+  'id, code, name, category, description, sort_order, price_paise, is_extra_available, fulfilment, reach, includes, turnaround, payment_timing, cancel_policy, expected_days';
 
 /** Included allowance left per service code for this Account (null = not included). */
 async function allowances(

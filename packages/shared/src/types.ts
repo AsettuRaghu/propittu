@@ -1,7 +1,7 @@
 import type { CompletionItem, PropertyCompletion } from './completion';
 import type { PlanSummary } from './plans';
 import type { PropertyReach, ServiceReach } from './reach';
-import type { ServiceFulfilment } from './services';
+import type { CancelPolicy, PaymentTiming, ServiceFulfilment } from './services';
 import type {
   AccountRole,
   AccountStatus,
@@ -213,6 +213,12 @@ export interface Service {
   includes: string[];
   /** How long it usually takes, e.g. "Within 3–5 days of confirming". */
   turnaround: string | null;
+  /** When an extra is paid: right after booking, once confirmed, or after the work. */
+  payment_timing: PaymentTiming;
+  /** Whether the customer may cancel it (only ever while Requested). */
+  cancel_policy: CancelPolicy;
+  /** Usual working days, for "Expected by" (null = we confirm a date). */
+  expected_days: number | null;
 }
 
 export interface ServiceRequest {
@@ -225,7 +231,13 @@ export interface ServiceRequest {
   description: string;
   created_at: string;
   updated_at: string;
-  service: Pick<Service, 'id' | 'code' | 'name' | 'category'>;
+  service: Pick<
+    Service,
+    'id' | 'code' | 'name' | 'category' | 'includes' | 'turnaround' | 'expected_days'
+  >;
+  /** The service's rules when the request was made (later edits don't change them). */
+  payment_timing: PaymentTiming;
+  cancel_policy: CancelPolicy;
   /** Decided by the server when the request is opened (M4). */
   coverage: 'included' | 'extra';
   /** Extra price snapshot in paise; null when Included or priced after review. */

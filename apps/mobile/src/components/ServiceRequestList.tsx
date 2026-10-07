@@ -1,48 +1,45 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
-import { OPEN_REQUEST_STATUSES, requestStatusLabel, type ServiceRequest } from '@propittu/shared';
+import {
+  OPEN_REQUEST_STATUSES,
+  requestExpectedBy,
+  requestStatusLabel,
+  type ServiceRequest,
+} from '@propittu/shared';
 import { useServiceRequests } from '@/api/queries';
 import { formatDate } from '@/lib/format';
 import { serviceVisual, STATUS_TONES } from '@/lib/icons';
 import { colors, space } from '@/theme';
 import { PullRefresh } from './PullRefresh';
-import { Select } from './Select';
 import { EmptyState, ErrorState, LoadingState } from './States';
 import { Badge, ListRow, Segmented } from './ui';
 
-type Tab = 'active' | 'history' | 'all';
-type Range = '3' | '6' | '12' | 'all';
-const MONTH = 30 * 86_400_000;
-const RANGES: { value: Range; label: string }[] = [
-  { value: '3', label: 'Last 3 months' },
-  { value: '6', label: 'Last 6 months' },
-  { value: '12', label: 'Last 12 months' },
-  { value: 'all', label: 'All time' },
-];
+type Tab = 'active' | 'history';
+/** History shows the last 18 months; older requests are kept, just not listed. */
+const HISTORY_MONTHS = 18;
 
 /**
- * Service requests (§8.4), flat: Active · History · All, a period for
- * history, and one row per request (service, property and date, status).
- * Everything is kept — old requests are never deleted.
+ * Service requests (§8.4), flat: Active (still open) · History (closed,
+ * last 18 months, newest first). One row each: the service, the property
+ * (may wrap — names can be long), when it was requested and is expected,
+ * and its status.
  */
 export function ServiceRequestList({ propertyId }: { propertyId?: string }) {
   const { data, isPending, error, refetch } = useServiceRequests(propertyId);
   const [tab, setTab] = useState<Tab>('active');
-  const [range, setRange] = useState<Range>('all');
-  const [now] = useState(() => Date.now());
+  const [since] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - HISTORY_MONTHS);
+    return d.getTime();
+  });
 
   if (isPending) return <LoadingState />;
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
 
   const open = (r: ServiceRequest) => OPEN_REQUEST_STATUSES.includes(r.status);
-  const since = range === 'all' ? null : now - Number(range) * MONTH;
   const rows = data.filter((r) =>
-    tab === 'active'
-      ? open(r)
-      : tab === 'history'
-        ? !open(r) && (since === null || new Date(r.created_at).getTime() >= since)
-        : true,
+    tab === 'active' ? open(r) : !open(r) && new Date(r.created_at).getTime() >= since,
   );
   const activeCount = data.filter(open).length;
 
@@ -60,20 +57,10 @@ export function ServiceRequestList({ propertyId }: { propertyId?: string }) {
             options={[
               { value: 'active', label: activeCount ? `Active · ${activeCount}` : 'Active' },
               { value: 'history', label: 'History' },
-              { value: 'all', label: 'All' },
             ]}
             value={tab}
             onChange={setTab}
           />
-          {tab === 'history' ? (
-            <Select
-              variant="flat"
-              label="Period"
-              value={range}
-              options={RANGES}
-              onChange={(v) => setRange(v ?? 'all')}
-            />
-          ) : null}
         </View>
       }
       ItemSeparatorComponent={() => <View style={styles.divider} />}
@@ -83,11 +70,11 @@ export function ServiceRequestList({ propertyId }: { propertyId?: string }) {
           <EmptyState
             icon="requests"
             accent="coral"
-            title={tab === 'active' ? 'Nothing in progress' : 'No requests here'}
+            title={tab === 'active' ? 'Nothing in progress' : 'No past requests'}
             message={
               tab === 'active'
                 ? 'Requests you book appear here until they are done.'
-                : 'Completed and cancelled requests are kept here for reference.'
+                : 'Completed and cancelled requests from the last 18 months appear here.'
             }
           />
         </View>
@@ -97,14 +84,25 @@ export function ServiceRequestList({ propertyId }: { propertyId?: string }) {
 }
 
 function RequestRow({ request: r }: { request: ServiceRequest }) {
-  const when = r.scheduled_for
-    ? `Visit ${formatDate(r.scheduled_for)}`
-    : `Requested ${formatDate(r.created_at)}`;
+  const expected = OPEN_REQUEST_STATUSES.includes(r.status) ? requestExpectedBy(r) : null;
+  const done = r.completed_at ?? r.cancelled_at;
+  const detail = [
+    `Requested ${formatDate(r.created_at)}`,
+    expected
+      ? `${r.scheduled_for ? 'Visit' : 'Expected by'} ${formatDate(expected)}`
+      : done
+        ? `${r.status === 'cancelled' ? 'Cancelled' : 'Done'} ${formatDate(done)}`
+        : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
   return (
     <ListRow
       {...serviceVisual(r.service.code, r.service.category)}
       title={r.service.name}
-      subtitle={`${r.property?.name ?? 'Property removed'} · ${when}`}
+      subtitle={r.property?.name ?? 'Property removed'}
+      subtitleLines={2}
+      detail={detail}
       right={
         <Badge label={requestStatusLabel(r.status, r.fulfilment)} tone={STATUS_TONES[r.status]} />
       }
@@ -117,7 +115,7 @@ function RequestRow({ request: r }: { request: ServiceRequest }) {
 const styles = StyleSheet.create({
   // Rows bleed by their 14 pt padding so their content sits on the 16 pt page edge.
   list: { paddingHorizontal: 2, paddingTop: space.md, paddingBottom: space.xxl },
-  header: { gap: space.md, paddingHorizontal: 14, marginBottom: space.sm },
+  header: { paddingHorizontal: 14, marginBottom: space.sm },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
   empty: { minHeight: 260 },
 });

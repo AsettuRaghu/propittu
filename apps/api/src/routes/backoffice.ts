@@ -8,6 +8,7 @@ import {
   documentStatusSchema,
   extendPlanSchema,
   releaseSlotSchema,
+  requestPriceSchema,
   areaPincodesSchema,
   createAreaSchema,
   createStateSchema,
@@ -859,6 +860,30 @@ backofficeRouter.post('/requests/:id/ask', allow('requests.manage'), async (req,
 });
 
 /* POST /backoffice/requests/:id/fulfilment {fulfilment} — switch on-site ⇄ paperwork */
+/* POST /backoffice/requests/:id/price {price_paise} — the quote for an "On quote" request */
+backofficeRouter.post('/requests/:id/price', allow('requests.manage'), async (req, res) => {
+  const ctx = auth(req);
+  const id = uuidParam(req.params.id, 'Service request');
+  const { price_paise } = requestPriceSchema.parse(req.body);
+  const current = await loadRequestRow(ctx.db, id);
+  const { error } = await ctx.db.rpc('staff_set_request_price', {
+    p_request: id,
+    p_price_paise: price_paise,
+  });
+  if (error?.code === '23514' || error?.code === '22023') {
+    throw new HttpError(409, 'CONFLICT', error.message);
+  }
+  must({ data: null, error });
+  await staffAudit(
+    ctx,
+    'staff.service_request.priced',
+    current.account_id,
+    { type: 'service_request', id },
+    { price_paise },
+  );
+  ok(res, await loadRequestDetail(ctx.db, id));
+});
+
 backofficeRouter.post('/requests/:id/fulfilment', allow('requests.manage'), async (req, res) => {
   const ctx = auth(req);
   const id = uuidParam(req.params.id, 'Service request');
@@ -1183,7 +1208,7 @@ backofficeRouter.post('/documents/:id/status', allow('documents.review'), async 
  * ================================================================== */
 
 const STAFF_SERVICE_COLUMNS =
-  'id, code, name, category, description, sort_order, price_paise, is_extra_available, fulfilment, reach, includes, turnaround, is_active';
+  'id, code, name, category, description, sort_order, price_paise, is_extra_available, fulfilment, reach, includes, turnaround, payment_timing, cancel_policy, expected_days, is_active';
 
 /* GET /backoffice/services — including inactive ones */
 backofficeRouter.get('/services', async (req, res) => {

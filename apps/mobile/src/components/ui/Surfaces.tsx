@@ -146,6 +146,8 @@ export function ListRow({
   accent = 'indigo',
   title,
   subtitle,
+  subtitleLines = 1,
+  detail,
   value,
   onPress,
   destructive = false,
@@ -156,6 +158,10 @@ export function ListRow({
   accent?: Accent;
   title: string;
   subtitle?: string | null;
+  /** Lines the subtitle may use before it is cut (long names wrap). */
+  subtitleLines?: number;
+  /** An optional third line (e.g. dates), in caption style. */
+  detail?: string | null;
   value?: string | null;
   onPress?: () => void;
   destructive?: boolean;
@@ -173,8 +179,13 @@ export function ListRow({
           {title}
         </Text>
         {subtitle ? (
-          <Text style={typography.small} numberOfLines={1}>
+          <Text style={typography.small} numberOfLines={subtitleLines}>
             {subtitle}
+          </Text>
+        ) : null}
+        {detail ? (
+          <Text style={typography.caption} numberOfLines={1}>
+            {detail}
           </Text>
         ) : null}
       </View>

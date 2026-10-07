@@ -9,6 +9,7 @@ import {
   DOCUMENT_TYPES,
   formatIndianMobile,
   formatPrice,
+  PAYMENT_TIMING_LABELS,
   SERVICE_FULFILMENT_LABELS,
   requestStatusLabel,
   staffCan,
@@ -31,6 +32,7 @@ import {
   useBoSaveOutcome,
   useBoSaveReport,
   useBoSetFulfilment,
+  useBoSetRequestPrice,
   useBoUpdateRequest,
 } from '@/api/backoffice';
 import { PullRefresh } from '@/components/PullRefresh';
@@ -43,7 +45,7 @@ import {
   uploadOutcomeFile,
   uploadVisitMedia,
 } from '@/api/uploads';
-import { dialog } from '@/components/Dialog';
+import { dialog, toast } from '@/components/Dialog';
 import { OutcomeView } from '@/components/OutcomeView';
 import { DateField, fromIsoDate, toIsoDate } from '@/components/DateField';
 import { TextField } from '@/components/Field';
@@ -88,6 +90,9 @@ export default function BackofficeRequestScreen() {
       refreshControl={<PullRefresh onRefresh={() => refetch()} />}
     >
       <Summary request={data} canManage={canManage} />
+      {canManage && open && data.coverage === 'extra' && data.order?.status !== 'paid' ? (
+        <QuotePrice key={data.price_paise ?? 'none'} request={data} />
+      ) : null}
       <Steps request={data} />
 
       {canManage && open && data.fulfilment === 'assistance' && data.status !== 'requested' ? (
@@ -141,6 +146,45 @@ export default function BackofficeRequestScreen() {
 }
 
 /* ------------------------------------------------------------------ */
+
+/** The quote for an extra service: set or change it until the customer pays. */
+function QuotePrice({ request }: { request: BackofficeRequestDetail }) {
+  const save = useBoSetRequestPrice(request.id);
+  const [rupees, setRupees] = useState(
+    request.price_paise !== null ? String(request.price_paise / 100) : '',
+  );
+  const submit = () => {
+    const value = Number(rupees.replace(/[,₹\s]/g, ''));
+    if (!Number.isFinite(value) || value < 1) {
+      void dialog.alert({ title: 'Enter the price in rupees', tone: 'danger' });
+      return;
+    }
+    save.mutate(Math.round(value * 100), {
+      onSuccess: () => toast('Price saved — the customer can now see it'),
+      onError: (err) =>
+        void dialog.alert({
+          title: "Couldn't save the price",
+          message: errorMessage(err),
+          tone: 'danger',
+        }),
+    });
+  };
+  return (
+    <Card style={styles.card}>
+      <Text style={typography.heading}>
+        {request.price_paise === null ? 'Set the quote' : 'Quote'}
+      </Text>
+      <TextField
+        label="Price (₹)"
+        keyboardType="decimal-pad"
+        value={rupees}
+        onChangeText={setRupees}
+        hint="Shown to the customer, who pays it in the app once the request is confirmed."
+      />
+      <Button title="Save price" variant="secondary" loading={save.isPending} onPress={submit} />
+    </Card>
+  );
+}
 
 function Summary({ request, canManage }: { request: BackofficeRequestDetail; canManage: boolean }) {
   const setType = useBoSetFulfilment(request.id);
@@ -213,7 +257,9 @@ function Summary({ request, canManage }: { request: BackofficeRequestDetail; can
             ? 'Included in the customer’s plan'
             : request.price_paise !== null
               ? `Extra · ${formatPrice(request.price_paise)}${
-                  request.order?.status === 'paid' ? ' · Paid' : ' · not paid yet'
+                  request.order?.status === 'paid'
+                    ? ' · Paid'
+                    : ` · not paid yet · ${PAYMENT_TIMING_LABELS[request.payment_timing].toLowerCase()}`
                 }`
               : 'Extra · price to be quoted'
         }
@@ -230,7 +276,7 @@ function Summary({ request, canManage }: { request: BackofficeRequestDetail; can
           />
         </>
       ) : null}
-      <KeyValue label="Last message to customer" value={request.status_note} />
+      <KeyValue label="Last update to customer (one-way)" value={request.status_note} />
     </Card>
   );
 }
@@ -367,8 +413,9 @@ function NextStep({ request }: { request: BackofficeRequestDetail }) {
         <DateField label="Visit date" value={date} onChange={setDate} minimumDate={new Date()} />
       ) : null}
       <TextField
-        label="Message to customer"
+        label="Update for the customer"
         optional
+        hint="One-way: the customer can't reply to this. Need something from them? Use “Ask the customer”."
         placeholder={
           step.target === 'scheduled'
             ? 'e.g. Our team will visit between 10 am and 1 pm'
