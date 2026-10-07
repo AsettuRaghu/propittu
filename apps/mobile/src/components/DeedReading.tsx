@@ -33,22 +33,14 @@ interface Finding {
   value?: string;
 }
 
+type Result = { prefill: PropertyPrefill; facts: PropertyFact[] } | null;
+
 /**
- * Pittu reading the deed, on one page from start to finish: the deed being
- * read and a running commentary; then, once done, what it found appears
- * line by line (and what it couldn't find), counting up, and "Check and
- * save" opens the form. Nothing moves between pages along the way.
+ * Where Pittu is in reading a deed: the commentary said so far (paced by
+ * `elapsed`), and once the reading arrives, the findings revealed one by
+ * one — counting up. Shared by the Add property screen and the resumed page.
  */
-export function DeedReading({
-  elapsed,
-  result,
-  onContinue,
-}: {
-  elapsed: number;
-  /** Set once the reading is ready. */
-  result: { prefill: PropertyPrefill; facts: PropertyFact[] } | null;
-  onContinue: () => void;
-}) {
+export function usePittuFeed(elapsed: number, result: Result) {
   const done = result !== null;
   const [findings] = useFindings(result);
   const [shown, setShown] = useState(0);
@@ -57,12 +49,93 @@ export function DeedReading({
     const t = setTimeout(() => setShown((n) => n + 1), shown === 0 ? 300 : 340);
     return () => clearTimeout(t);
   }, [done, shown, findings.length]);
+  return {
+    done,
+    said: SCRIPT.filter((s) => s.at <= elapsed),
+    findings: findings.slice(0, shown),
+    found: findings.slice(0, shown).filter((f) => f.kind === 'found').length,
+    finished: done && shown >= findings.length,
+    toFill: findings.filter((f) => f.kind === 'missing').length,
+  };
+}
+export type PittuFeedState = ReturnType<typeof usePittuFeed>;
 
-  const said = SCRIPT.filter((s) => s.at <= elapsed);
-  const found = findings.slice(0, shown).filter((f) => f.kind === 'found').length;
-  const finished = done && shown >= findings.length;
-  const toFill = findings.filter((f) => f.kind === 'missing').length;
+/** One line under the next: the commentary while reading, then what was found. */
+export function PittuFeed({
+  feed,
+  tone = 'default',
+}: {
+  feed: PittuFeedState;
+  tone?: 'default' | 'light';
+}) {
+  return (
+    <View style={styles.feedLines}>
+      {/* The commentary gives way to the findings once reading is done. */}
+      {feed.done
+        ? null
+        : feed.said.map((l, i) => (
+            <Line
+              key={l.at}
+              kind={i === feed.said.length - 1 ? 'current' : 'said'}
+              icon="check"
+              label={l.text}
+              tone={tone}
+            />
+          ))}
+      {feed.findings.map((f) => (
+        <Line
+          key={f.label}
+          kind={f.kind}
+          icon={f.icon}
+          label={f.label}
+          value={f.value}
+          tone={tone}
+        />
+      ))}
+    </View>
+  );
+}
 
+/** The heading and the line under it, as the reading moves on. */
+export function feedHeadline(feed: PittuFeedState): { title: string; text: string } {
+  if (!feed.done) {
+    return {
+      title: 'Pittu is filling it in for you',
+      text: 'Usually under a minute. You can leave — it’ll be waiting on Home.',
+    };
+  }
+  if (!feed.finished) {
+    return {
+      title: `Found ${feed.found} detail${feed.found === 1 ? '' : 's'}…`,
+      text: 'Here’s what I found',
+    };
+  }
+  return {
+    title: 'Pittu has done its magic ✨',
+    text:
+      feed.toFill > 0
+        ? `${feed.found} details found · ${feed.toFill} for you to fill in`
+        : `${feed.found} details found — check them, then save`,
+  };
+}
+
+/**
+ * The resumed reading page (opened from "Waiting for you" while Pittu is
+ * still at it): the same feed as the Add property screen, then "Check and
+ * save" opens the form.
+ */
+export function DeedReading({
+  elapsed,
+  result,
+  onContinue,
+}: {
+  elapsed: number;
+  /** Set once the reading is ready. */
+  result: Result;
+  onContinue: () => void;
+}) {
+  const feed = usePittuFeed(elapsed, result);
+  const { title, text } = feedHeadline(feed);
   return (
     <View style={styles.flex}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -72,47 +145,19 @@ export function DeedReading({
           end={{ x: 1, y: 1 }}
           style={styles.top}
         >
-          {done ? <DoneBadge /> : <DeedArt />}
-          <Text style={styles.title}>
-            {!done
-              ? 'Pittu is reading your deed'
-              : found === 0
-                ? 'Done reading'
-                : `${finished ? 'Done — I found' : 'Found'} ${found} detail${found === 1 ? '' : 's'}`}
-          </Text>
-          <Text style={styles.text}>
-            {!done
-              ? 'Usually under a minute. You can leave — it’ll be waiting on Home.'
-              : !finished
-                ? 'Reading done — here’s what I found…'
-                : toFill > 0
-                  ? `All done. ${toFill} thing${toFill === 1 ? '' : 's'} for you to fill in.`
-                  : 'All done. Check them, then save.'}
-          </Text>
+          {feed.done ? <DoneBadge /> : <DeedArt />}
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.text}>{text}</Text>
         </LinearGradient>
-
         <View style={styles.feed}>
-          {/* The commentary gives way to the findings once reading is done. */}
-          {done
-            ? null
-            : said.map((l, i) => (
-                <Line
-                  key={l.at}
-                  kind={i === said.length - 1 ? 'current' : 'said'}
-                  icon="check"
-                  label={l.text}
-                />
-              ))}
-          {findings.slice(0, shown).map((f) => (
-            <Line key={f.label} kind={f.kind} icon={f.icon} label={f.label} value={f.value} />
-          ))}
+          <PittuFeed feed={feed} />
         </View>
       </ScrollView>
       <Footer>
         <Button
-          title={done ? 'Check and save' : 'Pittu is reading…'}
+          title={feed.done ? 'Check and save' : 'Pittu is reading…'}
           onPress={onContinue}
-          disabled={!done}
+          disabled={!feed.done}
         />
       </Footer>
     </View>
@@ -174,12 +219,15 @@ function Line({
   icon,
   label,
   value,
+  tone,
 }: {
   kind: 'said' | 'current' | 'found' | 'missing';
   icon: IconName;
   label: string;
   value?: string;
+  tone: 'default' | 'light';
 }) {
+  const light = tone === 'light';
   const [opacity] = useState(() => new Animated.Value(0));
   const [scale] = useState(() => new Animated.Value(kind === 'found' ? 0.92 : 1));
   useEffect(() => {
@@ -190,23 +238,32 @@ function Line({
   }, [opacity, scale]);
 
   const found = kind === 'found';
+  const missing = kind === 'missing';
   return (
     <Animated.View style={[styles.line, { opacity, transform: [{ scale }] }]}>
       <View
         style={[
           styles.lineIcon,
-          found && styles.foundIcon,
-          kind === 'missing' && styles.missingIcon,
+          found && (light ? styles.lightIcon : styles.foundIcon),
+          missing && (light ? styles.lightMissingIcon : styles.missingIcon),
         ]}
       >
         {kind === 'current' ? (
-          <ActivityIndicator size="small" color={colors.primary} />
+          <ActivityIndicator size="small" color={light ? '#FFFFFF' : colors.primary} />
         ) : (
           <Icon
             name={icon}
             size={found ? 16 : 14}
             color={
-              found ? accents.teal.fg : kind === 'missing' ? colors.warning : colors.textSubtle
+              light
+                ? missing
+                  ? '#FFD38A'
+                  : '#FFFFFF'
+                : found
+                  ? accents.teal.fg
+                  : missing
+                    ? colors.warning
+                    : colors.textSubtle
             }
             strokeWidth={2.4}
           />
@@ -215,15 +272,16 @@ function Line({
       <View style={styles.flex}>
         {found ? (
           <>
-            <Text style={typography.caption}>{label}</Text>
-            <Text style={styles.value}>{value}</Text>
+            <Text style={[typography.caption, light && styles.lightCaption]}>{label}</Text>
+            <Text style={[styles.value, light && styles.lightValue]}>{value}</Text>
           </>
         ) : (
           <Text
             style={[
               styles.said,
-              kind === 'current' && styles.current,
-              kind === 'missing' && styles.missing,
+              light && styles.lightSaid,
+              kind === 'current' && (light ? styles.lightCurrent : styles.current),
+              missing && (light ? styles.lightMissing : styles.missing),
             ]}
           >
             {label}
@@ -234,15 +292,26 @@ function Line({
   );
 }
 
-function DoneBadge() {
+/** A tick that springs in where the deed was being read. */
+export function DoneBadge({ size = 104 }: { size?: number }) {
   const [scale] = useState(() => new Animated.Value(0.6));
   useEffect(() => {
     Animated.spring(scale, { toValue: 1, friction: 5, useNativeDriver: true }).start();
   }, [scale]);
   return (
-    <View style={styles.badgeBox}>
-      <Animated.View style={[styles.badge, { transform: [{ scale }] }]}>
-        <Icon name="check" size={46} color={accents.teal.fg} strokeWidth={2.8} />
+    <View style={size === 104 ? styles.badgeBox : null}>
+      <Animated.View
+        style={[
+          styles.badge,
+          { width: size, height: size, borderRadius: size / 2, transform: [{ scale }] },
+        ]}
+      >
+        <Icon
+          name="check"
+          size={Math.round(size * 0.44)}
+          color={accents.teal.fg}
+          strokeWidth={2.8}
+        />
       </Animated.View>
     </View>
   );
@@ -275,7 +344,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  feed: { padding: space.lg, paddingTop: space.xl, gap: space.md },
+  feed: { padding: space.lg, paddingTop: space.xl },
+  feedLines: { gap: space.md },
+  lightIcon: { backgroundColor: 'rgba(255,255,255,0.2)' },
+  lightMissingIcon: { backgroundColor: 'rgba(255,211,138,0.22)' },
+  lightCaption: { color: 'rgba(255,255,255,0.75)' },
+  lightValue: { color: '#FFFFFF' },
+  lightSaid: { color: 'rgba(255,255,255,0.75)' },
+  lightCurrent: { color: '#FFFFFF', fontWeight: '700' },
+  lightMissing: { color: '#FFD38A', fontWeight: '700' },
   line: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   lineIcon: {
     width: 32,

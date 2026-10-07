@@ -3,6 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, router } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatFileSize, MAX_LONG_DOCUMENT_BYTES } from '@propittu/shared';
 import { createDraftProperty, startAnalysis, useDraftProperties, useRefreshDrafts } from '@/api/ai';
 import { api } from '@/api/client';
@@ -10,20 +11,28 @@ import { prepareDocument, uploadDocument } from '@/api/uploads';
 import { errorMessage } from '@/lib/errors';
 import { accents, colors, font, gradients, radius, shadow, space, typography } from '@/theme';
 import { DeedArt } from './DeedArt';
+import { PittuAtWork } from './PittuAtWork';
 import { DraftRow } from './DraftRow';
 import { Icon } from './Icon';
-import { Banner, Button, ListGroup, ListRow, ProgressBar } from './ui';
+import { Banner, Button, ListGroup, ListRow } from './ui';
 
 /** Unfinished deed set-ups kept at once (matches the server). */
 const MAX_UNFINISHED = 2;
 
-type Phase = { kind: 'idle' } | { kind: 'uploading'; progress: number } | { kind: 'handing' };
+type Phase =
+  | { kind: 'idle' }
+  | { kind: 'uploading'; progress: number }
+  | { kind: 'handing' }
+  | { kind: 'reading'; propertyId: string; documentId: string };
 
 /**
- * The first screen of Add property when Pittu is available: a bold invite
- * to hand over the sale deed (what Pittu picks up, listed below it), and a
- * quiet way to type it in instead. The deed uploads right here — no second
- * page. A failed upload removes the draft.
+ * Add property, when Pittu is available — the whole Pittu journey on one
+ * screen. Before: a bold invite to hand over the sale deed, unfinished
+ * set-ups, and Manual entry. Once a deed is chosen, the other choices step
+ * aside, the deed shrinks to the top, and Pittu's running commentary plays
+ * on the same gradient; then what it found appears line by line ("Pittu has
+ * done its magic"). Only "Check and save" moves on — to the form.
+ * A failed upload removes the draft.
  */
 export function AddPropertyChoice({ onManual }: { onManual: () => void }) {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
@@ -31,6 +40,7 @@ export function AddPropertyChoice({ onManual }: { onManual: () => void }) {
   const busy = phase.kind !== 'idle';
   const drafts = useDraftProperties();
   const refreshDrafts = useRefreshDrafts();
+  const insets = useSafeAreaInsets();
 
   const uploadDeed = async () => {
     if (busy) return;
@@ -58,12 +68,9 @@ export function AddPropertyChoice({ onManual }: { onManual: () => void }) {
         setPhase({ kind: 'uploading', progress }),
       );
       setPhase({ kind: 'handing' });
-      await startAnalysis(doc.id).catch(() => undefined); // the next screen retries
+      await startAnalysis(doc.id).catch(() => undefined); // the status checks retry
       refreshDrafts(); // it now waits on Home too
-      router.replace({
-        pathname: '/properties/[id]/setup',
-        params: { id: propertyId, doc: doc.id },
-      });
+      setPhase({ kind: 'reading', propertyId, documentId: doc.id });
     } catch (err) {
       if (propertyId) {
         await api<void>(`/properties/${propertyId}`, { method: 'DELETE' }).catch(() => undefined);
@@ -77,7 +84,12 @@ export function AddPropertyChoice({ onManual }: { onManual: () => void }) {
   const full = (drafts.data?.length ?? 0) >= MAX_UNFINISHED;
 
   return (
-    <View style={styles.flex}>
+    <LinearGradient
+      colors={[gradients.brand[0], gradients.brand[1], '#8E4FE8']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 0.6, y: 1 }}
+      style={styles.flex}
+    >
       <Stack.Screen
         options={{
           title: '',
@@ -86,40 +98,40 @@ export function AddPropertyChoice({ onManual }: { onManual: () => void }) {
           headerShadowVisible: false,
         }}
       />
-      <ScrollView
-        style={styles.flex}
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-      >
-        <LinearGradient
-          colors={[gradients.brand[0], gradients.brand[1], '#8E4FE8']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0.6, y: 1 }}
-          style={styles.top}
+      <View style={[styles.glow, styles.glowA]} pointerEvents="none" />
+      <View style={[styles.glow, styles.glowB]} pointerEvents="none" />
+
+      {phase.kind !== 'idle' ? (
+        <PittuAtWork
+          phase={phase}
+          bottomInset={insets.bottom}
+          onReset={() => {
+            setPhase({ kind: 'idle' });
+            refreshDrafts();
+          }}
+          onManual={() => {
+            refreshDrafts();
+            onManual();
+          }}
+        />
+      ) : (
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
         >
-          <View style={[styles.glow, styles.glowA]} />
-          <View style={[styles.glow, styles.glowB]} />
-          <DeedArt />
-          <View style={styles.pill}>
-            <Icon name="sparkles" size={13} color="#FFFFFF" />
-            <Text style={styles.pillText}>Recommended · about a minute</Text>
-          </View>
-          <Text style={styles.title}>Let Pittu fill it in for you</Text>
-          <Text style={styles.text}>
-            Upload your sale deed — Pittu reads it and fills in the details. You just check and
-            save.
-          </Text>
-          {phase.kind === 'uploading' ? (
-            <View style={styles.progress}>
-              <Text style={styles.note}>
-                Uploading securely… {Math.round(phase.progress * 100)}%
-              </Text>
-              <ProgressBar progress={phase.progress} />
+          <View style={styles.top}>
+            <DeedArt />
+            <View style={styles.pill}>
+              <Icon name="sparkles" size={13} color="#FFFFFF" />
+              <Text style={styles.pillText}>Recommended · about a minute</Text>
             </View>
-          ) : phase.kind === 'handing' ? (
-            <Text style={styles.note}>Handing it to Pittu…</Text>
-          ) : (
+            <Text style={styles.title}>Let Pittu fill it in for you</Text>
+            <Text style={styles.text}>
+              Upload your sale deed — Pittu reads it and fills in the details. You just check and
+              save.
+            </Text>
             <Button
               title="Upload sale deed"
               icon="upload"
@@ -127,41 +139,47 @@ export function AddPropertyChoice({ onManual }: { onManual: () => void }) {
               onPress={() => void uploadDeed()}
               disabled={full}
             />
-          )}
-          {problem ? <Banner message={problem} /> : null}
-          <View style={styles.privacy}>
-            <Icon name="lock" size={12} color="rgba(255,255,255,0.8)" />
-            <Text style={styles.note}>
-              {full
-                ? 'Finish or remove an unfinished property below first'
-                : `PDF up to ${formatFileSize(MAX_LONG_DOCUMENT_BYTES)} · stored privately`}
-            </Text>
+            {problem ? <Banner message={problem} /> : null}
+            <View style={styles.privacy}>
+              <Icon name="lock" size={12} color="rgba(255,255,255,0.8)" />
+              <Text style={styles.note}>
+                {full
+                  ? 'Finish or remove an unfinished property below first'
+                  : `PDF up to ${formatFileSize(MAX_LONG_DOCUMENT_BYTES)} · stored privately`}
+              </Text>
+            </View>
           </View>
-        </LinearGradient>
 
-        <View style={styles.bottom}>
-          {waiting.length > 0 ? (
-            <ListGroup title={`Unfinished · ${waiting.length} of ${MAX_UNFINISHED}`} plain>
-              {waiting.map((d) => (
-                <DraftRow key={d.id} draft={d} />
-              ))}
+          <View style={styles.bottom}>
+            {waiting.length > 0 ? (
+              <ListGroup title={`Unfinished · ${waiting.length} of ${MAX_UNFINISHED}`} plain>
+                {waiting.map((d) => (
+                  <DraftRow key={d.id} draft={d} />
+                ))}
+              </ListGroup>
+            ) : null}
+            <ListGroup title="Manual entry" plain>
+              <ListRow
+                icon="edit"
+                accent="slate"
+                title="Fill in the details yourself"
+                subtitle="A couple of minutes · add the deed later"
+                onPress={onManual}
+              />
             </ListGroup>
-          ) : null}
-          <ListGroup title="Manual entry" plain>
-            <ListRow
-              icon="edit"
-              accent="slate"
-              title="Fill in the details yourself"
-              subtitle="A couple of minutes · add the deed later"
-              onPress={busy ? undefined : onManual}
-            />
-          </ListGroup>
-        </View>
-      </ScrollView>
-    </View>
+          </View>
+        </ScrollView>
+      )}
+    </LinearGradient>
   );
 }
 
+/**
+ * The deed is in: uploading, then Pittu reading (the deed shrinks to the
+ * top and the commentary runs), then the findings. "Check and save" opens
+ * the form; a deed Pittu couldn't read, or one already in the locker, goes
+ * to the same page, which explains.
+ */
 /** Shown instead of both choices when this term's property slots are all used. */
 export function PropertyLimitReached({
   limit,
@@ -212,7 +230,7 @@ export function PropertyLimitReached({
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.background },
+  flex: { flex: 1 },
   center: { textAlign: 'center' },
   content: { padding: space.lg, paddingTop: space.sm, gap: space.xl, paddingBottom: space.xxl },
   scroll: { flexGrow: 1 },
@@ -222,7 +240,6 @@ const styles = StyleSheet.create({
     paddingTop: space.md,
     paddingBottom: space.xxl,
     gap: space.md,
-    overflow: 'hidden',
   },
   glow: { position: 'absolute', borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.08)' },
   glowA: { width: 320, height: 320, top: -140, right: -120 },
@@ -254,7 +271,14 @@ const styles = StyleSheet.create({
   note: { fontSize: font(12.5), color: 'rgba(255,255,255,0.85)', textAlign: 'center' },
   progress: { gap: space.xs, alignSelf: 'stretch' },
   privacy: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  bottom: { padding: space.lg, paddingTop: space.xl, gap: space.xl, paddingBottom: space.xxl },
+  bottom: {
+    flexGrow: 1,
+    backgroundColor: colors.background,
+    padding: space.lg,
+    paddingTop: space.xl,
+    gap: space.xl,
+    paddingBottom: space.xxl,
+  },
   optionIcon: {
     width: 44,
     height: 44,

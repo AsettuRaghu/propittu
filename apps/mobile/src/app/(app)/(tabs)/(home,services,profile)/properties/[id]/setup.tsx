@@ -13,13 +13,11 @@ import {
   type PropertyType,
 } from '@propittu/shared';
 import {
-  confirmRemoveDraft,
   startAnalysis,
   useAnalysis,
   useFinishSetup,
   usePlaceSuggestion,
   useRefreshDrafts,
-  useRemoveDraft,
 } from '@/api/ai';
 import { useProperty } from '@/api/queries';
 import { ApiError } from '@/api/client';
@@ -36,7 +34,7 @@ import {
   validatePropertyForm,
   type PropertyFormValues,
 } from '@/components/PropertyForm';
-import { Banner, Button, KeyValue, LinkButton } from '@/components/ui';
+import { Banner, Button, KeyValue } from '@/components/ui';
 import { errorMessage, fieldErrors } from '@/lib/errors';
 import { space, typography } from '@/theme';
 
@@ -78,13 +76,14 @@ const EXTRA_KEYS = [
  * against what Pittu found (the improvement signal).
  */
 export default function PropertySetupScreen() {
-  const { id, doc } = useLocalSearchParams<{ id: string; doc?: string }>();
+  // asNew=1: "Add as a new property" was already chosen (on the Add property screen).
+  const { id, doc, asNew } = useLocalSearchParams<{ id: string; doc?: string; asNew?: string }>();
   const analysis = useAnalysis(doc);
   const started = useRef(false);
   const [elapsed, setElapsed] = useState(0);
   const [sawReading, setSawReading] = useState(false);
   const [revealed, setRevealed] = useState(false);
-  const [addAnyway, setAddAnyway] = useState(false);
+  const [addAnyway, setAddAnyway] = useState(asNew === '1');
 
   // No reading yet (e.g. the start call was interrupted): start it once.
   useEffect(() => {
@@ -224,7 +223,6 @@ function Review({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const finish = useFinishSetup(propertyId);
-  const removeDraft = useRemoveDraft();
   const scrollRef = useRef<ScrollView>(null);
 
   const byKey = new Map(facts.map((f) => [f.key, f]));
@@ -278,11 +276,6 @@ function Review({
     );
   };
 
-  // Remove this unfinished property (draft + deed) — it leaves Home too.
-  const discard = async () => {
-    if (await confirmRemoveDraft(removeDraft, propertyId)) router.dismissTo('/');
-  };
-
   return (
     <View style={styles.flex}>
       <Stack.Screen options={{ title: ready ? 'Check the details' : 'Add property' }} />
@@ -334,14 +327,6 @@ function Review({
             ))}
           </FormSection>
         ) : null}
-
-        <View style={styles.discard}>
-          <LinkButton
-            title="Remove this unfinished property"
-            tone="danger"
-            onPress={() => void discard()}
-          />
-        </View>
       </ScrollView>
       <Footer>
         <Button
@@ -358,5 +343,4 @@ const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
   content: { padding: space.lg, paddingTop: space.md, gap: space.xl, paddingBottom: space.xxl },
   head: { gap: space.xs },
-  discard: { alignItems: 'center' },
 });

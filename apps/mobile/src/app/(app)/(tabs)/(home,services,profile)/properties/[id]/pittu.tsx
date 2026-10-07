@@ -203,6 +203,12 @@ function Summary({
 }) {
   const property = useProperty(propertyId);
   const services = useServices();
+  // Reopened from the property page: back to it. Straight after adding: the property, welcomed.
+  const { from } = useLocalSearchParams<{ from?: string }>();
+  const finish = () =>
+    from === 'property'
+      ? router.back()
+      : router.replace({ pathname: '/properties/[id]', params: { id: propertyId, welcome: '1' } });
   // Only services that can reach this property (PIN code / state).
   const plan = carePlan(state.context, state.answers).filter((item) => {
     const service = (services.data ?? []).find((s) => s.code === item.service_code);
@@ -238,7 +244,7 @@ function Summary({
     }
     setSending(false);
     toast(sent ? `${sent} service${sent === 1 ? '' : 's'} requested` : 'Property saved');
-    router.replace({ pathname: '/properties/[id]', params: { id: propertyId, welcome: '1' } });
+    finish();
   };
 
   return (
@@ -315,41 +321,17 @@ function Summary({
                 ? `Request ${chosen.length} service${chosen.length === 1 ? '' : 's'}`
                 : 'Done'
             }
-            onPress={() =>
-              chosen.length
-                ? void send()
-                : router.replace({
-                    pathname: '/properties/[id]',
-                    params: { id: propertyId, welcome: '1' },
-                  })
-            }
+            onPress={() => (chosen.length ? void send() : finish())}
             loading={sending}
           />
-          <Button
-            title="Decide later"
-            variant="ghost"
-            onPress={() =>
-              router.replace({
-                pathname: '/properties/[id]',
-                params: { id: propertyId, welcome: '1' },
-              })
-            }
-          />
+          <Button title="Decide later" variant="ghost" onPress={() => finish()} />
           <Text style={[typography.caption, styles.center]}>
             Included services use your plan; others are priced before you pay — nothing is charged
             until we confirm.
           </Text>
         </>
       ) : (
-        <Button
-          title="Go to my property"
-          onPress={() =>
-            router.replace({
-              pathname: '/properties/[id]',
-              params: { id: propertyId, welcome: '1' },
-            })
-          }
-        />
+        <Button title="Go to my property" onPress={() => finish()} />
       )}
     </ScrollView>
   );

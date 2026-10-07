@@ -2,7 +2,13 @@ import { useRef } from 'react';
 import { openServicesTab } from '@/lib/nav';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import type { CompletionItem, CompletionKey, PropertyDetail } from '@propittu/shared';
+import {
+  pittuQuestions,
+  type CompletionItem,
+  type CompletionKey,
+  type PropertyDetail,
+} from '@propittu/shared';
+import { usePittu } from '@/api/ai';
 import { useProperty, useServiceRequests } from '@/api/queries';
 import { DocumentSlots } from '@/components/DocumentSlots';
 import type { IconName } from '@/components/Icon';
@@ -112,8 +118,11 @@ export default function PropertyDetailsScreen() {
               onPress={() => onStep(item)}
             />
           ))}
+          <PittuRow propertyId={property.id} />
         </ListGroup>
-      ) : null}
+      ) : (
+        <PittuSection propertyId={property.id} />
+      )}
 
       <Details property={property} onEdit={edit} />
 
@@ -147,6 +156,51 @@ export default function PropertyDetailsScreen() {
         </Text>
       ) : null}
     </ScrollView>
+  );
+}
+
+/**
+ * Pittu's quick questions, reopened where they were left — or, once all
+ * answered, the checklist and care plan they lead to.
+ */
+function PittuRow({ propertyId }: { propertyId: string }) {
+  const { data } = usePittu(propertyId);
+  if (!data) return null;
+  const questions = pittuQuestions(data.context, data.answers);
+  const answered = questions.filter((q) => data.answers[q.id]).length;
+  const open = () =>
+    router.push({
+      pathname: '/properties/[id]/pittu',
+      params: { id: propertyId, from: 'property' },
+    });
+  return answered < questions.length ? (
+    <ListRow
+      icon="sparkles"
+      accent="violet"
+      title="Pittu’s quick questions"
+      subtitle={`${answered} of ${questions.length} answered · so we know what your property needs`}
+      subtitleLines={2}
+      onPress={open}
+    />
+  ) : (
+    <ListRow
+      icon="sparkles"
+      accent="violet"
+      title="Your documents checklist and care plan"
+      subtitle="What to keep, and what Pittu suggests"
+      onPress={open}
+    />
+  );
+}
+
+/** With the profile complete, Pittu's row gets its own heading (once there is something to show). */
+function PittuSection({ propertyId }: { propertyId: string }) {
+  const { data } = usePittu(propertyId);
+  if (!data) return null;
+  return (
+    <ListGroup title="From Pittu" plain>
+      <PittuRow propertyId={propertyId} />
+    </ListGroup>
   );
 }
 
