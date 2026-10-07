@@ -47,6 +47,7 @@ export default function ProfileScreen() {
             <InlineEdit
               icon="user"
               label="Name"
+              hideLabel
               value={me.full_name}
               placeholder="Add your name"
               validate={(v) => {
@@ -55,20 +56,9 @@ export default function ProfileScreen() {
               }}
               onSave={(full_name) => updateProfile.mutateAsync({ full_name })}
               inputProps={{ autoCapitalize: 'words', autoComplete: 'name', maxLength: 120 }}
-              badge={
-                me.full_name ? (
-                  <Badge label="Complete" tone="success" />
-                ) : (
-                  <Badge label="Incomplete" tone="warning" />
-                )
-              }
+              badge={me.full_name ? undefined : <Badge label="Incomplete" tone="warning" />}
             />
-            <ListRow
-              icon="phone"
-              title={formatIndianMobile(me.phone)}
-              subtitle="Used to log in"
-              right={<Badge label="Verified" tone="success" icon="verified" />}
-            />
+            <ListRow icon="phone" title={formatIndianMobile(me.phone)} />
             <ListRow
               icon="plan"
               accent="violet"

@@ -27,10 +27,13 @@ export function InlineEdit({
   onSave,
   validate,
   badge,
+  hideLabel = false,
   inputProps,
 }: {
   icon: IconName;
+  /** Names the field for screen readers; shown above the value unless `hideLabel`. */
   label: string;
+  hideLabel?: boolean;
   value: string | null;
   placeholder: string;
   onSave: (value: string) => Promise<unknown>;
@@ -78,7 +81,7 @@ export function InlineEdit({
       >
         <IconTile icon={icon} accent="indigo" size={30} />
         <View style={styles.flex}>
-          <Text style={typography.caption}>{label}</Text>
+          {hideLabel ? null : <Text style={typography.caption}>{label}</Text>}
           {editing ? (
             <TextInput
               value={draft}

@@ -56,6 +56,10 @@ export default function PlanScreen() {
 
   const paidPlan = !!s.plan && s.plan.price_paise > 0;
   const currentPrice = paidPlan ? (s.plan?.price_paise ?? 0) : 0;
+  // Today's price of the customer's own plan (they may have bought it at an
+  // older price): what "higher" plans are compared with, and never their own.
+  const mine = plans.data?.find((p) => p.code === code);
+  const ownPrice = mine?.price_paise ?? currentPrice;
   const topCode = plans.data?.reduce<PublicPlan | null>(
     (top, p) => (!top || p.price_paise > top.price_paise ? p : top),
     null,
@@ -81,7 +85,7 @@ export default function PlanScreen() {
           ? canRenew
             ? 'current'
             : 'renew_later'
-          : p.price_paise > currentPrice
+          : p.price_paise > ownPrice
             ? 'upgrade'
             : 'later';
 
@@ -194,9 +198,8 @@ export default function PlanScreen() {
   // The header button acts directly: upgrade to the next plan up, or renew
   // in the renewal window. Choosing a first plan opens the Plans tab.
   const nextUp = [...(plans.data ?? [])]
-    .filter((p) => p.price_paise > currentPrice)
+    .filter((p) => p.code !== code && p.price_paise > ownPrice)
     .sort((a, b) => a.price_paise - b.price_paise)[0];
-  const mine = plans.data?.find((p) => p.code === code);
   const headerAction = () => {
     if (paidPlan && code !== topCode && nextUp) return void choose(nextUp);
     if (paidPlan && canRenew && mine) return void choose(mine);
