@@ -209,6 +209,10 @@ export interface Service {
   fulfilment: ServiceFulfilment;
   /** Where it can be delivered: service areas, service states, or anywhere. */
   reach: ServiceReach;
+  /** What the service includes (short lines), shown before booking. */
+  includes: string[];
+  /** How long it usually takes, e.g. "Within 3–5 days of confirming". */
+  turnaround: string | null;
 }
 
 export interface ServiceRequest {

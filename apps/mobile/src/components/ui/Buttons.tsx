@@ -7,7 +7,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { colors, radius, space } from '@/theme';
+import { colors, font, radius, space } from '@/theme';
 import { Icon, type IconName } from '../Icon';
 import { tap } from './tap';
 
@@ -180,9 +180,9 @@ const styles = StyleSheet.create({
   buttonSm: { minHeight: 38, paddingHorizontal: space.md, borderRadius: radius.sm },
   buttonInactive: { opacity: 0.5 },
   buttonContent: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  buttonText: { fontSize: 16, fontWeight: '700', letterSpacing: -0.1 },
-  buttonTextSm: { fontSize: 14 },
+  buttonText: { fontSize: font(16), fontWeight: '700', letterSpacing: -0.1 },
+  buttonTextSm: { fontSize: font(14) },
   link: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  linkText: { fontSize: 14, fontWeight: '600' },
+  linkText: { fontSize: font(14), fontWeight: '600' },
   iconButton: { alignItems: 'center', justifyContent: 'center' },
 });

@@ -6,7 +6,7 @@ import { Icon } from '@/components/Icon';
 import { ErrorState, LoadingState } from '@/components/States';
 import { Badge, Button, Card } from '@/components/ui';
 import { formatDate } from '@/lib/format';
-import { accents, colors, space, typography } from '@/theme';
+import { accents, colors, font, space, typography } from '@/theme';
 
 /** Payment receipt (M7): everything about one order and its payment. */
 export default function ReceiptScreen() {
@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
   content: { padding: space.lg, gap: space.md },
   card: { alignItems: 'center', gap: space.sm, paddingVertical: space.xl },
   icon: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
-  amount: { fontSize: 30, fontWeight: '800', color: colors.text, letterSpacing: -0.6 },
+  amount: { fontSize: font(30), fontWeight: '800', color: colors.text, letterSpacing: -0.6 },
   rows: { alignSelf: 'stretch', marginTop: space.md, gap: space.sm },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: space.md },
   value: { flexShrink: 1, textAlign: 'right' },

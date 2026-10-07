@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { OTP_LENGTH } from '@propittu/shared';
-import { colors, radius } from '@/theme';
+import { colors, font, radius } from '@/theme';
 
 /**
  * Six boxes backed by ONE transparent TextInput laid over them.
@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
   },
   boxActive: { borderColor: colors.primary, borderWidth: 2 },
   boxError: { borderColor: colors.danger },
-  digit: { fontSize: 24, fontWeight: '600', color: colors.text },
+  digit: { fontSize: font(24), fontWeight: '600', color: colors.text },
   hiddenInput: {
     position: 'absolute',
     top: 0,

@@ -1,6 +1,6 @@
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, space, typography } from '@/theme';
+import { colors, font, radius, space, typography } from '@/theme';
 
 /** Local calendar date as YYYY-MM-DD (what the API expects for dates). */
 export function toIsoDate(d: Date): string {
@@ -98,6 +98,6 @@ const styles = StyleSheet.create({
     borderColor: colors.borderStrong,
     backgroundColor: colors.surface,
   },
-  chooseText: { fontSize: 15, color: colors.text },
-  clear: { fontSize: 14, color: colors.primary, fontWeight: '600' },
+  chooseText: { fontSize: font(15), color: colors.text },
+  clear: { fontSize: font(14), color: colors.primary, fontWeight: '600' },
 });

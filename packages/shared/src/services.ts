@@ -393,6 +393,18 @@ const serviceFields = {
   is_extra_available: z.boolean(),
   fulfilment: z.enum(SERVICE_FULFILMENTS),
   reach: z.enum(SERVICE_REACHES),
+  includes: z
+    .array(
+      z
+        .string()
+        .trim()
+        .min(1)
+        .max(120)
+        .regex(/^[^<>]*$/),
+    )
+    .max(10)
+    .default([]),
+  turnaround: z.string().trim().max(80).nullable().default(null),
   sort_order: z.number().int().min(0).max(10_000),
 };
 

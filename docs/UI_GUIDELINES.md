@@ -1,4 +1,4 @@
-# UI guidelines (learned from the Profile rework, Oct 2026)
+# UI guidelines (learned from the Profile and Services reworks, Oct 2026)
 
 Propittu is for owners who want to feel **organised and calm**. Every screen should read like the
 Profile tab: flat, quiet, aligned, and only what matters. These rules came from the owner's reviews
@@ -21,7 +21,15 @@ reworked screen, and check them before handing anything over.
 - **Fixed things at the bottom**: the primary action in `Footer`; chat reply bar docked by
   `ChatThread`.
 
-## 2. Nothing moves
+## 2. Text size
+
+- **Every font size goes through `font()`** in `src/theme.ts` (or a `typography` token, which
+  already does). Never write a bare number for `fontSize` or `lineHeight`. One factor
+  (`TEXT_SCALE`) then sizes the whole app — ready for an in-app "text size" setting — and the
+  phone's own accessibility size still applies on top.
+- Let text wrap or truncate gracefully: no fixed heights around text; rows grow with their text.
+
+## 3. Nothing moves
 
 - No layout shift on arrival: load what a section needs **before** rendering the page
   (`LoadingState` until then), so content below never jumps when data arrives.
@@ -30,7 +38,7 @@ reworked screen, and check them before handing anything over.
 - Badges are **vertically centred** next to text (the `Badge` wrapper handles this — don't add
   `alignSelf` overrides).
 
-## 3. Components to reuse (in `src/components`)
+## 4. Components to reuse (in `src/components`)
 
 | Need | Use |
 |---|---|
@@ -47,10 +55,14 @@ reworked screen, and check them before handing anything over.
 | Pick from options | the bottom sheet via `dialog.actions` (scrolls, ticks the chosen one) |
 | Log out anywhere | `useLogout` |
 | Plan badge, plan purchase | `planBadge`, `usePlanPurchase` (`src/lib/plans.ts`) |
+| A service in a list | `ServiceRow` (icon, name, short line, price) |
+| A request in a list | `ServiceRequestList` rows (service, property · date, status badge) |
+| "About this…" explainer | `dialog.alert` with `highlights` (✓ list) and `summary` rows |
+| Choosing a day / time | `Select variant="flat"` with the options (no pill grids) |
 
 Never copy a component into a screen; extend the shared one with an option instead.
 
-## 4. Words and data
+## 5. Words and data
 
 - **No internal codes for customers** (PR-, ST-, ORD-): show the property name, service name and
   date. `withoutCodes()` strips them from old text. Staff screens may show codes; the order
@@ -61,11 +73,12 @@ Never copy a component into a screen; extend the shared one with an option inste
   when something is missing (no "Complete"/"Verified" noise).
 - Show only what matters (plans compare on properties only; payments are one list).
 
-## 5. Before handing over (checklist)
+## 6. Before handing over (checklist)
 
 1. Every element on the 16 pt edge, entries at 28 pt, right edges aligned.
 2. Badges centred; tabs evenly spread; nothing bold that shouldn't be.
 3. Nothing jumps or slides when the page opens or data loads.
 4. No boxes or borders that aren't needed; flat fields and dropdowns in forms.
 5. No internal codes, no duplicated words.
-6. Built from shared components; no dead code left behind; `tsc`, `eslint`, Prettier clean.
+6. Every size via `font()` / `typography`; text can wrap.
+7. Built from shared components; no dead code left behind; `tsc`, `eslint`, Prettier, knip clean.

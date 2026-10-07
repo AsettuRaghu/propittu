@@ -1183,7 +1183,7 @@ backofficeRouter.post('/documents/:id/status', allow('documents.review'), async 
  * ================================================================== */
 
 const STAFF_SERVICE_COLUMNS =
-  'id, code, name, category, description, sort_order, price_paise, is_extra_available, fulfilment, reach, is_active';
+  'id, code, name, category, description, sort_order, price_paise, is_extra_available, fulfilment, reach, includes, turnaround, is_active';
 
 /* GET /backoffice/services — including inactive ones */
 backofficeRouter.get('/services', async (req, res) => {

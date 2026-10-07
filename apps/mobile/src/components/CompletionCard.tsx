@@ -1,6 +1,6 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { CompletionItem, PropertyCompletion } from '@propittu/shared';
-import { accents, colors, radius, space, typography } from '@/theme';
+import { accents, colors, font, radius, space, typography } from '@/theme';
 import { Icon } from './Icon';
 import { Card, ProgressRing } from './ui';
 
@@ -66,7 +66,7 @@ const styles = StyleSheet.create({
   card: { gap: space.md },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   flex: { flex: 1 },
-  percent: { fontSize: 13, fontWeight: '800', color: colors.primary },
+  percent: { fontSize: font(13), fontWeight: '800', color: colors.primary },
   chips: { gap: space.sm },
   chip: {
     flexDirection: 'row',
@@ -77,5 +77,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     paddingVertical: 8,
   },
-  chipText: { fontSize: 13, fontWeight: '700', color: accents.indigo.fg },
+  chipText: { fontSize: font(13), fontWeight: '700', color: accents.indigo.fg },
 });

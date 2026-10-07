@@ -10,7 +10,7 @@ import { SessionProvider, useSession } from '@/auth/SessionProvider';
 import { BrandSplash } from '@/components/BrandSplash';
 import { DialogHost } from '@/components/Dialog';
 import { envProblems } from '@/lib/env';
-import { colors, space, typography } from '@/theme';
+import { colors, font, space, typography } from '@/theme';
 
 // Keep the native splash up until the persisted session is restored (§14).
 void SplashScreen.preventAutoHideAsync();
@@ -126,5 +126,5 @@ const styles = StyleSheet.create({
     gap: space.md,
     backgroundColor: colors.background,
   },
-  mono: { fontFamily: 'Courier', fontSize: 14, color: colors.danger },
+  mono: { fontFamily: 'Courier', fontSize: font(14), color: colors.danger },
 });

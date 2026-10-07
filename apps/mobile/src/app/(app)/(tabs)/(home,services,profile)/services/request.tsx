@@ -1,55 +1,97 @@
-import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import {
-  formatPrice,
   PREFERRED_SLOT_HOURS,
   PREFERRED_SLOT_LABELS,
   PREFERRED_SLOTS,
   REACH_PROBLEM_LABELS,
   REACH_PROBLEM_TEXT,
   reachProblem,
+  SERVICE_CATEGORIES,
+  SERVICE_CATEGORY_LABELS,
+  SERVICE_FULFILMENT_LABELS,
   type CatalogueService,
   type PreferredSlot,
-  type PropertySummary,
 } from '@propittu/shared';
 import { useCreateServiceRequest, useProperties, useServices } from '@/api/queries';
 import { toIsoDate } from '@/components/DateField';
+import { dialog } from '@/components/Dialog';
 import { TextField } from '@/components/Field';
 import { Footer } from '@/components/Footer';
-import { Icon, type IconName } from '@/components/Icon';
+import { PageHeader } from '@/components/PageHeader';
+import { Select } from '@/components/Select';
+import { servicePrice, ServiceRow } from '@/components/ServiceRow';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
-import { Banner, Button, Card, IconTile, LinkButton, SectionTitle } from '@/components/ui';
+import { Banner, Button, IconButton, ListGroup, ListRow } from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
-import {
-  isOnSiteService,
-  PROPERTY_TYPE_GRADIENTS,
-  PROPERTY_TYPE_ICONS,
-  serviceVisual,
-} from '@/lib/icons';
-import { signedImage } from '@/lib/image';
-import { accents, colors, radius, shadow, space, typography } from '@/theme';
+import { isOnSiteService, serviceVisual } from '@/lib/icons';
+import { space } from '@/theme';
 
-const SLOT_ICONS: Record<PreferredSlot, IconName> = {
-  morning: 'morning',
-  afternoon: 'afternoon',
-  evening: 'evening',
-};
+const ANY = 'any';
 
-/** The next 14 days, starting tomorrow (a visit needs a little notice). */
-function upcomingDays(): Date[] {
+/** "Any day" plus the next 14 days, starting tomorrow (a visit needs a little notice). */
+function dayOptions() {
   const start = new Date();
-  return Array.from({ length: 14 }, (_, i) => {
-    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i + 1);
-    return d;
+  return [
+    { value: ANY, label: 'Any day' },
+    ...Array.from({ length: 14 }, (_, i) => {
+      const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i + 1);
+      return {
+        value: toIsoDate(d),
+        label: d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' }),
+      };
+    }),
+  ];
+}
+
+const SLOT_OPTIONS = [
+  { value: ANY, label: 'Any time' },
+  ...PREFERRED_SLOTS.map((s) => ({
+    value: s,
+    label: PREFERRED_SLOT_LABELS[s],
+    description: PREFERRED_SLOT_HOURS[s],
+  })),
+];
+
+/** What this service costs on the customer's plan, and how payment works. */
+function costOf(s: CatalogueService): { title: string; text: string } {
+  if (s.coverage === 'included') {
+    return {
+      title: `Included in your plan · ${s.included_remaining} left`,
+      text: 'Counted only once we confirm your request.',
+    };
+  }
+  if (s.coverage === 'unavailable') {
+    return { title: 'Not on your plan', text: 'Upgrade your plan to request this service.' };
+  }
+  return s.price_paise !== null
+    ? { title: servicePrice(s), text: 'Pay after we confirm — by UPI or card, in the app.' }
+    : { title: 'Price on quote', text: 'We share the price before any work starts.' };
+}
+
+/** "About this service": what it includes, what it costs, how long it takes. */
+function showAbout(s: CatalogueService) {
+  const v = serviceVisual(s.code, s.category);
+  void dialog.alert({
+    title: s.name,
+    message: s.description,
+    icon: v.icon,
+    accent: v.accent,
+    highlights: s.includes.length ? s.includes : undefined,
+    summary: [
+      { label: 'Cost', value: costOf(s).title },
+      ...(s.turnaround ? [{ label: 'Usually takes', value: s.turnaround }] : []),
+      { label: 'How', value: SERVICE_FULFILMENT_LABELS[s.fulfilment] },
+    ],
+    buttonLabel: 'Got it',
   });
 }
 
 /**
- * Request a Service (PRODUCT_SPEC.md §23), top to bottom in the order
- * people think: what → for which property → when → anything else → cost.
+ * Request a service, flat like Profile: which property first, when (visits
+ * only), optional notes, then cost and timing. The ⓘ next to the title
+ * explains the service before anyone commits.
  */
 export default function RequestServiceScreen() {
   const params = useLocalSearchParams<{ serviceId?: string; propertyId?: string }>();
@@ -59,11 +101,11 @@ export default function RequestServiceScreen() {
 
   const [serviceId, setServiceId] = useState<string | null>(params.serviceId ?? null);
   const [propertyId, setPropertyId] = useState<string | null>(params.propertyId ?? null);
-  const [day, setDay] = useState<Date | null>(null);
-  const [slot, setSlot] = useState<PreferredSlot | null>(null);
+  const [day, setDay] = useState<string>(ANY);
+  const [slot, setSlot] = useState<string>(ANY);
   const [notes, setNotes] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
-  const [days] = useState(upcomingDays);
+  const [days] = useState(dayOptions);
 
   if (properties.isPending || services.isPending) return <LoadingState />;
   if (properties.error || services.error) {
@@ -77,7 +119,6 @@ export default function RequestServiceScreen() {
       />
     );
   }
-
   if (properties.data.length === 0) {
     return (
       <EmptyState
@@ -96,48 +137,42 @@ export default function RequestServiceScreen() {
   }
 
   const service = services.data.find((s) => s.id === serviceId) ?? null;
-  const chosenProperty =
+  if (!service)
+    return <ServicePicker services={services.data} onPick={(s) => setServiceId(s.id)} />;
+
+  const property =
     properties.data.find((p) => p.id === propertyId) ??
     (properties.data.length === 1 ? properties.data[0] : null) ??
     null;
-
-  if (!service) {
-    return <ServicePicker services={services.data} onPick={(s) => setServiceId(s.id)} />;
-  }
-
   const onSite = isOnSiteService(service);
   // Location rule (PIN code / state): the server enforces it too.
-  const blocked = chosenProperty ? reachProblem(service, chosenProperty.reach) : null;
-  const v = serviceVisual(service.code, service.category);
+  const blocked = property ? reachProblem(service, property.reach) : null;
+  const cost = costOf(service);
 
   const submit = () => {
     setProblem(null);
-    if (service.coverage === 'unavailable') {
-      setProblem(`${service.name} is not available on your plan.`);
-      return;
-    }
-    if (!chosenProperty) {
-      setProblem('Choose the property this is for.');
-      return;
-    }
-    if (blocked) {
-      setProblem(REACH_PROBLEM_TEXT[blocked]);
-      return;
-    }
+    if (!property) return setProblem('Choose the property this is for.');
+    if (blocked) return setProblem(REACH_PROBLEM_TEXT[blocked]);
     create.mutate(
       {
-        property_id: chosenProperty.id,
+        property_id: property.id,
         service_id: service.id,
         description: notes,
-        preferred_date: onSite && day ? toIsoDate(day) : null,
-        preferred_slot: onSite ? slot : null,
+        preferred_date: onSite && day !== ANY ? day : null,
+        preferred_slot: onSite && slot !== ANY ? (slot as PreferredSlot) : null,
       },
       {
-        onSuccess: (request) =>
-          router.replace({
-            pathname: '/requests/[id]',
-            params: { id: request.id, submitted: '1' },
-          }),
+        onSuccess: async () => {
+          await dialog.alert({
+            title: 'Request registered',
+            message:
+              'We’ll confirm it with you. Follow it any time in My requests on the Services tab.',
+            icon: 'success',
+            tone: 'success',
+          });
+          if (router.canGoBack()) router.back();
+          else router.replace('/services');
+        },
         onError: (err) =>
           setProblem(errorMessage(err, "Couldn't send your request. Please try again.")),
       },
@@ -152,151 +187,109 @@ export default function RequestServiceScreen() {
         automaticallyAdjustKeyboardInsets
         showsVerticalScrollIndicator={false}
       >
-        {/* 1. What */}
-        <Card style={styles.serviceCard}>
-          <IconTile icon={v.icon} accent={v.accent} size={52} />
-          <View style={styles.flex}>
-            <Text style={typography.title} numberOfLines={1}>
-              {service.name}
-            </Text>
-            <Text style={typography.small} numberOfLines={3}>
-              {service.description}
-            </Text>
-          </View>
-        </Card>
-        {!params.serviceId ? (
-          <View style={styles.changeRow}>
-            <LinkButton
-              title="Choose a different service"
-              icon="refresh"
-              onPress={() => setServiceId(null)}
+        <PageHeader
+          title={service.name}
+          subtitle={SERVICE_FULFILMENT_LABELS[service.fulfilment]}
+          action={
+            <IconButton icon="info" label="About this service" onPress={() => showAbout(service)} />
+          }
+        />
+
+        <ListGroup title="Which property?" plain>
+          <View style={styles.inner}>
+            <Select
+              variant="flat"
+              label="Property"
+              placeholder="Choose a property"
+              value={property?.id ?? null}
+              options={properties.data.map((p) => {
+                const r = reachProblem(service, p.reach);
+                return {
+                  value: p.id,
+                  label: p.name,
+                  description: r ? REACH_PROBLEM_LABELS[r] : (p.city ?? undefined),
+                };
+              })}
+              onChange={setPropertyId}
             />
           </View>
-        ) : null}
-
-        {/* 2. Which property */}
-        <View>
-          <SectionTitle title="For which property?" />
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.props}
-          >
-            {properties.data.map((p) => (
-              <PropertyChoice
-                key={p.id}
-                property={p}
-                selected={chosenProperty?.id === p.id}
-                note={(() => {
-                  const r = reachProblem(service, p.reach);
-                  return r ? REACH_PROBLEM_LABELS[r] : null;
-                })()}
-                onPress={() => setPropertyId(p.id)}
-              />
-            ))}
-          </ScrollView>
-        </View>
-        {blocked && chosenProperty ? (
-          <View style={styles.block}>
+        </ListGroup>
+        {blocked && property ? (
+          <View style={styles.gap}>
             <Banner tone="info" message={REACH_PROBLEM_TEXT[blocked]} />
             {blocked === 'no_pincode' ? (
               <Button
                 title="Add PIN code"
                 variant="secondary"
-                onPress={() => router.push(`/properties/${chosenProperty.id}/edit`)}
+                onPress={() => router.push(`/properties/${property.id}/edit`)}
               />
             ) : null}
           </View>
         ) : null}
 
-        {/* 3. When (on-site services only) */}
         {onSite && !blocked ? (
-          <View style={styles.block}>
-            <SectionTitle
-              title="When suits you?"
-              subtitle="We'll confirm the exact time with you."
-            />
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.days}
-            >
-              <DayPill
-                label="Any"
-                sub="Flexible"
-                selected={day === null}
-                onPress={() => setDay(null)}
+          <ListGroup title="When suits you?" plain>
+            <View style={[styles.inner, styles.gap]}>
+              <Select
+                variant="flat"
+                label="Preferred day"
+                value={day}
+                options={days}
+                onChange={(v) => setDay(v ?? ANY)}
               />
-              {days.map((d) => (
-                <DayPill
-                  key={d.toISOString()}
-                  label={d.toLocaleDateString('en-IN', { weekday: 'short' })}
-                  sub={d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                  selected={day?.getTime() === d.getTime()}
-                  onPress={() => setDay(d)}
-                />
-              ))}
-            </ScrollView>
-            <View style={styles.slots}>
-              {PREFERRED_SLOTS.map((s) => {
-                const selected = slot === s;
-                return (
-                  <Pressable
-                    key={s}
-                    onPress={() => setSlot(selected ? null : s)}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected }}
-                    style={[styles.slot, selected && styles.slotSelected]}
-                  >
-                    <Icon
-                      name={SLOT_ICONS[s]}
-                      size={20}
-                      color={selected ? accents.amber.fg : colors.textMuted}
-                    />
-                    <Text style={[styles.slotLabel, selected && { color: accents.amber.fg }]}>
-                      {PREFERRED_SLOT_LABELS[s]}
-                    </Text>
-                    <Text style={styles.slotHours}>{PREFERRED_SLOT_HOURS[s]}</Text>
-                  </Pressable>
-                );
-              })}
+              <Select
+                variant="flat"
+                label="Time of day"
+                value={slot}
+                options={SLOT_OPTIONS}
+                onChange={(v) => setSlot(v ?? ANY)}
+              />
             </View>
-          </View>
+          </ListGroup>
         ) : null}
 
-        {/* 4. Anything else */}
-        <TextField
-          label={onSite ? 'Anything we should know?' : 'What do you need help with?'}
-          optional={onSite}
-          multiline
-          maxLength={2000}
-          placeholder={
-            onSite
-              ? 'e.g. Check the compound wall; gate key is with the neighbour'
-              : 'e.g. Property tax for 2025–26 is pending'
-          }
-          value={notes}
-          onChangeText={setNotes}
-        />
+        <ListGroup title="Anything we should know? (optional)" plain>
+          <View style={styles.inner}>
+            <TextField
+              variant="flat"
+              label="Notes for our team"
+              multiline
+              maxLength={2000}
+              placeholder={
+                onSite
+                  ? 'e.g. The gate key is with the neighbour'
+                  : 'e.g. Property tax for 2025–26 is pending'
+              }
+              value={notes}
+              onChangeText={setNotes}
+            />
+          </View>
+        </ListGroup>
 
-        {/* 5. Cost */}
-        <CostSummary service={service} />
+        <ListGroup title="Cost and timing" plain>
+          <ListRow icon="rupee" accent="teal" title={cost.title} subtitle={cost.text} />
+          {service.turnaround ? (
+            <ListRow icon="clock" accent="sky" title={service.turnaround} subtitle="Usually" />
+          ) : null}
+        </ListGroup>
+
         {problem ? <Banner message={problem} /> : null}
       </ScrollView>
 
       <Footer>
         <Button
-          title={onSite ? 'Request this visit' : 'Send request'}
+          title="Request this service"
           icon="arrow"
           onPress={submit}
           loading={create.isPending}
-          disabled={!chosenProperty || service.coverage === 'unavailable' || !!blocked}
+          disabled={!property || service.coverage === 'unavailable' || !!blocked}
         />
       </Footer>
     </View>
   );
 }
 
+/** No service chosen yet (e.g. "Book service" on a property): the catalogue as rows. */
 function ServicePicker({
   services,
   onPick,
@@ -305,226 +298,27 @@ function ServicePicker({
   onPick: (s: CatalogueService) => void;
 }) {
   return (
-    <ScrollView contentContainerStyle={styles.content}>
-      <Text style={typography.title}>What do you need?</Text>
-      <View style={styles.pickGrid}>
-        {services.map((s) => {
-          const v = serviceVisual(s.code, s.category);
-          return (
-            <Pressable
-              key={s.id}
-              onPress={() => onPick(s)}
-              style={({ pressed }) => [styles.pickTile, shadow, pressed && { opacity: 0.85 }]}
-              accessibilityRole="button"
-            >
-              <IconTile icon={v.icon} accent={v.accent} size={38} />
-              <Text style={styles.pickName} numberOfLines={2}>
-                {s.name}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+    <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <PageHeader title="What do you need?" />
+      {SERVICE_CATEGORIES.map((category) => {
+        const items = services.filter((s) => s.category === category);
+        if (items.length === 0) return null;
+        return (
+          <ListGroup key={category} title={SERVICE_CATEGORY_LABELS[category]} plain>
+            {items.map((s) => (
+              <ServiceRow key={s.id} service={s} onPress={() => onPick(s)} />
+            ))}
+          </ListGroup>
+        );
+      })}
     </ScrollView>
   );
 }
 
-function PropertyChoice({
-  property,
-  selected,
-  note,
-  onPress,
-}: {
-  property: PropertySummary;
-  selected: boolean;
-  /** Why this service can't reach this property, if so. */
-  note: string | null;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="radio"
-      accessibilityState={{ selected }}
-      style={[styles.prop, shadow, selected && styles.propSelected]}
-    >
-      <View style={styles.propMedia}>
-        {property.cover_photo_url ? (
-          <Image
-            source={signedImage(property.cover_photo_url)}
-            style={styles.fill}
-            contentFit="cover"
-          />
-        ) : (
-          <LinearGradient
-            colors={PROPERTY_TYPE_GRADIENTS[property.property_type]}
-            style={[styles.fill, styles.propIcon]}
-          >
-            <Icon
-              name={PROPERTY_TYPE_ICONS[property.property_type]}
-              size={26}
-              color="rgba(255,255,255,0.85)"
-            />
-          </LinearGradient>
-        )}
-        {selected ? (
-          <View style={styles.propCheck}>
-            <Icon name="check" size={13} color="#FFFFFF" strokeWidth={3.5} />
-          </View>
-        ) : null}
-      </View>
-      <Text style={styles.propName} numberOfLines={1}>
-        {property.name}
-      </Text>
-      {note ? (
-        <Text style={[typography.caption, { color: accents.amber.fg }]} numberOfLines={1}>
-          {note}
-        </Text>
-      ) : property.city ? (
-        <Text style={typography.caption} numberOfLines={1}>
-          {property.city}
-        </Text>
-      ) : null}
-    </Pressable>
-  );
-}
-
-function DayPill({
-  label,
-  sub,
-  selected,
-  onPress,
-}: {
-  label: string;
-  sub: string;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="radio"
-      accessibilityState={{ selected }}
-      style={[styles.day, selected && styles.daySelected]}
-    >
-      <Text style={[styles.dayLabel, selected && styles.dayTextSelected]}>{label}</Text>
-      <Text style={[styles.daySub, selected && styles.dayTextSelected]}>{sub}</Text>
-    </Pressable>
-  );
-}
-
-/** "Show whether Included or Extra; show price if Extra" (M4) — and how payment works. */
-function CostSummary({ service }: { service: CatalogueService }) {
-  let icon: IconName = 'rupee';
-  let title: string;
-  let text: string;
-  let tone: 'teal' | 'sky' | 'slate' = 'sky';
-  if (service.coverage === 'included') {
-    icon = 'success';
-    tone = 'teal';
-    title = 'Included in your plan';
-    text = `${service.included_remaining} left. It's counted only once we confirm your request.`;
-  } else if (service.coverage === 'unavailable') {
-    icon = 'blocked';
-    tone = 'slate';
-    title = 'Not available on your plan';
-    text = 'Upgrade your plan to request this service.';
-  } else if (service.price_paise !== null) {
-    title = `${formatPrice(service.price_paise)} · pay after we confirm`;
-    text = "No payment now. Once we confirm, you'll pay securely by UPI or card from the request.";
-  } else {
-    title = 'Price on quote';
-    text = "We'll review your request and share the price before any work starts.";
-  }
-  const a = accents[tone];
-  return (
-    <View style={[styles.cost, { backgroundColor: a.bg }]}>
-      <Icon name={icon} size={20} color={a.fg} />
-      <View style={styles.flex}>
-        <Text style={[styles.costTitle, { color: a.fg }]}>{title}</Text>
-        <Text style={typography.small}>{text}</Text>
-      </View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  flex: { flex: 1, minWidth: 0 },
-  fill: { width: '100%', height: '100%' },
-  content: { padding: space.lg, paddingTop: space.xs, gap: space.xl, paddingBottom: space.xxl },
-  block: { gap: space.md },
-  serviceCard: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-  changeRow: { marginTop: -space.md, alignItems: 'flex-start' },
-  props: { gap: space.md, paddingVertical: space.xs, paddingRight: space.lg },
-  prop: {
-    width: 148,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: space.sm,
-    gap: 4,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  propSelected: { borderColor: colors.primary },
-  propMedia: { height: 84, borderRadius: radius.md, overflow: 'hidden', marginBottom: 4 },
-  propIcon: { alignItems: 'center', justifyContent: 'center' },
-  propCheck: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  propName: { fontSize: 14, fontWeight: '700', color: colors.text, paddingHorizontal: 2 },
-  days: { gap: space.sm },
-  day: {
-    width: 64,
-    paddingVertical: space.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    gap: 2,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-  },
-  daySelected: { backgroundColor: colors.primary, borderColor: colors.primary },
-  dayLabel: { fontSize: 13, fontWeight: '800', color: colors.text },
-  daySub: { fontSize: 11, fontWeight: '600', color: colors.textMuted },
-  dayTextSelected: { color: '#FFFFFF' },
-  slots: { flexDirection: 'row', gap: space.sm },
-  slot: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 3,
-    paddingVertical: space.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-  },
-  slotSelected: { borderColor: accents.amber.fg, backgroundColor: accents.amber.bg },
-  slotLabel: { fontSize: 13, fontWeight: '800', color: colors.text },
-  slotHours: { fontSize: 11, color: colors.textSubtle },
-  cost: {
-    flexDirection: 'row',
-    gap: space.md,
-    padding: space.lg,
-    borderRadius: radius.lg,
-    alignItems: 'flex-start',
-  },
-  costTitle: { fontSize: 15, fontWeight: '800', marginBottom: 2 },
-  pickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md },
-  pickTile: {
-    width: '47.5%',
-    flexGrow: 1,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: space.md,
-    gap: space.sm,
-  },
-  pickName: { fontSize: 14, fontWeight: '700', color: colors.text },
+  flex: { flex: 1 },
+  content: { padding: space.lg, paddingTop: space.md, gap: space.xl, paddingBottom: space.xxl },
+  // Same 14 pt inset as list rows, so content lines up under each heading.
+  inner: { paddingHorizontal: 14, paddingVertical: space.xs },
+  gap: { gap: space.lg },
 });

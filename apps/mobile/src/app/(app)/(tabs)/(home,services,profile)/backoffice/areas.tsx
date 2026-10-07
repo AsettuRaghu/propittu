@@ -9,7 +9,7 @@ import { PullRefresh } from '@/components/PullRefresh';
 import { ErrorState, LoadingState } from '@/components/States';
 import { Badge, Banner, Button, Card, SectionTitle } from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
-import { colors, radius, space, typography } from '@/theme';
+import { colors, font, radius, space, typography } from '@/theme';
 
 /**
  * Backoffice → Where we serve. Visit services reach properties whose PIN
@@ -381,8 +381,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: colors.surfaceMuted,
   },
-  pinText: { fontSize: 13, color: colors.text, fontVariant: ['tabular-nums'] },
-  pinX: { fontSize: 14, color: colors.textSubtle },
+  pinText: { fontSize: font(13), color: colors.text, fontVariant: ['tabular-nums'] },
+  pinX: { fontSize: font(14), color: colors.textSubtle },
   addRow: { flexDirection: 'row', alignItems: 'flex-end', gap: space.sm },
   newState: { gap: space.sm },
 });

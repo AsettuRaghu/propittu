@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { PlanSummary } from '@propittu/shared';
 import { formatDate } from '@/lib/format';
-import { accents, colors, radius, shadow, space, typography } from '@/theme';
+import { accents, colors, font, radius, shadow, space, typography } from '@/theme';
 import { Icon } from './Icon';
 import { ProgressRing } from './ui';
 
@@ -91,6 +91,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     paddingVertical: 7,
   },
-  ringSmall: { fontSize: 13, fontWeight: '800' },
-  warnCtaText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
+  ringSmall: { fontSize: font(13), fontWeight: '800' },
+  warnCtaText: { color: '#FFFFFF', fontSize: font(13), fontWeight: '800' },
 });

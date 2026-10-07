@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { DOCUMENT_TYPE_LABELS, DOCUMENT_TYPES, type DocumentType } from '@propittu/shared';
 import { useDocuments } from '@/api/queries';
 import { DOCUMENT_TYPE_VISUALS } from '@/lib/icons';
-import { accents, colors, radius, shadow, space } from '@/theme';
+import { accents, colors, font, radius, shadow, space } from '@/theme';
 import { Icon } from './Icon';
 import { IconTile } from './ui';
 
@@ -70,9 +70,9 @@ const styles = StyleSheet.create({
     padding: space.md,
     gap: space.sm,
   },
-  label: { fontSize: 14, fontWeight: '700', color: colors.text },
+  label: { fontSize: font(14), fontWeight: '700', color: colors.text },
   done: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  doneText: { fontSize: 12, fontWeight: '700', color: accents.teal.fg },
+  doneText: { fontSize: font(12), fontWeight: '700', color: accents.teal.fg },
   add: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  addText: { fontSize: 12, fontWeight: '700', color: colors.primary },
+  addText: { fontSize: font(12), fontWeight: '700', color: colors.primary },
 });

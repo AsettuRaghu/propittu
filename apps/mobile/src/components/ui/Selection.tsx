@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, shadow, space } from '@/theme';
+import { colors, font, radius, shadow, space } from '@/theme';
 import { Icon, type IconName } from '../Icon';
 import { tap } from './tap';
 
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     borderColor: colors.surfaceMuted,
   },
   chipSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
-  chipText: { fontSize: 14, fontWeight: '500', color: colors.text },
+  chipText: { fontSize: font(14), fontWeight: '500', color: colors.text },
   chipTextSelected: { color: colors.primary, fontWeight: '700' },
   segments: {
     flexDirection: 'row',
@@ -123,11 +123,11 @@ const styles = StyleSheet.create({
   },
   segment: { flex: 1, paddingVertical: 9, borderRadius: radius.sm, alignItems: 'center' },
   segmentActive: { backgroundColor: colors.surface },
-  segmentText: { fontSize: 14, fontWeight: '600', color: colors.textMuted },
+  segmentText: { fontSize: font(14), fontWeight: '600', color: colors.textMuted },
   segmentTextActive: { color: colors.text },
   tabs: { flexDirection: 'row', gap: space.xs },
   tab: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: radius.pill },
   tabActive: { backgroundColor: colors.primarySoft },
-  tabText: { fontSize: 15, fontWeight: '500', color: colors.textMuted },
-  tabTextActive: { fontSize: 15, fontWeight: '600', color: colors.primary },
+  tabText: { fontSize: font(15), fontWeight: '500', color: colors.textMuted },
+  tabTextActive: { fontSize: font(15), fontWeight: '600', color: colors.primary },
 });

@@ -1,7 +1,7 @@
 import { type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { colors, radius, space } from '@/theme';
+import { colors, font, radius, space } from '@/theme';
 import { Icon, type IconName } from '../Icon';
 
 /* ------------------------------------------------------------------ *
@@ -179,9 +179,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: radius.pill,
   },
-  badgeText: { fontSize: 12, fontWeight: '700' },
+  badgeText: { fontSize: font(12), fontWeight: '700' },
   badgeLg: { paddingHorizontal: space.md, paddingVertical: 6, gap: 6 },
-  badgeTextLg: { fontSize: 14, fontWeight: '800' },
+  badgeTextLg: { fontSize: font(14), fontWeight: '800' },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -190,15 +190,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     borderRadius: radius.md,
   },
-  bannerTitle: { fontSize: 14, fontWeight: '700', marginBottom: 1 },
-  bannerText: { fontSize: 13, lineHeight: 18 },
+  bannerTitle: { fontSize: font(14), fontWeight: '700', marginBottom: 1 },
+  bannerText: { fontSize: font(13), lineHeight: font(18) },
   bannerAction: {
     borderWidth: 1,
     borderRadius: radius.pill,
     paddingHorizontal: space.md,
     paddingVertical: 6,
   },
-  bannerActionText: { fontSize: 13, fontWeight: '700' },
+  bannerActionText: { fontSize: font(13), fontWeight: '700' },
   progressTrack: { borderRadius: radius.pill, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: radius.pill },
 });

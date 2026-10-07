@@ -8,7 +8,7 @@ import { formatDate, formatLocation } from '@/lib/format';
 import { PROPERTY_TYPE_GRADIENTS, PROPERTY_TYPE_ICONS, STATUS_ICONS } from '@/lib/icons';
 import { goToCompletionStep } from '@/lib/propertySteps';
 import { signedImage } from '@/lib/image';
-import { accents, colors, radius, shadow, space, typography } from '@/theme';
+import { accents, colors, font, radius, shadow, space, typography } from '@/theme';
 import { Icon, type IconName } from './Icon';
 import { ProgressBar } from './ui';
 
@@ -215,12 +215,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
-  typeText: { fontSize: 11, fontWeight: '700', color: colors.text },
+  typeText: { fontSize: font(11), fontWeight: '700', color: colors.text },
   body: { paddingHorizontal: space.md, paddingTop: 10, paddingBottom: space.md, gap: 8 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   locationRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 },
   progressRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  progressLabel: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
+  progressLabel: { fontSize: font(12), fontWeight: '600', color: colors.textMuted },
   progressPct: { fontWeight: '800', color: colors.primary },
   attention: {
     flexDirection: 'row',
@@ -230,10 +230,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 7,
   },
-  attentionText: { flex: 1, fontSize: 12.5, fontWeight: '700' },
+  attentionText: { flex: 1, fontSize: font(12.5), fontWeight: '700' },
   stats: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
   stat: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  statValue: { fontSize: 13, fontWeight: '800', color: colors.text },
+  statValue: { fontSize: font(13), fontWeight: '800', color: colors.text },
   bone: { backgroundColor: colors.surfaceMuted },
   boneLine: { height: 10, borderRadius: 5, backgroundColor: colors.surfaceMuted },
 });

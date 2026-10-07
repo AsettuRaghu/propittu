@@ -1,6 +1,6 @@
 import { forwardRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
-import { colors, radius, space, typography } from '@/theme';
+import { colors, font, radius, space, typography } from '@/theme';
 
 type FieldProps = Omit<TextInputProps, 'style'> & {
   label: string;
@@ -71,8 +71,8 @@ export const TextField = forwardRef<TextInput, FieldProps>(function TextField(
 const styles = StyleSheet.create({
   wrap: { gap: 6 },
   flat: {
-    fontSize: 17,
-    lineHeight: 24,
+    fontSize: font(17),
+    lineHeight: font(24),
     color: colors.text,
     paddingVertical: space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
   flatMultiline: { minHeight: 110, textAlignVertical: 'top' },
   flatFocused: { borderBottomColor: colors.primary, borderBottomWidth: 1.5 },
   flatError: { borderBottomColor: colors.danger },
-  label: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
+  label: { fontSize: font(13), fontWeight: '700', color: colors.textMuted },
   optional: { fontWeight: '500', color: colors.textSubtle },
   input: {
     minHeight: 50,
@@ -90,12 +90,12 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingHorizontal: space.md,
     paddingVertical: space.md,
-    fontSize: 16,
+    fontSize: font(16),
     color: colors.text,
     backgroundColor: colors.surface,
   },
   multiline: { minHeight: 96, textAlignVertical: 'top' },
   inputFocused: { borderColor: colors.primary, backgroundColor: colors.surface },
   inputError: { borderColor: colors.danger, backgroundColor: colors.dangerSoft },
-  error: { fontSize: 13, color: colors.danger, fontWeight: '600' },
+  error: { fontSize: font(13), color: colors.danger, fontWeight: '600' },
 });

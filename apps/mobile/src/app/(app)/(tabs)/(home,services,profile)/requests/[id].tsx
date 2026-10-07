@@ -18,14 +18,14 @@ import { VisitReportView } from '@/components/VisitReportView';
 import { errorMessage } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
 import { serviceVisual, STATUS_ICONS, STATUS_TONES } from '@/lib/icons';
-import { accents, colors, space, typography } from '@/theme';
+import { accents, colors, font, space, typography } from '@/theme';
 
 /**
  * Service request (M4): what, where, its timeline step by step, the cost
  * and payment, and — once completed — the visit report.
  */
 export default function ServiceRequestScreen() {
-  const { id, submitted } = useLocalSearchParams<{ id: string; submitted?: string }>();
+  const { id } = useLocalSearchParams<{ id: string }>();
   const { data: request, isPending, error, refetch } = useServiceRequest(id);
   const cancel = useCancelServiceRequest(id);
 
@@ -57,18 +57,6 @@ export default function ServiceRequestScreen() {
       showsVerticalScrollIndicator={false}
       refreshControl={<PullRefresh onRefresh={() => refetch()} />}
     >
-      {submitted === '1' ? (
-        <View style={[styles.submitted, { backgroundColor: accents.teal.bg }]}>
-          <Icon name="celebrate" size={22} color={accents.teal.fg} />
-          <View style={styles.flex}>
-            <Text style={[styles.submittedTitle, { color: accents.teal.fg }]}>Request sent</Text>
-            <Text style={typography.small}>
-              We&apos;ll confirm it with you and update every step here.
-            </Text>
-          </View>
-        </View>
-      ) : null}
-
       {/* Hero */}
       <Card style={styles.hero}>
         <View style={styles.heroTop}>
@@ -121,7 +109,6 @@ export default function ServiceRequestScreen() {
       {request.report ? <VisitReportView report={request.report} /> : null}
       {request.outcome ? <OutcomeView outcome={request.outcome} /> : null}
 
-      {submitted === '1' ? <Button title="Done" onPress={() => router.back()} /> : null}
       <View style={styles.actions}>
         {request.status === 'requested' ? (
           <Button
@@ -392,18 +379,10 @@ function Timeline({ request }: { request: ServiceRequestDetail }) {
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
   content: { padding: space.lg, paddingTop: space.xs, gap: space.xl, paddingBottom: space.xxl },
-  submitted: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-    padding: space.lg,
-    borderRadius: 20,
-  },
-  submittedTitle: { fontSize: 16, fontWeight: '800' },
   hero: { gap: space.md },
   heroTop: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   heroRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  cost: { fontSize: 15, fontWeight: '800', color: colors.text },
+  cost: { fontSize: font(15), fontWeight: '800', color: colors.text },
   note: {
     flexDirection: 'row',
     gap: space.sm,
@@ -418,7 +397,7 @@ const styles = StyleSheet.create({
     padding: space.lg,
     borderRadius: 20,
   },
-  payTitle: { fontSize: 15, fontWeight: '800' },
+  payTitle: { fontSize: font(15), fontWeight: '800' },
   payCard: { gap: space.md },
   needs: { gap: space.md, borderWidth: 1.5, borderColor: accents.coral.fg },
   ask: { backgroundColor: colors.surfaceMuted, borderRadius: 14, padding: space.md },

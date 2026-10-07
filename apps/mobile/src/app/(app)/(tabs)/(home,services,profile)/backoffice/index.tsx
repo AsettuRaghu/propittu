@@ -24,7 +24,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/States';
 import { Badge, Button, Card, Chips } from '@/components/ui';
 import { formatDate } from '@/lib/format';
 import { STATUS_TONES, TICKET_TONES } from '@/lib/icons';
-import { colors, radius, space, typography } from '@/theme';
+import { colors, font, radius, space, typography } from '@/theme';
 import { Icon } from '@/components/Icon';
 
 type Tab = 'requests' | 'tickets' | 'accounts' | 'payments' | 'services' | 'pittu';
@@ -395,7 +395,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   segmentActive: { backgroundColor: colors.surface },
-  segmentText: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
+  segmentText: { fontSize: font(12), fontWeight: '600', color: colors.textMuted },
   segmentTextActive: { color: colors.text, fontWeight: '600' },
   toolbar: { paddingHorizontal: space.lg, paddingTop: space.lg },
   search: { flexDirection: 'row', alignItems: 'flex-end', gap: space.sm },

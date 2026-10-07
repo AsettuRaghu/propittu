@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, space, typography } from '@/theme';
+import { colors, font, radius, space, typography } from '@/theme';
 import { dialog } from './Dialog';
 import { Icon, type IconName } from './Icon';
 
@@ -122,7 +122,7 @@ export function Select<T extends string>({
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   wrap: { gap: 6 },
-  label: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
+  label: { fontSize: font(13), fontWeight: '700', color: colors.textMuted },
   optional: { fontWeight: '500', color: colors.textSubtle },
   field: {
     flexDirection: 'row',
@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
     borderColor: colors.borderStrong,
     backgroundColor: colors.surface,
   },
-  error: { fontSize: 13, color: colors.danger, fontWeight: '600', marginTop: 4 },
+  error: { fontSize: font(13), color: colors.danger, fontWeight: '600', marginTop: 4 },
   flatField: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -144,5 +144,5 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderStrong,
   },
-  flatValue: { fontSize: 17, color: colors.text, marginTop: 2 },
+  flatValue: { fontSize: font(17), color: colors.text, marginTop: 2 },
 });

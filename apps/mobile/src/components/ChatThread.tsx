@@ -17,7 +17,7 @@ import { formatFileSize, type SupportAttachment, type SupportMessage } from '@pr
 import type { LocalFile } from '@/api/uploads';
 import { formatDateTime } from '@/lib/format';
 import { signedImage } from '@/lib/image';
-import { colors, radius, space, typography } from '@/theme';
+import { colors, font, radius, space, typography } from '@/theme';
 import { AttachmentPreviews, useAttachmentAdder } from './AttachmentPicker';
 import { Icon } from './Icon';
 import { IconButton } from './ui';
@@ -210,8 +210,8 @@ const styles = StyleSheet.create({
   },
   bubbleOwn: { backgroundColor: colors.primary, borderBottomRightRadius: 4 },
   bubbleOther: { backgroundColor: colors.surface, borderBottomLeftRadius: 4 },
-  author: { fontSize: 12, fontWeight: '800', color: colors.primary },
-  time: { fontSize: 11, color: colors.textSubtle, alignSelf: 'flex-end' },
+  author: { fontSize: font(12), fontWeight: '800', color: colors.primary },
+  time: { fontSize: font(11), color: colors.textSubtle, alignSelf: 'flex-end' },
   atts: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 2 },
   attImage: { width: 96, height: 96, borderRadius: radius.sm },
   attFile: {
@@ -225,8 +225,8 @@ const styles = StyleSheet.create({
     minWidth: 180,
   },
   attFileOwn: { backgroundColor: 'rgba(255,255,255,0.18)' },
-  attName: { fontSize: 13, fontWeight: '700', color: colors.text },
-  attSize: { fontSize: 11, color: colors.textSubtle },
+  attName: { fontSize: font(13), fontWeight: '700', color: colors.text },
+  attSize: { fontSize: font(11), color: colors.textSubtle },
   bar: {
     gap: space.sm,
     paddingHorizontal: space.lg,
@@ -255,7 +255,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     paddingTop: 12,
     paddingBottom: 12,
-    fontSize: 15,
+    fontSize: font(15),
     color: colors.text,
   },
   closed: { textAlign: 'center', marginTop: space.sm },

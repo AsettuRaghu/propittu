@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, typography, type Accent } from '@/theme';
+import { colors, font, typography, type Accent } from '@/theme';
 import { type IconName } from './Icon';
 import { ListRow } from './ui';
 
@@ -53,6 +53,6 @@ export function UsageRow({
 
 const styles = StyleSheet.create({
   numbers: { alignItems: 'flex-end' },
-  used: { fontSize: 15, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  of: { fontSize: 13, fontWeight: '500', color: colors.textSubtle },
+  used: { fontSize: font(15), fontWeight: '700', fontVariant: ['tabular-nums'] },
+  of: { fontSize: font(13), fontWeight: '500', color: colors.textSubtle },
 });

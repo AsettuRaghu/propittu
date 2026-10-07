@@ -5,7 +5,7 @@ import { useDeleteVideo, useInvalidateProperty } from '@/api/queries';
 import { playVideo, prepareVideo, uploadVideo } from '@/api/uploads';
 import { errorMessage } from '@/lib/errors';
 import { pickVideo } from '@/lib/pickPhotos';
-import { accents, colors, radius, space, typography } from '@/theme';
+import { accents, colors, font, radius, space, typography } from '@/theme';
 import { dialog, toast } from './Dialog';
 import { Icon } from './Icon';
 import { Banner, ProgressBar } from './ui';
@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: space.xs,
   },
-  meta: { fontSize: 11, color: colors.onPrimary },
+  meta: { fontSize: font(11), color: colors.onPrimary },
   uploading: {
     backgroundColor: colors.surfaceMuted,
     justifyContent: 'center',
@@ -142,5 +142,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 2,
   },
-  addText: { fontSize: 13, fontWeight: '700', color: accents.rose.fg },
+  addText: { fontSize: font(13), fontWeight: '700', color: accents.rose.fg },
 });

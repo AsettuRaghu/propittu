@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, space, typography } from '@/theme';
+import { colors, font, space, typography } from '@/theme';
 
 /**
  * The top of a section page (Plan & Usage, Help & Support): a large title
@@ -44,6 +44,6 @@ const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
   wrap: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  subtitle: { fontSize: 14, color: colors.textMuted, marginTop: 2 },
+  subtitle: { fontSize: font(14), color: colors.textMuted, marginTop: 2 },
   strong: { fontWeight: '700', color: colors.text },
 });

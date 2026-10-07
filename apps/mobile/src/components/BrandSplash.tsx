@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, G, Line, Path, Rect } from 'react-native-svg';
 import { markSplashDone } from '@/lib/splash';
-import { accents, colors } from '@/theme';
+import { accents, colors, font } from '@/theme';
 import { Icon, type IconName } from './Icon';
 
 const APath = Animated.createAnimatedComponent(Path);
@@ -222,8 +222,8 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: '#FFFFFF',
   },
-  word: { fontSize: 34, fontWeight: '800', color: colors.text, letterSpacing: -1 },
-  tagline: { fontSize: 16, fontWeight: '600', color: colors.textMuted },
+  word: { fontSize: font(34), fontWeight: '800', color: colors.text, letterSpacing: -1 },
+  tagline: { fontSize: font(16), fontWeight: '600', color: colors.textMuted },
   chips: { flexDirection: 'row', gap: 8, marginTop: 18 },
   chip: {
     flexDirection: 'row',
@@ -236,6 +236,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  chipText: { fontSize: 12, fontWeight: '700', color: colors.text },
-  skip: { position: 'absolute', bottom: 48, fontSize: 12, color: colors.textSubtle },
+  chipText: { fontSize: font(12), fontWeight: '700', color: colors.text },
+  skip: { position: 'absolute', bottom: 48, fontSize: font(12), color: colors.textSubtle },
 });

@@ -26,7 +26,7 @@ import {
 import { Banner, Button, ProgressBar } from '@/components/ui';
 import { errorMessage, fieldErrors } from '@/lib/errors';
 import { pickPhotos } from '@/lib/pickPhotos';
-import { accents, colors, radius, space, typography } from '@/theme';
+import { accents, colors, font, radius, space, typography } from '@/theme';
 
 type Phase =
   | { kind: 'idle' }
@@ -236,6 +236,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 2,
   },
-  addPhotoText: { fontSize: 13, fontWeight: '700', color: accents.sky.fg },
+  addPhotoText: { fontSize: font(13), fontWeight: '700', color: accents.sky.fg },
   progress: { gap: space.xs },
 });

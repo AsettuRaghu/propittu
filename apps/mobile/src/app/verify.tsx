@@ -14,7 +14,7 @@ import { OtpInput } from '@/components/OtpInput';
 import { Banner, Button } from '@/components/ui';
 import { authErrorMessage } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
-import { colors, space, typography } from '@/theme';
+import { colors, font, space, typography } from '@/theme';
 
 /**
  * OTP verification (PRODUCT_SPEC.md §11): 6-digit code, validation errors,
@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
   back: { alignSelf: 'flex-start', padding: 4, marginLeft: -4 },
   header: { gap: space.sm },
   sentTo: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  link: { fontSize: 14, fontWeight: '600', color: colors.primary },
+  link: { fontSize: font(14), fontWeight: '600', color: colors.primary },
   resend: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  cooldown: { fontSize: 14, color: colors.textSubtle },
+  cooldown: { fontSize: font(14), color: colors.textSubtle },
 });

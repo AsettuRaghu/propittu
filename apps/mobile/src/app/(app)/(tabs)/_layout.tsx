@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { Icon, type IconName } from '@/components/Icon';
-import { colors, radius } from '@/theme';
+import { colors, font, radius } from '@/theme';
 
 /**
  * Three tabs rather than §39's suggested four: §15's Home already IS the
@@ -32,7 +32,7 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textSubtle,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },
+        tabBarLabelStyle: { fontSize: font(11), fontWeight: '700' },
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,

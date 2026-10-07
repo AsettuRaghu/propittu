@@ -11,7 +11,16 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { accents, colors, radius, shadowStrong, space, typography, type Accent } from '@/theme';
+import {
+  accents,
+  colors,
+  font,
+  radius,
+  shadowStrong,
+  space,
+  typography,
+  type Accent,
+} from '@/theme';
 import { Icon, type IconName } from './Icon';
 import { Button, IconTile } from './ui';
 
@@ -78,7 +87,7 @@ type Request =
       icon?: IconName;
       resolve: (v: boolean) => void;
     } & ConfirmExtras)
-  | {
+  | ({
       kind: 'alert';
       title: string;
       message?: string;
@@ -86,7 +95,7 @@ type Request =
       tone: Tone;
       icon?: IconName;
       resolve: () => void;
-    }
+    } & ConfirmExtras)
   | {
       kind: 'actions';
       title: string;
@@ -135,13 +144,15 @@ export const dialog = {
       });
     });
   },
-  alert(opts: {
-    title: string;
-    message?: string;
-    buttonLabel?: string;
-    tone?: Tone;
-    icon?: IconName;
-  }): Promise<void> {
+  alert(
+    opts: {
+      title: string;
+      message?: string;
+      buttonLabel?: string;
+      tone?: Tone;
+      icon?: IconName;
+    } & ConfirmExtras,
+  ): Promise<void> {
     return new Promise((resolve) => {
       if (!showRequest) return resolve();
       showRequest({
@@ -151,6 +162,10 @@ export const dialog = {
         buttonLabel: opts.buttonLabel ?? 'OK',
         tone: opts.tone ?? 'primary',
         icon: opts.icon,
+        highlights: opts.highlights,
+        summary: opts.summary,
+        note: opts.note,
+        accent: opts.accent,
         resolve,
       });
     });
@@ -259,10 +274,7 @@ export function DialogHost() {
               <View style={styles.center}>
                 <IconTile
                   icon={request.icon ?? TONE_ICON[request.tone]}
-                  accent={
-                    (request.kind === 'confirm' ? request.accent : undefined) ??
-                    TONE_ACCENT[request.tone]
-                  }
+                  accent={request.accent ?? TONE_ACCENT[request.tone]}
                   size={52}
                 />
               </View>
@@ -276,7 +288,7 @@ export function DialogHost() {
               </Text>
             ) : null}
 
-            {request.kind === 'confirm' && request.highlights?.length ? (
+            {request.kind !== 'actions' && request.highlights?.length ? (
               <View style={styles.highlights}>
                 {request.highlights.map((h) => (
                   <View key={h} style={styles.highlight}>
@@ -298,7 +310,7 @@ export function DialogHost() {
                 ))}
               </View>
             ) : null}
-            {request.kind === 'confirm' && request.summary?.length ? (
+            {request.kind !== 'actions' && request.summary?.length ? (
               <View style={styles.summary}>
                 {request.summary.map((r) => (
                   <View
@@ -325,7 +337,7 @@ export function DialogHost() {
                 ))}
               </View>
             ) : null}
-            {request.kind === 'confirm' && request.note ? (
+            {request.kind !== 'actions' && request.note ? (
               <Text style={[typography.caption, styles.centerText]}>{request.note}</Text>
             ) : null}
 
@@ -477,7 +489,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     paddingTop: 9,
   },
-  totalValue: { fontSize: 18, fontWeight: '800', color: colors.text },
+  totalValue: { fontSize: font(18), fontWeight: '800', color: colors.text },
   actions: { gap: space.xs, marginTop: space.xs },
   actionList: { maxHeight: Dimensions.get('window').height * 0.55 },
   action: {

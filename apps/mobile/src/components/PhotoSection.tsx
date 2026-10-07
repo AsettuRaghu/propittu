@@ -8,7 +8,7 @@ import { preparePhoto, uploadPhoto } from '@/api/uploads';
 import { errorMessage } from '@/lib/errors';
 import { signedImage } from '@/lib/image';
 import { pickPhotos } from '@/lib/pickPhotos';
-import { accents, colors, radius, space, typography } from '@/theme';
+import { accents, colors, font, radius, space, typography } from '@/theme';
 import { dialog, toast } from './Dialog';
 import { Icon } from './Icon';
 import { Banner, Button, ProgressBar } from './ui';
@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: space.xs,
   },
-  emptyText: { fontSize: 14, fontWeight: '700', color: accents.sky.fg },
+  emptyText: { fontSize: font(14), fontWeight: '700', color: accents.sky.fg },
   viewer: { flex: 1, backgroundColor: '#000000' },
   viewerBar: { flexDirection: 'row', justifyContent: 'flex-end', padding: space.lg },
   viewerImage: { flex: 1 },

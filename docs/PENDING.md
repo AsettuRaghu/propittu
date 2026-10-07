@@ -40,6 +40,12 @@ registration is through.
 
 ## Product follow-ups noted
 
+- **Brainstorm (owner asked to be reminded): configurable services at scale.** Each service with
+  its own steps, the information collected in the app, what staff / agents see and do, its
+  statuses, pricing and timelines — defined in data, not code, and usable by the AI layer.
+  Today: services are rows with category, delivery (visit / paperwork), reach, price, includes
+  and turnaround; two fixed status flows; outcomes per delivery type. See the brief from 7 Oct.
+
 - Account deletion: consider a 7-day grace period (deletion scheduled, cancelled by logging in) — needs the delete function to run from the server, and the delete page wording updated.
 
 - Where we serve: tell interested customers when their PIN code is added (needs notifications); use the map pin as a cross-check on wrong PIN codes; per-area service lists, if one area ever offers fewer services.

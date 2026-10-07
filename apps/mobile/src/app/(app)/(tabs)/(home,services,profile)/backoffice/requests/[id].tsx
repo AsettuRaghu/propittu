@@ -54,7 +54,7 @@ import { errorMessage, fieldErrors } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
 import { STATUS_TONES } from '@/lib/icons';
 import { pickPhotos, pickVideo } from '@/lib/pickPhotos';
-import { colors, radius, space, typography } from '@/theme';
+import { colors, font, radius, space, typography } from '@/theme';
 import { showAlert } from '@/lib/alert';
 import { Icon } from '@/components/Icon';
 
@@ -959,7 +959,7 @@ const styles = StyleSheet.create({
   links: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   typeRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   uploading: { gap: space.sm },
-  error: { fontSize: 13, color: colors.danger },
+  error: { fontSize: font(13), color: colors.danger },
   steps: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: space.xs },
   step: { alignItems: 'center', gap: space.xs, flex: 1 },
   dot: {
@@ -974,10 +974,10 @@ const styles = StyleSheet.create({
   },
   dotDone: { backgroundColor: colors.primary, borderColor: colors.primary },
   dotActive: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
-  dotNumber: { fontSize: 11, fontWeight: '600', color: colors.textSubtle },
+  dotNumber: { fontSize: font(11), fontWeight: '600', color: colors.textSubtle },
   dotNumberActive: { color: colors.primary },
-  stepLabel: { fontSize: 11, color: colors.textSubtle },
+  stepLabel: { fontSize: font(11), color: colors.textSubtle },
   stepLabelOn: { color: colors.text, fontWeight: '600' },
   cancel: { alignSelf: 'center', padding: space.md },
-  cancelText: { color: colors.danger, fontSize: 14, fontWeight: '600' },
+  cancelText: { color: colors.danger, fontSize: font(14), fontWeight: '600' },
 });

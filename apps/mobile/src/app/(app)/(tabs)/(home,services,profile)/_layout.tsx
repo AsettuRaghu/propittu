@@ -1,5 +1,5 @@
 import { Stack } from 'expo-router';
-import { colors } from '@/theme';
+import { colors, font } from '@/theme';
 
 /**
  * One navigation stack PER TAB, so the tab bar stays visible on every
@@ -74,7 +74,7 @@ export default function TabStackLayout({ segment }: { segment?: string }) {
       initialRouteName={root}
       screenOptions={{
         headerTintColor: colors.primary,
-        headerTitleStyle: { color: colors.text, fontWeight: '700', fontSize: 17 },
+        headerTitleStyle: { color: colors.text, fontWeight: '700', fontSize: font(17) },
         headerStyle: { backgroundColor: colors.background },
         headerShadowVisible: false,
         headerBackButtonDisplayMode: 'minimal',

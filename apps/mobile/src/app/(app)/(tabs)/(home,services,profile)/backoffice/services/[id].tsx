@@ -45,6 +45,8 @@ function ServiceForm({ service }: { service: StaffService }) {
   const [isExtra, setIsExtra] = useState(service.is_extra_available);
   const [fulfilment, setFulfilment] = useState<ServiceFulfilment>(service.fulfilment);
   const [reach, setReach] = useState<ServiceReach>(service.reach);
+  const [includes, setIncludes] = useState(service.includes.join('\n'));
+  const [turnaround, setTurnaround] = useState(service.turnaround ?? '');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -65,6 +67,11 @@ function ServiceForm({ service }: { service: StaffService }) {
         is_extra_available: isExtra,
         fulfilment,
         reach,
+        includes: includes
+          .split('\n')
+          .map((l) => l.trim())
+          .filter(Boolean),
+        turnaround: turnaround.trim() || null,
       },
       {
         onSuccess: () => router.back(),
@@ -102,6 +109,26 @@ function ServiceForm({ service }: { service: StaffService }) {
           multiline
           maxLength={500}
           error={errors.description}
+          editable={canEdit}
+        />
+        <TextField
+          label="What's included"
+          optional
+          multiline
+          value={includes}
+          onChangeText={setIncludes}
+          hint="One point per line — shown to customers before they book (up to 10)."
+          error={errors.includes}
+          editable={canEdit}
+        />
+        <TextField
+          label="How long it usually takes"
+          optional
+          value={turnaround}
+          onChangeText={setTurnaround}
+          placeholder="e.g. Within 3–5 days of confirming"
+          maxLength={80}
+          error={errors.turnaround}
           editable={canEdit}
         />
         <TextField

@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import type { Property } from '@propittu/shared';
-import { accents, colors, radius, shadow, space } from '@/theme';
+import { accents, colors, font, radius, shadow, space } from '@/theme';
 import { dialog } from './Dialog';
 import { Icon, type IconName } from './Icon';
 
@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
-  expandText: { fontSize: 12, fontWeight: '700', color: colors.text },
+  expandText: { fontSize: font(12), fontWeight: '700', color: colors.text },
   actions: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   actionIconPrimary: { backgroundColor: accents.teal.fg },
-  actionText: { fontSize: 12, fontWeight: '600', color: colors.text },
+  actionText: { fontSize: font(12), fontWeight: '600', color: colors.text },
   empty: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md },
   emptyIcon: {
     width: 36,
@@ -205,13 +205,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
-  emptyText: { color: colors.textMuted, fontSize: 12, marginTop: 1 },
+  emptyTitle: { color: colors.text, fontSize: font(15), fontWeight: '700' },
+  emptyText: { color: colors.textMuted, fontSize: font(12), marginTop: 1 },
   emptyCta: {
     backgroundColor: accents.teal.bg,
     borderRadius: radius.pill,
     paddingHorizontal: space.md,
     paddingVertical: 6,
   },
-  emptyCtaText: { color: accents.teal.fg, fontSize: 13, fontWeight: '800' },
+  emptyCtaText: { color: accents.teal.fg, fontSize: font(13), fontWeight: '800' },
 });

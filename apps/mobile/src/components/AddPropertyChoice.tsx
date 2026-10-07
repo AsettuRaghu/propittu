@@ -7,7 +7,7 @@ import { createDraftProperty, startAnalysis } from '@/api/ai';
 import { api } from '@/api/client';
 import { prepareDocument, uploadDocument } from '@/api/uploads';
 import { errorMessage } from '@/lib/errors';
-import { accents, colors, radius, shadow, space, typography } from '@/theme';
+import { accents, colors, font, radius, shadow, space, typography } from '@/theme';
 import { Icon, type IconName } from './Icon';
 import { Banner, Button, ProgressBar } from './ui';
 
@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
     padding: space.md,
     gap: 4,
   },
-  bubbleTitle: { fontSize: 16, fontWeight: '800', color: colors.text },
+  bubbleTitle: { fontSize: font(16), fontWeight: '800', color: colors.text },
   group: { backgroundColor: colors.surface, borderRadius: radius.lg, overflow: 'hidden' },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 72 },
   option: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.lg },
@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
   },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' },
   tag: {
-    fontSize: 11,
+    fontSize: font(11),
     fontWeight: '800',
     color: colors.primary,
     backgroundColor: colors.primarySoft,

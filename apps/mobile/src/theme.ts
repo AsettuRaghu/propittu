@@ -82,17 +82,27 @@ export const radius = {
   pill: 999,
 } as const;
 
+/*
+ * Text size. Every font size in the app goes through font(), so a future
+ * "text size" setting only changes TEXT_SCALE (read before the app's styles
+ * are created, e.g. at start-up). The phone's own accessibility text size
+ * still applies on top. Layouts must let text wrap — no fixed text heights.
+ */
+const TEXT_SCALE = 1;
+export const font = (size: number) => size * TEXT_SCALE;
+const line = (height: number) => height * TEXT_SCALE;
+
 /** Compact type scale: titles fit on one line on a phone. */
 export const typography = {
-  display: { fontSize: 24, fontWeight: '800', color: colors.text, letterSpacing: -0.5 },
-  title: { fontSize: 19, fontWeight: '700', color: colors.text, letterSpacing: -0.3 },
-  heading: { fontSize: 16, fontWeight: '700', color: colors.text, letterSpacing: -0.2 },
-  body: { fontSize: 15, color: colors.text, lineHeight: 21 },
-  bodyStrong: { fontSize: 15, fontWeight: '600', color: colors.text },
-  small: { fontSize: 13, color: colors.textMuted, lineHeight: 18 },
-  caption: { fontSize: 12, color: colors.textSubtle },
+  display: { fontSize: font(24), fontWeight: '800', color: colors.text, letterSpacing: -0.5 },
+  title: { fontSize: font(19), fontWeight: '700', color: colors.text, letterSpacing: -0.3 },
+  heading: { fontSize: font(16), fontWeight: '700', color: colors.text, letterSpacing: -0.2 },
+  body: { fontSize: font(15), color: colors.text, lineHeight: line(21) },
+  bodyStrong: { fontSize: font(15), fontWeight: '600', color: colors.text },
+  small: { fontSize: font(13), color: colors.textMuted, lineHeight: line(18) },
+  caption: { fontSize: font(12), color: colors.textSubtle },
   overline: {
-    fontSize: 11,
+    fontSize: font(11),
     fontWeight: '700',
     color: colors.textSubtle,
     letterSpacing: 0.9,

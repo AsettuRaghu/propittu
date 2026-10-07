@@ -18,7 +18,7 @@ import { Banner, Button } from '@/components/ui';
 import { authErrorMessage } from '@/lib/errors';
 import { useSplashDone } from '@/lib/splash';
 import { supabase } from '@/lib/supabase';
-import { colors, gradients, radius, shadow, space, typography } from '@/theme';
+import { colors, font, gradients, radius, shadow, space, typography } from '@/theme';
 
 /**
  * Login — Indian mobile number only (PRODUCT_SPEC.md §10, §13).
@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: space.sm,
   },
-  wordmark: { fontSize: 34, fontWeight: '800', color: colors.primary, letterSpacing: -0.5 },
+  wordmark: { fontSize: font(34), fontWeight: '800', color: colors.primary, letterSpacing: -0.5 },
   tagline: { ...typography.body, color: colors.textMuted, textAlign: 'center' },
   form: {
     gap: space.md,
@@ -174,15 +174,15 @@ const styles = StyleSheet.create({
     borderRightWidth: 1,
     borderRightColor: colors.border,
   },
-  prefixText: { fontSize: 18, fontWeight: '600', color: colors.text },
+  prefixText: { fontSize: font(18), fontWeight: '600', color: colors.text },
   phoneInput: {
     flex: 1,
     minHeight: 56,
     paddingHorizontal: space.lg,
-    fontSize: 20,
+    fontSize: font(20),
     letterSpacing: 1,
     color: colors.text,
   },
-  error: { fontSize: 14, color: colors.danger },
+  error: { fontSize: font(14), color: colors.danger },
   footnote: { ...typography.caption, textAlign: 'center' },
 });

@@ -21,7 +21,7 @@ import { Badge, Card, IconButton, IconTile, LinkButton, SectionTitle } from '@/c
 import { formatArea, formatDate, formatLocation } from '@/lib/format';
 import { goToCompletionStep } from '@/lib/propertySteps';
 import { PROPERTY_TYPE_ICONS, STATUS_TONES, serviceVisual } from '@/lib/icons';
-import { accents, colors, radius, shadow, space, typography, type Accent } from '@/theme';
+import { accents, colors, font, radius, shadow, space, typography, type Accent } from '@/theme';
 
 /** Property details (§18, M2/M3): map first, everything one tap away. */
 export default function PropertyDetailsScreen() {
@@ -290,7 +290,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: colors.surface,
   },
-  quickLabel: { fontSize: 12, fontWeight: '700', color: colors.text },
+  quickLabel: { fontSize: font(12), fontWeight: '700', color: colors.text },
   facts: { gap: space.md },
   factGrid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: space.md },
   fact: { width: '50%', gap: 2, paddingRight: space.sm },
@@ -313,5 +313,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  bookText: { fontSize: 14, fontWeight: '700', color: colors.primary },
+  bookText: { fontSize: font(14), fontWeight: '700', color: colors.primary },
 });

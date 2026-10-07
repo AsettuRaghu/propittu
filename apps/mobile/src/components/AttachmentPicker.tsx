@@ -10,7 +10,7 @@ import {
 } from '@/api/uploads';
 import { errorMessage } from '@/lib/errors';
 import { pickPhotos } from '@/lib/pickPhotos';
-import { colors, radius, space } from '@/theme';
+import { colors, font, radius, space } from '@/theme';
 import { dialog } from './Dialog';
 import { Icon } from './Icon';
 
@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
     padding: 4,
     gap: 2,
   },
-  docName: { fontSize: 9, fontWeight: '600', color: colors.primary },
+  docName: { fontSize: font(9), fontWeight: '600', color: colors.primary },
   remove: {
     position: 'absolute',
     top: -6,

@@ -22,7 +22,7 @@ import { Icon } from '@/components/Icon';
 import { ErrorState, LoadingState } from '@/components/States';
 import { Banner, Button } from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
-import { accents, colors, radius, shadow, space, typography } from '@/theme';
+import { accents, colors, font, radius, shadow, space, typography } from '@/theme';
 
 /**
  * Pittu's quick questions after a property is added from its deed, then the
@@ -389,7 +389,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   fill: { height: 6, borderRadius: 3, backgroundColor: colors.primary },
-  count: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
+  count: { fontSize: font(12), fontWeight: '700', color: colors.textMuted },
   bubbleRow: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start' },
   avatar: {
     width: 28,
@@ -415,10 +415,10 @@ const styles = StyleSheet.create({
   tight: { paddingVertical: space.xs },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   title: {
-    fontSize: 20,
+    fontSize: font(20),
     fontWeight: '800',
     color: colors.text,
-    lineHeight: 26,
+    lineHeight: font(26),
     letterSpacing: -0.3,
   },
   chip: {
@@ -429,7 +429,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     marginTop: space.xs,
   },
-  chipText: { fontSize: 13, fontWeight: '700', color: colors.primary },
+  chipText: { fontSize: font(13), fontWeight: '700', color: colors.primary },
   glossary: { backgroundColor: colors.background, borderRadius: radius.md, padding: space.md },
   options: { gap: space.sm },
   option: {
@@ -451,9 +451,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ringText: { fontSize: 13, fontWeight: '800', color: colors.text },
+  ringText: { fontSize: font(13), fontWeight: '800', color: colors.text },
   overline: {
-    fontSize: 11,
+    fontSize: font(11),
     fontWeight: '700',
     color: colors.textSubtle,
     letterSpacing: 0.9,
@@ -468,7 +468,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  upload: { fontSize: 13, fontWeight: '700', color: colors.primary },
+  upload: { fontSize: font(13), fontWeight: '700', color: colors.primary },
   care: {
     flexDirection: 'row',
     gap: space.md,
@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   careOn: { borderColor: colors.primary },
-  legal: { fontSize: 12, fontWeight: '600', color: colors.warning, marginTop: 2 },
+  legal: { fontSize: font(12), fontWeight: '600', color: colors.warning, marginTop: 2 },
   check: {
     width: 24,
     height: 24,

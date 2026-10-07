@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import type { AuditEntry } from '@propittu/shared';
 import { useBoActivity } from '@/api/backoffice';
-import { colors, radius, space, typography } from '@/theme';
+import { colors, font, radius, space, typography } from '@/theme';
 import { Icon, type IconName } from './Icon';
 import { Card, Segmented } from './ui';
 
@@ -106,5 +106,5 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   flex: { flex: 1, minWidth: 0, gap: 1 },
-  change: { fontSize: 11.5, color: colors.textMuted, fontFamily: 'Courier' },
+  change: { fontSize: font(11.5), color: colors.textMuted, fontFamily: 'Courier' },
 });

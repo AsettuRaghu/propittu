@@ -19,7 +19,7 @@ import { FormSection } from '@/components/PropertyForm';
 import { Banner, Button, Card, IconTile, ProgressBar } from '@/components/ui';
 import { DOCUMENT_TYPE_VISUALS } from '@/lib/icons';
 import { errorMessage } from '@/lib/errors';
-import { accents, colors, radius, shadow, space, typography } from '@/theme';
+import { accents, colors, font, radius, shadow, space, typography } from '@/theme';
 
 type Status =
   | { kind: 'idle' }
@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  typeLabel: { flex: 1, fontSize: 13, fontWeight: '700', color: colors.text },
+  typeLabel: { flex: 1, fontSize: font(13), fontWeight: '700', color: colors.text },
   fileCard: {
     flexDirection: 'row',
     alignItems: 'center',

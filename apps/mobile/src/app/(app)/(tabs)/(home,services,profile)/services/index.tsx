@@ -1,27 +1,35 @@
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
-  formatPrice,
   REACH_PROBLEM_LABELS,
   reachProblem,
   SERVICE_CATEGORIES,
   SERVICE_CATEGORY_LABELS,
   type CatalogueService,
 } from '@propittu/shared';
-import { PullRefresh } from '@/components/PullRefresh';
-import { EmptyState, ErrorState, LimitedAccessState, LoadingState } from '@/components/States';
 import { useMe, useProperties, useServices } from '@/api/queries';
-import { Icon } from '@/components/Icon';
+import { PageHeader } from '@/components/PageHeader';
+import { PullRefresh } from '@/components/PullRefresh';
 import { ServiceRequestList } from '@/components/ServiceRequestList';
-import { GradientCard, IconTile, Segmented } from '@/components/ui';
+import { ServiceRow } from '@/components/ServiceRow';
+import { ErrorState, LimitedAccessState, LoadingState } from '@/components/States';
+import { Button, ListGroup, ListRow, Segmented } from '@/components/ui';
 import { serviceVisual } from '@/lib/icons';
-import { accents, colors, gradients, radius, shadow, space, typography } from '@/theme';
+import { colors, space } from '@/theme';
 
 type Segment = 'browse' | 'requests';
 
-/** Services tab: browse the catalogue (§22) or follow your requests (§8.4). */
+const book = (service: CatalogueService) =>
+  router.push({ pathname: '/services/request', params: { serviceId: service.id } });
+
+/**
+ * Services tab, flat like Profile: a header with Browse · My requests.
+ * Browse shows what the plan already includes (only while some is left),
+ * then every other service by category, each one row: what it is, a short
+ * line, and its price.
+ */
 export default function ServicesScreen() {
   const [segment, setSegment] = useState<Segment>('browse');
   const me = useMe();
@@ -30,10 +38,10 @@ export default function ServicesScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <Text style={typography.display}>Services</Text>
-        <Text style={typography.small}>Trusted help for your property, booked in a minute.</Text>
+        <PageHeader title="Services" />
         {!limited ? (
           <Segmented
+            variant="text"
             options={[
               { value: 'browse', label: 'Browse' },
               { value: 'requests', label: 'My requests' },
@@ -48,212 +56,77 @@ export default function ServicesScreen() {
       ) : segment === 'browse' ? (
         <Catalogue />
       ) : (
-        <ServiceRequestList showCta={false} />
+        <ServiceRequestList />
       )}
     </SafeAreaView>
   );
 }
 
-const book = (service: CatalogueService) =>
-  router.push({ pathname: '/services/request', params: { serviceId: service.id } });
-
-function priceLabel(s: CatalogueService, outOfReach: boolean): string {
-  if (outOfReach) return REACH_PROBLEM_LABELS.not_in_area;
-  if (s.coverage === 'included') return 'Included';
-  if (s.coverage === 'unavailable') return 'Not on your plan';
-  return s.price_paise !== null ? formatPrice(s.price_paise) : 'On quote';
-}
-
 function Catalogue() {
-  const { data, isPending, error, refetch } = useServices();
+  const services = useServices();
   const properties = useProperties();
-  // Muted when NONE of the customer's properties can get it (by PIN / state).
-  const outOfReach = (s: CatalogueService) => {
-    const list = properties.data ?? [];
-    return list.length > 0 && list.every((p) => reachProblem(s, p.reach) !== null);
-  };
-
-  const { featured, sections } = useMemo(() => {
-    const all = data ?? [];
-    const visit = all.find((s) => s.code === 'property_visit') ?? null;
-    return {
-      featured: visit,
-      sections: SERVICE_CATEGORIES.map((category) => ({
-        category,
-        title: SERVICE_CATEGORY_LABELS[category],
-        items: all.filter((s) => s.category === category && s.id !== visit?.id),
-      })).filter((s) => s.items.length > 0),
-    };
-  }, [data]);
-
-  if (isPending) return <LoadingState />;
-  if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
-  if (!featured && sections.length === 0) {
-    return <EmptyState icon="services" title="No services available right now" />;
+  if (services.isPending || properties.isPending) return <LoadingState />;
+  if (services.error) {
+    return <ErrorState error={services.error} onRetry={() => void services.refetch()} />;
   }
+
+  // Muted when NONE of the customer's properties can get it (by PIN / state).
+  const list = properties.data ?? [];
+  const outOfReach = (s: CatalogueService) =>
+    list.length > 0 && list.every((p) => reachProblem(s, p.reach) !== null);
+  const included = services.data.filter(
+    (s) => s.coverage === 'included' && (s.included_remaining ?? 0) > 0,
+  );
+  const rest = services.data.filter((s) => !included.includes(s));
 
   return (
     <ScrollView
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
-      refreshControl={<PullRefresh onRefresh={() => refetch()} />}
+      refreshControl={
+        <PullRefresh onRefresh={() => Promise.all([services.refetch(), properties.refetch()])} />
+      }
     >
-      {featured ? <Featured service={featured} outOfReach={outOfReach(featured)} /> : null}
+      {included.length > 0 ? (
+        <ListGroup title="Included in your plan" plain>
+          {included.map((s) => (
+            <ListRow
+              key={s.id}
+              {...serviceVisual(s.code, s.category)}
+              title={s.name}
+              subtitle={
+                outOfReach(s)
+                  ? REACH_PROBLEM_LABELS.not_in_area
+                  : `${s.included_remaining} left this year`
+              }
+              right={<Button title="Book" size="sm" onPress={() => book(s)} />}
+            />
+          ))}
+        </ListGroup>
+      ) : null}
 
-      {sections.map((section) => (
-        <View key={section.category} style={styles.section}>
-          <Text style={typography.heading}>{section.title}</Text>
-          <View style={styles.grid}>
-            {section.items.map((s) => (
-              <ServiceTile key={s.id} service={s} outOfReach={outOfReach(s)} />
+      {SERVICE_CATEGORIES.map((category) => {
+        const items = rest.filter((s) => s.category === category);
+        if (items.length === 0) return null;
+        return (
+          <ListGroup key={category} title={SERVICE_CATEGORY_LABELS[category]} plain>
+            {items.map((s) => (
+              <ServiceRow
+                key={s.id}
+                service={s}
+                note={outOfReach(s) ? REACH_PROBLEM_LABELS.not_in_area : null}
+                onPress={() => book(s)}
+              />
             ))}
-          </View>
-        </View>
-      ))}
-
-      {/* §5 / §22: no legal advice, no promised government outcomes. */}
-      <Text style={[typography.caption, styles.disclaimer]}>
-        Propittu helps you request assistance with your property. We do not provide legal advice or
-        guarantee outcomes with government departments.
-      </Text>
+          </ListGroup>
+        );
+      })}
     </ScrollView>
-  );
-}
-
-function Featured({ service, outOfReach }: { service: CatalogueService; outOfReach: boolean }) {
-  const included = service.coverage === 'included';
-  return (
-    <GradientCard colors={gradients.visit} onPress={() => book(service)} style={styles.featured}>
-      <View style={styles.featuredTop}>
-        <View style={styles.featuredIcon}>
-          <Icon name="compass" size={24} color="#FFFFFF" />
-        </View>
-        <View style={styles.featuredPill}>
-          <Text style={styles.featuredPillText}>
-            {outOfReach
-              ? REACH_PROBLEM_LABELS.not_in_area
-              : included
-                ? `Included · ${service.included_remaining} left`
-                : service.price_paise !== null
-                  ? formatPrice(service.price_paise)
-                  : 'On quote'}
-          </Text>
-        </View>
-      </View>
-      <Text style={styles.featuredTitle}>{service.name}</Text>
-      <Text style={styles.featuredText} numberOfLines={2}>
-        {service.description}
-      </Text>
-      <View style={styles.featuredCta}>
-        <Text style={styles.featuredCtaText}>Book a visit</Text>
-        <Icon name="arrow" size={16} color={accents.indigo.fg} strokeWidth={2.5} />
-      </View>
-    </GradientCard>
-  );
-}
-
-function ServiceTile({ service, outOfReach }: { service: CatalogueService; outOfReach: boolean }) {
-  const v = serviceVisual(service.code, service.category);
-  const unavailable = service.coverage === 'unavailable' || outOfReach;
-  return (
-    <Pressable
-      onPress={() => book(service)}
-      accessibilityRole="button"
-      accessibilityLabel={service.name}
-      style={({ pressed }) => [
-        styles.tile,
-        shadow,
-        unavailable && styles.tileMuted,
-        pressed && styles.pressed,
-      ]}
-    >
-      <IconTile icon={v.icon} accent={v.accent} size={40} />
-      <Text style={styles.tileName} numberOfLines={2}>
-        {service.name}
-      </Text>
-      <View
-        style={[
-          styles.price,
-          service.coverage === 'included' && { backgroundColor: accents.teal.bg },
-        ]}
-      >
-        <Text
-          style={[styles.priceText, service.coverage === 'included' && { color: accents.teal.fg }]}
-        >
-          {priceLabel(service, outOfReach)}
-        </Text>
-      </View>
-    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  header: {
-    paddingHorizontal: space.lg,
-    paddingTop: space.md,
-    paddingBottom: space.md,
-    gap: space.sm,
-  },
-  content: { padding: space.lg, paddingTop: space.sm, gap: space.xl, paddingBottom: space.xxl },
-  section: { gap: space.md },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md },
-  tile: {
-    width: '47.5%',
-    flexGrow: 1,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: space.md,
-    gap: space.sm,
-    minHeight: 136,
-  },
-  tileMuted: { opacity: 0.6 },
-  pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
-  tileName: { fontSize: 14, fontWeight: '700', color: colors.text, flex: 1 },
-  price: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: radius.pill,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-  },
-  priceText: { fontSize: 12, fontWeight: '800', color: colors.text },
-  featured: { gap: 6, padding: space.lg },
-  featuredTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  featuredIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 15,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  featuredPill: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: radius.pill,
-    paddingHorizontal: space.md,
-    paddingVertical: 6,
-  },
-  featuredPillText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
-  featuredTitle: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-    marginTop: space.xs,
-  },
-  featuredText: { color: 'rgba(255,255,255,0.88)', fontSize: 13, lineHeight: 18 },
-  featuredCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    alignSelf: 'flex-start',
-    backgroundColor: '#FFFFFF',
-    borderRadius: radius.pill,
-    paddingHorizontal: space.lg,
-    paddingVertical: 10,
-    marginTop: space.sm,
-  },
-  featuredCtaText: { color: accents.indigo.fg, fontSize: 14, fontWeight: '800' },
-  disclaimer: { textAlign: 'center' },
+  header: { paddingHorizontal: space.lg, paddingTop: space.md, gap: space.md },
+  content: { padding: space.lg, gap: space.xl, paddingBottom: space.xxl },
 });

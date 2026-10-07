@@ -13,7 +13,7 @@ import {
   type PropertyType,
 } from '@propittu/shared';
 import { PROPERTY_TYPE_ACCENTS, PROPERTY_TYPE_ICONS } from '@/lib/icons';
-import { accents, colors, radius, shadow, space, typography, type Accent } from '@/theme';
+import { accents, colors, font, radius, shadow, space, typography, type Accent } from '@/theme';
 import { TextField } from './Field';
 import { Icon, type IconName } from './Icon';
 import { IconTile } from './ui';
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  typeLabel: { fontSize: 13, fontWeight: '700', color: colors.text },
+  typeLabel: { fontSize: font(13), fontWeight: '700', color: colors.text },
   tick: {
     position: 'absolute',
     top: 6,
@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
     borderColor: colors.surfaceMuted,
   },
   unitSelected: { borderColor: accents.sky.fg, backgroundColor: accents.sky.bg },
-  unitText: { fontSize: 14, fontWeight: '600', color: colors.text },
+  unitText: { fontSize: font(14), fontWeight: '600', color: colors.text },
   unitTextSelected: { color: accents.sky.fg, fontWeight: '800' },
-  error: { fontSize: 13, color: colors.danger, fontWeight: '600' },
+  error: { fontSize: font(13), color: colors.danger, fontWeight: '600' },
 });

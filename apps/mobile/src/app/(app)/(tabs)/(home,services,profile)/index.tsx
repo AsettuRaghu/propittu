@@ -14,6 +14,7 @@ import { greeting } from '@/lib/format';
 import {
   accents,
   colors,
+  font,
   gradients,
   radius,
   shadow,
@@ -257,7 +258,7 @@ const styles = StyleSheet.create({
   header: { paddingTop: space.md, paddingBottom: space.md, gap: space.md },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   greetRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  greet: { fontSize: 14, fontWeight: '600', color: colors.textMuted },
+  greet: { fontSize: font(14), fontWeight: '600', color: colors.textMuted },
   section: { ...typography.heading, marginTop: space.xs },
   draft: {
     flexDirection: 'row',
@@ -281,7 +282,7 @@ const styles = StyleSheet.create({
     padding: space.md,
     gap: space.sm,
   },
-  actionLabel: { fontSize: 13, fontWeight: '700', color: colors.text },
+  actionLabel: { fontSize: font(13), fontWeight: '700', color: colors.text },
   welcome: { gap: space.md },
   hero: { backgroundColor: colors.surface, borderRadius: radius.lg, overflow: 'hidden' },
   heroArt: {
@@ -319,6 +320,6 @@ const styles = StyleSheet.create({
     padding: space.md,
     gap: 6,
   },
-  benefitTitle: { fontSize: 13, fontWeight: '800', color: colors.text },
-  benefitText: { fontSize: 11.5, color: colors.textMuted, lineHeight: 15 },
+  benefitTitle: { fontSize: font(13), fontWeight: '800', color: colors.text },
+  benefitText: { fontSize: font(11.5), color: colors.textMuted, lineHeight: font(15) },
 });
