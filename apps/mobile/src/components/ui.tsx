@@ -450,12 +450,16 @@ export function Badge({
   icon?: IconName;
 }) {
   const c = toneColors[tone];
+  // The outer view follows the parent's alignment (centred in a row); the
+  // pill inside keeps its own size (never stretched in a column).
   return (
-    <View style={[styles.badge, { backgroundColor: c.bg }]}>
-      {icon ? <Icon name={icon} size={12} color={c.fg} strokeWidth={2.5} /> : null}
-      <Text style={[styles.badgeText, { color: c.fg }]} numberOfLines={1}>
-        {label}
-      </Text>
+    <View>
+      <View style={[styles.badge, { backgroundColor: c.bg }]}>
+        {icon ? <Icon name={icon} size={12} color={c.fg} strokeWidth={2.5} /> : null}
+        <Text style={[styles.badgeText, { color: c.fg }]} numberOfLines={1}>
+          {label}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -758,8 +762,10 @@ const styles = StyleSheet.create({
   listRowPressed: { backgroundColor: colors.surfaceMuted },
   listDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 56 },
   listDividerPlain: { marginLeft: 0 },
-  listPlain: {},
-  listTitle: { marginBottom: space.sm, marginLeft: 2 },
+  // Rows have 14 pt inner padding; bleeding by the same amount lines their
+  // content up with the page's own 16 pt edge (titles, headers, buttons).
+  listPlain: { marginHorizontal: -14 },
+  listTitle: { marginBottom: space.xs },
   rowValue: { maxWidth: '45%' },
   rowRight: { justifyContent: 'center' },
   keyValue: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start' },
@@ -850,8 +856,8 @@ const styles = StyleSheet.create({
   segmentActive: { backgroundColor: colors.surface },
   segmentText: { fontSize: 14, fontWeight: '600', color: colors.textMuted },
   segmentTextActive: { color: colors.text },
-  tabs: { flexDirection: 'row', gap: space.xl },
-  tab: { paddingVertical: 6 },
+  tabs: { flexDirection: 'row' },
+  tab: { flex: 1, alignItems: 'center', paddingVertical: 8 },
   tabText: { fontSize: 15, color: colors.textSubtle },
   tabTextActive: { fontSize: 15, fontWeight: '800', color: colors.primary },
 });

@@ -556,7 +556,7 @@ const styles = StyleSheet.create({
   },
   amount: { alignItems: 'flex-end', gap: 3 },
   muted: { opacity: 0.75 },
-  note: { marginTop: space.sm, marginLeft: 2 },
+  note: { marginTop: space.sm },
   struck: { color: colors.textSubtle, textDecorationLine: 'line-through' },
   centerText: { textAlign: 'center' },
 });
