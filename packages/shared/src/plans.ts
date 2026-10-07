@@ -40,6 +40,9 @@ export const LIMIT_LABELS: Record<LimitCode, string> = {
 };
 
 /** Included Service codes match service codes in the catalogue (M4). */
+/** A plan can be renewed only in its last 100 days (also enforced in plan_change()). */
+export const RENEWAL_WINDOW_DAYS = 100;
+
 export const INCLUDED_SERVICE_LABELS: Record<string, string> = {
   property_visit: 'Property visits',
 };

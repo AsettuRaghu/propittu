@@ -682,6 +682,15 @@ reset role;
 
 set role authenticated;
 select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.ok((select public.plan_quote('plus')->>'blocked_reason') like 'You can renew from%',
+  'renewing is refused while more than 100 days are left');
+select tst.rejects($$select public.create_plan_order('plus')$$, 'an early renewal cannot be ordered');
+reset role;
+-- A's Plus now has 60 days left: inside the renewal window.
+update public.account_plans set ends_at = now() + interval '60 days'
+where account_id = 'acc0000a-0000-0000-0000-00000000000a' and ends_at > now();
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
 select public.create_plan_order('plus');
 select tst.ok((select amount_paise = 499900 and status = 'pending' and kind = 'plan' from public.orders),
   'A creates a Plus order priced from the catalogue (₹4,999)');
@@ -747,15 +756,10 @@ select tst.ok((select count(*) from public.refunds) = 1 and (select status from 
   'refund does not overwrite the original payment');
 select tst.rows('select * from public.payment_events', 0, 'customers cannot read the webhook log');
 
--- Renewal of the same paid Plan queues after the current period.
-select public.create_plan_order('plus');
+-- With a full renewal already queued, another renewal waits for the window.
+select tst.rejects($$select public.create_plan_order('plus')$$,
+  'a second renewal is refused until the last 100 days of what is already paid');
 reset role;
-set role service_role;
-select public.record_payment_event('razorpay', 'evt_6', 'payment.captured',
-  (select id from public.orders where kind = 'plan' and status = 'pending'), 'pay_6', 499900, 'INR');
-reset role;
-select tst.ok((select count(*) from public.account_plans where account_id = 'acc0000a-0000-0000-0000-00000000000a' and source = 'payment' and starts_at > now()) = 2,
-  'a further renewal queues after the previous one');
 
 -- B: Trial → paid Plus starts immediately and ends the Trial.
 set role authenticated;
@@ -778,8 +782,8 @@ reset role;
 
 set role authenticated;
 select tst.as_user('55555555-5555-5555-5555-555555555555');
-select tst.ok((select count(*) from public.payment_events) = 6, 'staff can read the webhook log (the replay is stored once)');
-select tst.ok((select count(*) from public.orders) = 4, 'staff can see all orders');
+select tst.ok((select count(*) from public.payment_events) = 5, 'staff can read the webhook log (the replay is stored once)');
+select tst.ok((select count(*) from public.orders) = 3, 'staff can see all orders');
 reset role;
 
 -- =====================================================================
@@ -1220,7 +1224,9 @@ reset role;
 select tst.ok(exists (select 1 from public.audit_events where action = 'db.property_slots.update' and actor_type = 'staff'),
   'the staff release is in the audit trail');
 
--- A plan that can't hold today's properties is refused.
+-- A plan that can't hold today's properties is refused (A put inside its renewal window first).
+update public.account_plans set starts_at = least(starts_at, now() - interval '1 day'), ends_at = now() + interval '30 days'
+where account_id = 'acc0000a-0000-0000-0000-00000000000a' and ends_at > now();
 insert into public.properties (account_id, user_id, property_type, name)
 select 'acc0000a-0000-0000-0000-00000000000a', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'land', 'Bulk ' || g
 from generate_series(1, 11) g;

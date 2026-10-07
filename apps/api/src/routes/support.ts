@@ -31,7 +31,7 @@ export const supportRouter = Router();
 
 export const TICKET_COLUMNS =
   'id, reference, subject, category, status, created_at, last_message_at, resolved_at, ' +
-  'property:properties(id, name), service_request:service_requests(id, reference)';
+  'property:properties(id, name), service_request:service_requests(id, reference, service:services(name))';
 
 interface AttachmentRow {
   id: string;

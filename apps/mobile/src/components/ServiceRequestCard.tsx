@@ -37,7 +37,7 @@ export function ServiceRequestCard({
             {request.service.name}
           </Text>
           <Text style={typography.small} numberOfLines={1}>
-            {request.property?.name ?? 'Property removed'} · {request.reference}
+            {request.property?.name ?? 'Property removed'} · {formatDate(request.created_at)}
           </Text>
         </View>
         <Icon name="chevron" size={18} color={colors.textSubtle} />

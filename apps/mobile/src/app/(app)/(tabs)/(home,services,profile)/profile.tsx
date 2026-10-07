@@ -19,7 +19,6 @@ import { InlineEdit } from '@/components/InlineEdit';
 import { PullRefresh } from '@/components/PullRefresh';
 import { ErrorState, LoadingState } from '@/components/States';
 import { Badge, LinkButton, ListGroup, ListRow, type Tone } from '@/components/ui';
-import { BUILD_LABEL } from '@/lib/buildInfo';
 import { env } from '@/lib/env';
 import { colors, space, typography } from '@/theme';
 
@@ -65,6 +64,7 @@ export default function ProfileScreen() {
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         refreshControl={<PullRefresh onRefresh={() => refetch()} />}
       >
         <Text style={typography.display}>Profile</Text>
@@ -134,7 +134,7 @@ export default function ProfileScreen() {
 
         <View style={styles.footer}>
           <Text style={typography.caption}>
-            Propittu {Constants.expoConfig?.version ?? ''} · {BUILD_LABEL}
+            Propittu v{Constants.expoConfig?.version ?? '1.0.0'}
           </Text>
           {me && !me.staff_role ? (
             <LinkButton

@@ -6,9 +6,9 @@ import { formatFileSize, type SupportAttachment, type SupportMessage } from '@pr
 import type { LocalFile } from '@/api/uploads';
 import { signedImage } from '@/lib/image';
 import { colors, radius, space, typography } from '@/theme';
-import { AttachmentPicker } from './AttachmentPicker';
+import { AttachmentPreviews, useAttachmentAdder } from './AttachmentPicker';
 import { Icon } from './Icon';
-import { IconButton } from './ui';
+import { Banner, IconButton } from './ui';
 
 function stamp(iso: string): string {
   const d = new Date(iso);
@@ -56,22 +56,29 @@ function Attachments({ items, own }: { items: SupportAttachment[]; own: boolean 
   );
 }
 
-/** A support conversation with attachments, plus a reply box. `mine` = whose bubbles go right. */
-export function TicketThread({
+/**
+ * A conversation (support tickets, for customers and staff): bubbles with
+ * attachments, an optional notice (e.g. when to expect a reply), and a
+ * reply box with a paperclip. `mine` = whose bubbles go on the right.
+ */
+export function ChatThread({
   messages,
   mine,
   onSend,
   sending,
   closedNote,
+  notice,
 }: {
   messages: SupportMessage[];
   mine: 'customer' | 'staff';
   onSend: (body: string, files: LocalFile[]) => Promise<boolean>;
   sending: boolean;
   closedNote?: string | null;
+  notice?: { tone: 'info' | 'warning'; text: string } | null;
 }) {
   const [draft, setDraft] = useState('');
   const [files, setFiles] = useState<LocalFile[]>([]);
+  const attach = useAttachmentAdder({ files, onChange: setFiles, disabled: sending });
 
   const send = async () => {
     if (sending || (!draft.trim() && files.length === 0)) return;
@@ -106,21 +113,37 @@ export function TicketThread({
         );
       })}
 
+      {notice && !closedNote ? (
+        <Banner tone={notice.tone} icon="clock" message={notice.text} />
+      ) : null}
+
       {closedNote ? (
         <Text style={[typography.small, styles.closed]}>{closedNote}</Text>
       ) : (
         <View style={styles.composer}>
+          <AttachmentPreviews files={files} onChange={setFiles} disabled={sending} />
           <View style={styles.reply}>
-            <TextInput
-              value={draft}
-              onChangeText={setDraft}
-              placeholder="Write a reply…"
-              placeholderTextColor={colors.textSubtle}
-              multiline
-              maxLength={4000}
-              editable={!sending}
-              style={styles.input}
-            />
+            <View style={styles.box}>
+              {attach.room > 0 ? (
+                <IconButton
+                  icon="attach"
+                  label="Attach photos or files"
+                  variant="plain"
+                  size={36}
+                  onPress={() => void attach.add()}
+                />
+              ) : null}
+              <TextInput
+                value={draft}
+                onChangeText={setDraft}
+                placeholder="Write a reply…"
+                placeholderTextColor={colors.textSubtle}
+                multiline
+                maxLength={4000}
+                editable={!sending}
+                style={styles.input}
+              />
+            </View>
             <IconButton
               icon="arrow"
               label="Send reply"
@@ -129,7 +152,6 @@ export function TicketThread({
               onPress={() => void send()}
             />
           </View>
-          <AttachmentPicker files={files} onChange={setFiles} disabled={sending} />
           {sending ? <Text style={typography.caption}>Sending…</Text> : null}
         </View>
       )}
@@ -170,13 +192,19 @@ const styles = StyleSheet.create({
   attSize: { fontSize: 11, color: colors.textSubtle },
   composer: { gap: space.sm, marginTop: space.sm },
   reply: { flexDirection: 'row', alignItems: 'flex-end', gap: space.sm },
+  box: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    paddingLeft: 4,
+  },
   input: {
     flex: 1,
     minHeight: 44,
     maxHeight: 140,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    paddingHorizontal: space.md,
+    paddingHorizontal: space.sm,
     paddingTop: 12,
     paddingBottom: 12,
     fontSize: 15,

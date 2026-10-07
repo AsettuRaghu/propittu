@@ -13,7 +13,7 @@ import { useBoReplyTicket, useBoTicket, useBoTicketStatus } from '@/api/support'
 import { uploadAll } from '@/components/AttachmentPicker';
 import { dialog, toast } from '@/components/Dialog';
 import { ErrorState, LoadingState } from '@/components/States';
-import { TicketThread } from '@/components/TicketThread';
+import { ChatThread } from '@/components/ChatThread';
 import { Badge, Card, Chips, ListGroup, ListRow, SectionTitle } from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
@@ -81,7 +81,7 @@ export default function BoTicketScreen() {
           <ListRow
             icon="requests"
             accent="coral"
-            title={t.service_request.reference}
+            title={`${t.service_request.service?.name ?? 'Service request'} · ${t.service_request.reference}`}
             subtitle="Service request"
             onPress={() => router.push(`/backoffice/requests/${t.service_request?.id}`)}
           />
@@ -106,7 +106,7 @@ export default function BoTicketScreen() {
 
       <View>
         <SectionTitle title="Conversation" />
-        <TicketThread
+        <ChatThread
           messages={t.messages}
           mine="staff"
           sending={reply.isPending}

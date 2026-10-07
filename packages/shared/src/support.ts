@@ -43,6 +43,39 @@ export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
 };
 export const OPEN_TICKET_STATUSES: TicketStatus[] = ['open', 'in_progress', 'waiting_on_customer'];
 
+/** Our promise: a reply within one working day (Mon–Sat). */
+export const SUPPORT_REPLY_PROMISE = 'within 1 working day';
+
+/** When a reply is due for a message sent at `sentAt`: +1 day, skipping Sunday. */
+export function replyDueBy(sentAt: string | Date): Date {
+  const due = new Date(new Date(sentAt).getTime() + 86_400_000);
+  if (due.getDay() === 0) due.setDate(due.getDate() + 1);
+  return due;
+}
+
+/**
+ * What the customer is waiting for on a ticket, for the line above the
+ * chat: our reply (with when), their reply, or nothing (resolved/closed).
+ */
+export function ticketWaitingNote(t: {
+  status: TicketStatus;
+  messages: { author_type: 'customer' | 'staff'; created_at: string }[];
+}): { tone: 'info' | 'warning'; text: string } | null {
+  if (t.status === 'waiting_on_customer') {
+    return { tone: 'warning', text: 'We need a reply from you to carry on.' };
+  }
+  const last = t.messages[t.messages.length - 1];
+  if (!OPEN_TICKET_STATUSES.includes(t.status) || !last || last.author_type !== 'customer') {
+    return null;
+  }
+  const by = replyDueBy(last.created_at).toLocaleDateString('en-IN', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
+  return { tone: 'info', text: `Expect our reply by ${by} — we reply ${SUPPORT_REPLY_PROMISE}.` };
+}
+
 export interface SupportAttachment {
   id: string;
   file_name: string;
@@ -79,7 +112,7 @@ export interface SupportTicket {
   last_message_at: string;
   resolved_at: string | null;
   property: { id: string; name: string } | null;
-  service_request: { id: string; reference: string } | null;
+  service_request: { id: string; reference: string; service: { name: string } | null } | null;
 }
 
 export interface SupportTicketDetail extends SupportTicket {

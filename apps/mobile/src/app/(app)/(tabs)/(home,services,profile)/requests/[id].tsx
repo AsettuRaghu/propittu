@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   formatPrice,
   PREFERRED_SLOT_LABELS,
@@ -78,7 +78,7 @@ export default function ServiceRequestScreen() {
               {request.service.name}
             </Text>
             <Text style={typography.small} numberOfLines={1}>
-              {request.property?.name ?? 'Property removed'} · {request.reference}
+              {request.property?.name ?? 'Property removed'} · {formatDate(request.created_at)}
             </Text>
           </View>
         </View>
@@ -142,7 +142,7 @@ export default function ServiceRequestScreen() {
               params: {
                 requestId: request.id,
                 category: 'service_request',
-                subject: `${request.service.name} ${request.reference}`,
+                subject: `${request.service.name}${request.property ? ` · ${request.property.name}` : ''}`,
               },
             })
           }
@@ -170,14 +170,20 @@ function PaymentCard({ request }: { request: ServiceRequestDetail }) {
   const price = formatPrice(request.price_paise);
 
   if (request.order?.status === 'paid') {
+    const orderId = request.order.id;
     return (
-      <View style={[styles.payBox, { backgroundColor: accents.teal.bg }]}>
+      <Pressable
+        onPress={() => router.push(`/receipts/${orderId}`)}
+        accessibilityRole="button"
+        style={[styles.payBox, { backgroundColor: accents.teal.bg }]}
+      >
         <Icon name="success" size={22} color={accents.teal.fg} />
         <View style={styles.flex}>
           <Text style={[styles.payTitle, { color: accents.teal.fg }]}>Paid {price}</Text>
-          <Text style={typography.small}>Receipt {request.order.reference}</Text>
+          <Text style={typography.small}>View receipt</Text>
         </View>
-      </View>
+        <Icon name="chevron" size={18} color={accents.teal.fg} />
+      </Pressable>
     );
   }
 

@@ -9,6 +9,7 @@ import {
   LIMIT_LABELS,
   ORDER_DISPLAY_LABELS,
   PLAN_STATUS_LABELS,
+  RENEWAL_WINDOW_DAYS,
   type AccountPlanState,
   type LimitCode,
   type Order,
@@ -19,17 +20,27 @@ import { PullRefresh } from '@/components/PullRefresh';
 import { fetchPlanQuote, useOrders, usePlanCheckout } from '@/api/billing';
 import { useAccountPlan, usePlans, useProperties, useServices } from '@/api/queries';
 import { dialog } from '@/components/Dialog';
+import { Icon } from '@/components/Icon';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
 import { UsageMeter } from '@/components/UsageMeter';
 import { Badge, Banner, Card, GradientCard, IconTile, Segmented } from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
-import { accents, colors, gradients, radius, space, typography, type Accent } from '@/theme';
+import {
+  accents,
+  colors,
+  gradients,
+  radius,
+  shadow,
+  space,
+  typography,
+  type Accent,
+} from '@/theme';
 
 type Tab = 'usage' | 'plans' | 'payments';
 
 /** How a plan card relates to what the customer has now. */
-type CardState = 'choose' | 'current' | 'upgrade' | 'later' | 'too_small';
+type CardState = 'choose' | 'current' | 'renew_later' | 'upgrade' | 'later' | 'too_small';
 
 const PLAN_ACCENT: Record<string, Accent> = { trial: 'teal', basic: 'sky', plus: 'violet' };
 const PLAN_GRADIENT: Record<string, readonly [string, string]> = {
@@ -64,6 +75,16 @@ export default function PlanScreen() {
     null,
   )?.code;
   const owned = s.usage.properties;
+  // Renewing opens in the last RENEWAL_WINDOW_DAYS (the server enforces it too).
+  const daysLeft = s.current?.days_left ?? 0;
+  const canRenew = daysLeft <= RENEWAL_WINDOW_DAYS;
+  const renewFrom = s.current
+    ? formatDate(
+        new Date(
+          new Date(s.current.ends_at).getTime() - RENEWAL_WINDOW_DAYS * 86_400_000,
+        ).toISOString(),
+      )
+    : null;
   const cardState = (p: PublicPlan): CardState =>
     // A plan must hold every property you have today.
     p.benefits.limits.max_properties !== undefined && owned > p.benefits.limits.max_properties
@@ -71,7 +92,9 @@ export default function PlanScreen() {
       : !paidPlan
         ? 'choose'
         : p.code === code
-          ? 'current'
+          ? canRenew
+            ? 'current'
+            : 'renew_later'
           : p.price_paise > currentPrice
             ? 'upgrade'
             : 'later';
@@ -103,7 +126,12 @@ export default function PlanScreen() {
     );
     const list = properties.data ?? [];
     const includesVisits = plan.benefits.included.some((i) => visitCodes.has(i.code));
-    if (includesVisits && list.length > 0 && list.every((p) => p.reach && !p.reach.visits)) {
+    if (
+      q.mode !== 'renewal' &&
+      includesVisits &&
+      list.length > 0 &&
+      list.every((p) => p.reach && !p.reach.visits)
+    ) {
       const goOn = await dialog.confirm({
         title: 'Visits don’t reach your properties yet',
         message:
@@ -195,7 +223,12 @@ export default function PlanScreen() {
         />
       }
     >
-      <CurrentPlan state={s} onTop={!!code && code === topCode} onAction={() => setTab('plans')} />
+      <CurrentPlan
+        state={s}
+        onTop={!!code && code === topCode}
+        canRenew={canRenew}
+        onAction={() => setTab('plans')}
+      />
 
       {s.over_limit.length > 0 ? (
         <Banner
@@ -224,14 +257,21 @@ export default function PlanScreen() {
         ) : plans.error ? (
           <ErrorState error={plans.error} onRetry={() => void plans.refetch()} />
         ) : (
-          <PlanComparison
-            plans={plans.data}
-            stateOf={cardState}
-            laterDate={s.current ? formatDate(s.current.ends_at) : null}
-            popular={paidPlan ? null : (topCode ?? null)}
-            busyCode={checkout.isPending ? (checkout.variables ?? null) : null}
-            onChoose={(p) => void choose(p)}
-          />
+          <View style={styles.list}>
+            {plans.data.map((p) => (
+              <PlanCard
+                key={p.code}
+                plan={p}
+                state={cardState(p)}
+                laterDate={s.current ? formatDate(s.current.ends_at) : null}
+                renewFrom={renewFrom}
+                popular={!paidPlan && p.code === topCode}
+                busy={checkout.isPending && checkout.variables === p.code}
+                disabled={checkout.isPending}
+                onChoose={() => void choose(p)}
+              />
+            ))}
+          </View>
         )
       ) : orders.isPending ? (
         <LoadingState />
@@ -247,16 +287,26 @@ export default function PlanScreen() {
 function CurrentPlan({
   state: s,
   onTop,
+  canRenew,
   onAction,
 }: {
   state: AccountPlanState;
   onTop: boolean;
+  canRenew: boolean;
   onAction: () => void;
 }) {
   const code = s.plan?.code ?? '';
   const trial = s.status === 'trialing';
-  // No "Upgrade" on the top plan — renewing early is the only thing to do.
-  const cta = s.status === 'expired' || trial ? 'Choose a plan' : onTop ? 'Renew' : 'Upgrade';
+  // On the top plan the only action is renewing — and only in the renewal window.
+  const cta =
+    s.status === 'expired' || trial
+      ? 'Choose a plan'
+      : !onTop
+        ? 'Upgrade'
+        : canRenew
+          ? 'Renew'
+          : null;
+  const days = s.current?.days_left ?? 0;
   return (
     <GradientCard colors={PLAN_GRADIENT[code] ?? gradients.limited} style={styles.hero}>
       <View style={styles.flex}>
@@ -266,17 +316,19 @@ function CurrentPlan({
         </Text>
         <Text style={styles.heroLine} numberOfLines={1}>
           {s.current
-            ? `${formatDate(s.current.starts_at)} – ${formatDate(s.current.ends_at)}`
+            ? `${days} ${days === 1 ? 'day' : 'days'} remaining · until ${formatDate(s.current.ends_at)}`
             : 'Your data is safe — choose a plan to carry on'}
         </Text>
       </View>
-      <Pressable
-        onPress={onAction}
-        accessibilityRole="button"
-        style={({ pressed }) => [styles.heroCta, pressed && { opacity: 0.85 }]}
-      >
-        <Text style={styles.heroCtaText}>{cta}</Text>
-      </Pressable>
+      {cta ? (
+        <Pressable
+          onPress={onAction}
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.heroCta, pressed && { opacity: 0.85 }]}
+        >
+          <Text style={styles.heroCtaText}>{cta}</Text>
+        </Pressable>
+      ) : null}
     </GradientCard>
   );
 }
@@ -351,8 +403,7 @@ function PaymentRow({ order: o, first }: { order: Order; first: boolean }) {
         <Text style={typography.caption} numberOfLines={1}>
           {o.period
             ? `${formatDate(o.period.starts_at)} – ${formatDate(o.period.ends_at)}`
-            : formatDate(o.paid_at ?? o.created_at)}{' '}
-          · {o.reference}
+            : formatDate(o.paid_at ?? o.created_at)}
         </Text>
         {o.credit_paise > 0 ? (
           <Text style={typography.caption} numberOfLines={1}>
@@ -465,117 +516,101 @@ function UsageTab({ state: s }: { state: AccountPlanState }) {
   );
 }
 
-/* ---- Plans: side by side, only what matters when choosing ---- */
+/* ---- Plans: one card each, showing only what matters when choosing ---- */
 
-/** The four things people compare plans on. */
-const COMPARE: { label: string; value: (b: PlanBenefits) => string }[] = [
-  { label: 'Properties', value: (b) => String(b.limits.max_properties ?? '—') },
-  {
-    label: 'Storage',
-    value: (b) => (b.limits.max_storage_mb ? formatStorageMb(b.limits.max_storage_mb) : '—'),
-  },
-  {
-    label: 'Documents per property',
-    value: (b) => String(b.limits.max_documents_per_property ?? '—'),
-  },
-  {
-    label: 'Property visits a year',
-    value: (b) => String(b.included.find((i) => i.code === 'property_visit')?.quantity ?? 0),
-  },
-];
+/** The four things people choose a plan on. */
+function keyBenefits(b: PlanBenefits): string[] {
+  const visits = b.included.find((i) => i.code === 'property_visit')?.quantity ?? 0;
+  return [
+    b.limits.max_properties !== undefined ? `${b.limits.max_properties} properties` : null,
+    b.limits.max_storage_mb ? `${formatStorageMb(b.limits.max_storage_mb)} storage` : null,
+    b.limits.max_documents_per_property !== undefined
+      ? `${b.limits.max_documents_per_property} documents per property`
+      : null,
+    `${visits} property visit${visits === 1 ? '' : 's'} a year`,
+  ].filter((x): x is string => x !== null);
+}
 
-function PlanComparison({
-  plans,
-  stateOf,
+function PlanCard({
+  plan,
+  state,
   laterDate,
+  renewFrom,
   popular,
-  busyCode,
+  busy,
+  disabled,
   onChoose,
 }: {
-  plans: PublicPlan[];
-  stateOf: (p: PublicPlan) => CardState;
+  plan: PublicPlan;
+  state: CardState;
   laterDate: string | null;
-  popular: string | null;
-  busyCode: string | null;
-  onChoose: (p: PublicPlan) => void;
+  renewFrom: string | null;
+  popular: boolean;
+  busy: boolean;
+  disabled: boolean;
+  onChoose: () => void;
 }) {
-  const label = (p: PublicPlan, st: CardState) =>
-    st === 'current'
+  const a = accents[PLAN_ACCENT[plan.code] ?? 'slate'];
+  const mine = state === 'current' || state === 'renew_later';
+  const locked = state === 'later' || state === 'too_small' || state === 'renew_later';
+  const label = busy
+    ? 'Opening payment…'
+    : state === 'current'
       ? 'Renew'
-      : st === 'upgrade'
-        ? 'Upgrade'
-        : st === 'too_small'
-          ? `Holds ${p.benefits.limits.max_properties}`
-          : st === 'later'
-            ? `After ${laterDate ?? 'renewal'}`
-            : 'Choose';
+      : state === 'renew_later'
+        ? `Renew from ${renewFrom ?? 'later'}`
+        : state === 'upgrade'
+          ? `Upgrade to ${plan.name}`
+          : state === 'too_small'
+            ? `Holds ${plan.benefits.limits.max_properties} properties — you have more`
+            : state === 'later'
+              ? `Available after ${laterDate ?? 'your plan ends'}`
+              : `Choose ${plan.name}`;
   return (
-    <View style={styles.list}>
-      <Card style={styles.compare}>
-        <View style={styles.compareRow}>
-          <View style={styles.compareLabel} />
-          {plans.map((p) => {
-            const a = accents[PLAN_ACCENT[p.code] ?? 'slate'];
-            const st = stateOf(p);
-            return (
-              <View key={p.code} style={styles.compareCol}>
-                <Text style={[styles.planName, { color: a.fg }]}>{p.name}</Text>
-                <Text style={styles.price}>{formatPrice(p.price_paise)}</Text>
-                <Text style={typography.caption}>
-                  {p.billing_period === 'month' ? 'a month' : 'a year'}
-                </Text>
-                {st === 'current' ? (
-                  <Badge label="Your plan" tone="success" />
-                ) : popular === p.code ? (
-                  <Badge label="Popular" tone="brand" />
-                ) : null}
-              </View>
-            );
-          })}
+    <View style={[styles.planCard, shadow, mine && { borderColor: a.fg }]}>
+      <View style={styles.planHead}>
+        <View style={styles.flex}>
+          <View style={styles.planNameRow}>
+            <Text style={typography.title}>{plan.name}</Text>
+            {mine ? <Badge label="Your plan" tone="success" icon="check" /> : null}
+            {popular ? <Badge label="Most popular" tone="brand" icon="sparkles" /> : null}
+          </View>
+          {plan.description ? (
+            <Text style={typography.small} numberOfLines={2}>
+              {plan.description}
+            </Text>
+          ) : null}
         </View>
-        {COMPARE.map((c) => (
-          <View key={c.label} style={[styles.compareRow, styles.compareLine]}>
-            <Text style={[typography.small, styles.compareLabel]}>{c.label}</Text>
-            {plans.map((p) => (
-              <Text key={p.code} style={[typography.bodyStrong, styles.compareCol]}>
-                {c.value(p.benefits)}
-              </Text>
-            ))}
+        <Text style={styles.price}>
+          {formatPrice(plan.price_paise)}
+          <Text style={styles.per}>/{plan.billing_period === 'month' ? 'mo' : 'yr'}</Text>
+        </Text>
+      </View>
+      <View style={styles.benefits}>
+        {keyBenefits(plan.benefits).map((l) => (
+          <View key={l} style={styles.benefit}>
+            <Icon name="check" size={14} color={a.fg} strokeWidth={3} />
+            <Text style={[typography.small, styles.benefitText]}>{l}</Text>
           </View>
         ))}
-        <View style={[styles.compareRow, styles.compareLine]}>
-          <View style={styles.compareLabel} />
-          {plans.map((p) => {
-            const st = stateOf(p);
-            const a = accents[PLAN_ACCENT[p.code] ?? 'slate'];
-            const muted = st === 'current' || st === 'later' || st === 'too_small';
-            return (
-              <View key={p.code} style={styles.compareCol}>
-                <Pressable
-                  onPress={() => onChoose(p)}
-                  disabled={busyCode !== null || st === 'later' || st === 'too_small'}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${label(p, st)} ${p.name}`}
-                  style={({ pressed }) => [
-                    styles.cta,
-                    { backgroundColor: muted ? a.bg : a.fg },
-                    pressed && { opacity: 0.8 },
-                  ]}
-                >
-                  <Text style={[styles.ctaText, muted && { color: a.fg }]} numberOfLines={1}>
-                    {busyCode === p.code ? '…' : label(p, st)}
-                  </Text>
-                </Pressable>
-              </View>
-            );
-          })}
-        </View>
-      </Card>
-      {plans.some((p) => stateOf(p) === 'upgrade') ? (
-        <Text style={[typography.caption, styles.centerText]}>
-          Upgrading? You pay only the difference — unused days are credited.
+      </View>
+      {state === 'upgrade' ? (
+        <Text style={typography.caption}>
+          Pay only the difference — unused days on your current plan are credited.
         </Text>
       ) : null}
+      <Pressable
+        onPress={onChoose}
+        disabled={disabled || locked}
+        accessibilityRole="button"
+        style={({ pressed }) => [
+          styles.cta,
+          { backgroundColor: mine || locked ? a.bg : a.fg },
+          (pressed || disabled) && { opacity: 0.8 },
+        ]}
+      >
+        <Text style={[styles.ctaText, (mine || locked) && { color: a.fg }]}>{label}</Text>
+      </Pressable>
     </View>
   );
 }
@@ -603,20 +638,23 @@ const styles = StyleSheet.create({
   },
   heroCtaText: { color: colors.primary, fontSize: 13, fontWeight: '800' },
   usage: { paddingVertical: 0 },
-  compare: { paddingVertical: space.xs },
-  compareRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingVertical: 10 },
-  compareLine: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
-  compareLabel: { flex: 1.3 },
-  compareCol: { flex: 1, alignItems: 'center', textAlign: 'center', gap: 2 },
-  planName: { fontSize: 15, fontWeight: '800' },
-  price: { fontSize: 20, fontWeight: '800', color: colors.text },
-  cta: {
-    alignSelf: 'stretch',
-    borderRadius: radius.md,
-    paddingVertical: 10,
-    alignItems: 'center',
+  planCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: 14,
+    gap: space.md,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
   },
-  ctaText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
+  planHead: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },
+  planNameRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' },
+  price: { fontSize: 22, fontWeight: '800', color: colors.text },
+  per: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
+  benefits: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 6 },
+  benefit: { width: '50%', flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: 4 },
+  benefitText: { flex: 1, color: colors.text },
+  cta: { borderRadius: radius.md, paddingVertical: 12, alignItems: 'center' },
+  ctaText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
   history: { paddingVertical: space.xs },
   payment: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 10 },
   paymentBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },

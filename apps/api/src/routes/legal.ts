@@ -225,7 +225,7 @@ const DELETE = page(
 <ol>
 <li>Open Propittu and sign in.</li>
 <li>Go to <strong>Profile</strong>, scroll to the bottom and tap <strong>Delete account</strong>.</li>
-<li>Review what will be removed, type <strong>DELETE</strong> and confirm.</li>
+<li>Type <strong>DELETE MY ACCOUNT</strong>, tap <strong>Delete account</strong> and confirm.</li>
 </ol>
 <p>Your account is deleted immediately.</p>
 

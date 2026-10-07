@@ -85,7 +85,7 @@ export default function SupportScreen() {
             icon="mail"
             accent="sky"
             title="Email us"
-            subtitle="Replies within a day"
+            subtitle={SUPPORT_EMAIL}
             onPress={() => void email()}
           />
           <Reach
@@ -108,10 +108,7 @@ export default function SupportScreen() {
       </View>
 
       <View>
-        <SectionTitle
-          title="Open tickets"
-          subtitle={open.length ? `${open.length} open` : undefined}
-        />
+        <SectionTitle title="Open tickets" />
         {open.length === 0 ? (
           <Text style={[typography.small, styles.none]}>
             {tickets.isPending ? 'Loading…' : 'No open tickets — raise one any time.'}
@@ -178,7 +175,7 @@ function TicketList({ tickets }: { tickets: SupportTicket[] }) {
         <ListRow
           key={t.id}
           title={t.subject}
-          subtitle={`${t.reference} · ${formatDate(t.last_message_at)}`}
+          subtitle={`Raised ${formatDate(t.created_at)}`}
           right={<Badge label={TICKET_STATUS_LABELS[t.status]} tone={TICKET_TONES[t.status]} />}
           onPress={() => router.push(`/support/${t.id}`)}
         />

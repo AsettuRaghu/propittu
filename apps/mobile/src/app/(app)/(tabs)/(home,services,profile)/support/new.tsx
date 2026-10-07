@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   createTicketSchema,
+  OPEN_REQUEST_STATUSES,
+  requestStatusLabel,
   TICKET_CATEGORIES,
   TICKET_CATEGORY_LABELS,
   toFieldErrors,
@@ -15,13 +17,13 @@ import { AttachmentPicker, uploadAll } from '@/components/AttachmentPicker';
 import { toast } from '@/components/Dialog';
 import { TextField } from '@/components/Field';
 import { Footer } from '@/components/Footer';
-import { Banner, Button, Chips } from '@/components/ui';
+import { Select } from '@/components/Select';
+import { Banner, Button } from '@/components/ui';
+import { formatDate } from '@/lib/format';
 import { errorMessage, fieldErrors } from '@/lib/errors';
 import { colors, space, typography } from '@/theme';
 
-const NONE = 'none';
-
-/** Raise a support ticket: subject, category, what happened, optional property/request. */
+/** Raise a support ticket: subject, category, the issue, and optionally a property / request. */
 export default function NewTicketScreen() {
   const params = useLocalSearchParams<{
     category?: string;
@@ -40,9 +42,10 @@ export default function NewTicketScreen() {
       : null,
   );
   const [description, setDescription] = useState('');
-  const [propertyId, setPropertyId] = useState<string>(params.propertyId ?? NONE);
-  const [requestId, setRequestId] = useState<string>(params.requestId ?? NONE);
+  const [propertyId, setPropertyId] = useState<string | null>(params.propertyId ?? null);
+  const [requestId, setRequestId] = useState<string | null>(params.requestId ?? null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [since] = useState(() => Date.now() - 30 * 86_400_000);
   const [files, setFiles] = useState<LocalFile[]>([]);
   const [uploading, setUploading] = useState(false);
 
@@ -51,8 +54,8 @@ export default function NewTicketScreen() {
       subject,
       category: category ?? undefined,
       description,
-      property_id: propertyId === NONE ? null : propertyId,
-      service_request_id: requestId === NONE ? null : requestId,
+      property_id: propertyId,
+      service_request_id: requestId,
     });
     if (!parsed.success) {
       setErrors(toFieldErrors(parsed.error));
@@ -69,14 +72,19 @@ export default function NewTicketScreen() {
           if (failed)
             toast(`${failed} file${failed === 1 ? '' : 's'} couldn't be uploaded`, 'danger');
         }
-        toast(`Ticket ${t.reference} raised`);
+        toast('Ticket raised — we’ll reply here');
         router.replace(`/support/${t.id}`);
       },
       onError: (err) => setErrors(fieldErrors(err)),
     });
   };
 
-  const recentRequests = (requests.data ?? []).slice(0, 6);
+  // Open requests, plus those closed in the last 30 days.
+  const relevantRequests = (requests.data ?? []).filter(
+    (r) =>
+      OPEN_REQUEST_STATUSES.includes(r.status) ||
+      new Date(r.completed_at ?? r.cancelled_at ?? r.updated_at).getTime() >= since,
+  );
 
   return (
     <View style={styles.flex}>
@@ -98,59 +106,54 @@ export default function NewTicketScreen() {
           error={errors.subject}
         />
 
-        <View style={styles.block}>
-          <Text style={styles.label}>Category</Text>
-          <Chips
-            options={TICKET_CATEGORIES.map((c) => ({ value: c, label: TICKET_CATEGORY_LABELS[c] }))}
-            value={category}
-            onChange={setCategory}
-          />
-          {errors.category ? <Text style={styles.error}>{errors.category}</Text> : null}
-        </View>
+        <Select
+          label="Category"
+          value={category}
+          options={TICKET_CATEGORIES.map((c) => ({ value: c, label: TICKET_CATEGORY_LABELS[c] }))}
+          onChange={setCategory}
+          error={errors.category}
+        />
 
         <TextField
-          label="What happened?"
+          label="Explain the issue"
           value={description}
           onChangeText={setDescription}
           multiline
           maxLength={4000}
-          placeholder="Tell us what you expected and what you saw."
+          placeholder="Tell us what you need help with — the more detail, the faster we can help."
           error={errors.description}
         />
 
         {(properties.data ?? []).length > 0 ? (
-          <View style={styles.block}>
-            <Text style={styles.label}>
-              Related property <Text style={typography.caption}>· optional</Text>
-            </Text>
-            <Chips
-              options={[
-                { value: NONE, label: 'None' },
-                ...(properties.data ?? []).map((p) => ({ value: p.id, label: p.name })),
-              ]}
-              value={propertyId}
-              onChange={setPropertyId}
-            />
-          </View>
+          <Select
+            label="Property"
+            optional
+            value={propertyId}
+            noneLabel="Not about a specific property"
+            options={(properties.data ?? []).map((p) => ({ value: p.id, label: p.name }))}
+            onChange={setPropertyId}
+          />
         ) : null}
 
-        {recentRequests.length > 0 ? (
-          <View style={styles.block}>
-            <Text style={styles.label}>
-              Related service request <Text style={typography.caption}>· optional</Text>
-            </Text>
-            <Chips
-              options={[
-                { value: NONE, label: 'None' },
-                ...recentRequests.map((r) => ({
-                  value: r.id,
-                  label: `${r.service.name} · ${r.reference}`,
-                })),
-              ]}
-              value={requestId}
-              onChange={setRequestId}
-            />
-          </View>
+        {relevantRequests.length > 0 ? (
+          <Select
+            label="Service request"
+            optional
+            value={requestId}
+            noneLabel="Not about a service request"
+            options={relevantRequests.map((r) => ({
+              value: r.id,
+              label: r.service.name,
+              description: [
+                r.property?.name,
+                requestStatusLabel(r.status, r.fulfilment),
+                formatDate(r.created_at),
+              ]
+                .filter(Boolean)
+                .join(' · '),
+            }))}
+            onChange={setRequestId}
+          />
         ) : null}
 
         <View style={styles.block}>

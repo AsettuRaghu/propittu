@@ -14,16 +14,10 @@ import { colors, radius, space, typography } from '@/theme';
 import { dialog } from './Dialog';
 import { Icon } from './Icon';
 
-/** Lets the user add up to 5 photos / PDFs to a message before sending. */
-export function AttachmentPicker({
-  files,
-  onChange,
-  disabled = false,
-}: {
-  files: LocalFile[];
-  onChange: (files: LocalFile[]) => void;
-  disabled?: boolean;
-}) {
+type Props = { files: LocalFile[]; onChange: (files: LocalFile[]) => void; disabled?: boolean };
+
+/** Adds photos / PDFs to a message (up to 5): the "Attach" sheet and pickers. */
+export function useAttachmentAdder({ files, onChange, disabled = false }: Props) {
   const room = MAX_ATTACHMENTS_PER_MESSAGE - files.length;
 
   const add = async () => {
@@ -76,51 +70,63 @@ export function AttachmentPicker({
     }
   };
 
+  return { add, room };
+}
+
+/** Thumbnails of the files picked so far, each removable. */
+export function AttachmentPreviews({ files, onChange, disabled = false }: Props) {
+  if (files.length === 0) return null;
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.strip}
+    >
+      {files.map((f, i) => (
+        <View key={`${f.uri}-${i}`} style={styles.item}>
+          {f.mimeType.startsWith('image/') ? (
+            <Image source={{ uri: f.uri }} style={styles.thumb} contentFit="cover" />
+          ) : (
+            <View style={[styles.thumb, styles.doc]}>
+              <Icon name="document" size={18} color={colors.primary} />
+              <Text style={styles.docName} numberOfLines={1}>
+                {f.name}
+              </Text>
+            </View>
+          )}
+          {!disabled ? (
+            <Pressable
+              onPress={() => onChange(files.filter((_, j) => j !== i))}
+              hitSlop={8}
+              style={styles.remove}
+              accessibilityRole="button"
+              accessibilityLabel={`Remove ${f.name}`}
+            >
+              <Icon name="close" size={11} color="#FFFFFF" strokeWidth={3} />
+            </Pressable>
+          ) : null}
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
+
+/** Form version: previews plus an "Attach photos or files" link. */
+export function AttachmentPicker(props: Props) {
+  const { add, room } = useAttachmentAdder(props);
   return (
     <View style={styles.wrap}>
-      {files.length > 0 ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.strip}
-        >
-          {files.map((f, i) => (
-            <View key={`${f.uri}-${i}`} style={styles.item}>
-              {f.mimeType.startsWith('image/') ? (
-                <Image source={{ uri: f.uri }} style={styles.thumb} contentFit="cover" />
-              ) : (
-                <View style={[styles.thumb, styles.doc]}>
-                  <Icon name="document" size={18} color={colors.primary} />
-                  <Text style={styles.docName} numberOfLines={1}>
-                    {f.name}
-                  </Text>
-                </View>
-              )}
-              {!disabled ? (
-                <Pressable
-                  onPress={() => onChange(files.filter((_, j) => j !== i))}
-                  hitSlop={8}
-                  style={styles.remove}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Remove ${f.name}`}
-                >
-                  <Icon name="close" size={11} color="#FFFFFF" strokeWidth={3} />
-                </Pressable>
-              ) : null}
-            </View>
-          ))}
-        </ScrollView>
-      ) : null}
+      <AttachmentPreviews {...props} />
       {room > 0 ? (
         <Pressable
           onPress={() => void add()}
-          disabled={disabled}
+          disabled={props.disabled}
           accessibilityRole="button"
           style={styles.addRow}
         >
           <Icon name="attach" size={15} color={colors.primary} />
           <Text style={styles.addText}>
-            {files.length ? `Add more (${room} left)` : 'Attach photos or files'}
+            {props.files.length ? `Add more (${room} left)` : 'Attach photos or files'}
           </Text>
         </Pressable>
       ) : null}

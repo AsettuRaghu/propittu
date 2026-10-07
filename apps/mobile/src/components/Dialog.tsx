@@ -1,6 +1,15 @@
 import * as Haptics from 'expo-haptics';
 import { useEffect, useState } from 'react';
-import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Animated,
+  Dimensions,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { accents, colors, radius, shadowStrong, space, typography, type Accent } from '@/theme';
 import { Icon, type IconName } from './Icon';
@@ -40,6 +49,8 @@ export interface ActionItem<T> {
   icon?: IconName;
   tone?: 'default' | 'danger';
   description?: string;
+  /** Shown with a tick (when the sheet is used as a dropdown). */
+  selected?: boolean;
 }
 
 /** A row in a confirm's price summary; `total` is emphasised, `credit` shown in green. */
@@ -340,29 +351,32 @@ export function DialogHost() {
               </View>
             ) : (
               <View style={styles.actions}>
-                {request.actions.map((a) => {
-                  const danger = a.tone === 'danger';
-                  return (
-                    <Pressable
-                      key={a.label}
-                      onPress={() => close(() => request.resolve(a.value))}
-                      accessibilityRole="button"
-                      style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}
-                    >
-                      {a.icon ? (
-                        <IconTile icon={a.icon} accent={danger ? 'coral' : 'indigo'} size={38} />
-                      ) : null}
-                      <View style={styles.flex}>
-                        <Text style={[typography.bodyStrong, danger && { color: colors.danger }]}>
-                          {a.label}
-                        </Text>
-                        {a.description ? (
-                          <Text style={typography.small}>{a.description}</Text>
+                <ScrollView style={styles.actionList} bounces={false}>
+                  {request.actions.map((a) => {
+                    const danger = a.tone === 'danger';
+                    return (
+                      <Pressable
+                        key={a.label}
+                        onPress={() => close(() => request.resolve(a.value))}
+                        accessibilityRole="button"
+                        style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}
+                      >
+                        {a.icon ? (
+                          <IconTile icon={a.icon} accent={danger ? 'coral' : 'indigo'} size={38} />
                         ) : null}
-                      </View>
-                    </Pressable>
-                  );
-                })}
+                        <View style={styles.flex}>
+                          <Text style={[typography.bodyStrong, danger && { color: colors.danger }]}>
+                            {a.label}
+                          </Text>
+                          {a.description ? (
+                            <Text style={typography.small}>{a.description}</Text>
+                          ) : null}
+                        </View>
+                        {a.selected ? <Icon name="check" size={18} color={colors.primary} /> : null}
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
                 <Button title="Cancel" variant="ghost" onPress={dismiss} />
               </View>
             )}
@@ -465,6 +479,7 @@ const styles = StyleSheet.create({
   },
   totalValue: { fontSize: 18, fontWeight: '800', color: colors.text },
   actions: { gap: space.xs, marginTop: space.xs },
+  actionList: { maxHeight: Dimensions.get('window').height * 0.55 },
   action: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -1,12 +1,12 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { TICKET_CATEGORY_LABELS, TICKET_STATUS_LABELS } from '@propittu/shared';
+import { TICKET_CATEGORY_LABELS, TICKET_STATUS_LABELS, ticketWaitingNote } from '@propittu/shared';
 import { PullRefresh } from '@/components/PullRefresh';
 import { useReplyTicket, useTicket } from '@/api/support';
 import { uploadAll } from '@/components/AttachmentPicker';
 import { dialog, toast } from '@/components/Dialog';
 import { ErrorState, LoadingState } from '@/components/States';
-import { TicketThread } from '@/components/TicketThread';
+import { ChatThread } from '@/components/ChatThread';
 import { Badge, Card, LinkButton } from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
@@ -37,7 +37,7 @@ export default function TicketScreen() {
           <Badge label={TICKET_STATUS_LABELS[t.status]} tone={TICKET_TONES[t.status]} />
         </View>
         <Text style={typography.small}>
-          {t.reference} · {TICKET_CATEGORY_LABELS[t.category]} · opened {formatDate(t.created_at)}
+          {TICKET_CATEGORY_LABELS[t.category]} · raised {formatDate(t.created_at)}
         </Text>
         <View style={styles.links}>
           {t.property ? (
@@ -49,7 +49,7 @@ export default function TicketScreen() {
           ) : null}
           {t.service_request ? (
             <LinkButton
-              title={t.service_request.reference}
+              title={t.service_request.service?.name ?? 'Service request'}
               icon="requests"
               onPress={() => router.push(`/requests/${t.service_request?.id}`)}
             />
@@ -57,9 +57,10 @@ export default function TicketScreen() {
         </View>
       </Card>
 
-      <TicketThread
+      <ChatThread
         messages={t.messages}
         mine="customer"
+        notice={ticketWaitingNote(t)}
         sending={reply.isPending || isRefetching}
         closedNote={
           t.status === 'closed'
