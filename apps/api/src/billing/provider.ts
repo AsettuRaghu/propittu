@@ -46,6 +46,9 @@ export type PaymentEvent =
   | { type: 'refund.processed'; paymentRef: string; refundRef: string; amountPaise: number }
   | { type: 'ignored'; providerType: string };
 
+/** A provider event for a captured (paid) payment. */
+export type CapturedEvent = Extract<PaymentEvent, { type: 'payment.captured' }>;
+
 export interface PaymentProvider {
   readonly name: 'razorpay';
   /** False until the provider's keys are configured. */
@@ -54,8 +57,14 @@ export interface PaymentProvider {
   /**
    * Server-to-server status of a checkout — used to reconcile when a
    * webhook is late. Never based on anything the app reports.
+   * `captured`: the payment, if paid. `attempted`: a payment was started
+   * (e.g. a UPI approval pending) even if not captured yet.
    */
-  fetchCheckout(checkoutRef: string): Promise<PaymentEvent | null>;
+  inspectCheckout(
+    checkoutRef: string,
+  ): Promise<{ captured: CapturedEvent | null; attempted: boolean }>;
+  /** Stops an unpaid checkout from being paid later (best effort). */
+  cancelCheckout(checkoutRef: string): Promise<void>;
   /** True only if the payload was signed with our webhook secret. */
   verifyWebhook(rawBody: Buffer, signature: string | undefined): boolean;
   parseWebhook(rawBody: Buffer): { eventId: string | null; event: PaymentEvent };

@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import {
+  type CheckedOrder,
+  type CheckoutState,
   FAILED_PAYMENT_HISTORY_DAYS,
   PAYMENT_HISTORY_YEARS,
   planCheckoutSchema,
   type CheckoutSession,
-  type Order,
   type PlanQuote,
 } from '@propittu/shared';
 import { auth, type AuthContext } from '../auth.js';
@@ -153,29 +154,65 @@ billingRouter.get('/billing/orders/:id', async (req, res) => {
   ok(res, toOrder(await loadOrderRow(db, uuidParam(req.params.id, 'Order'), accountId)));
 });
 
-/*
- * POST /billing/orders/:id/refresh — the app calls this after the customer
- * returns from the payment page. If the webhook has not arrived yet, ask
- * the provider directly (server-to-server, with our key). Nothing the app
- * sends is trusted.
+/**
+ * Where an order's checkout stands, asking the provider directly when it is
+ * still pending (server-to-server, with our key) and recording a capture
+ * the webhook hasn't delivered yet. Nothing the app sends is trusted.
  */
-billingRouter.post('/billing/orders/:id/refresh', async (req, res) => {
-  const { db, accountId } = auth(req);
-  const id = uuidParam(req.params.id, 'Order');
+async function checkOrder(ctx: AuthContext, id: string): Promise<CheckedOrder> {
+  const { db, accountId } = ctx;
   let row = await loadOrderRow(db, id, accountId);
   const checkoutRef = latestPayment(row)?.provider_checkout_ref;
-
-  if (row.status === 'pending' && checkoutRef && paymentsReady()) {
-    const event = await provider.fetchCheckout(checkoutRef);
-    if (event?.type === 'payment.captured') {
-      await recordPaymentEvent(
-        `fetch:${event.paymentRef}`,
-        { ...event, orderId: row.id },
-        { source: 'fetch' },
-      );
-      row = await loadOrderRow(db, id, accountId);
+  let state: CheckoutState = row.status === 'paid' ? 'paid' : 'closed';
+  if (row.status === 'pending') {
+    state = 'in_progress';
+    if (checkoutRef && paymentsReady()) {
+      const { captured, attempted } = await provider.inspectCheckout(checkoutRef);
+      if (captured) {
+        await recordPaymentEvent(
+          `fetch:${captured.paymentRef}`,
+          { ...captured, orderId: row.id },
+          { source: 'fetch' },
+        );
+        row = await loadOrderRow(db, id, accountId);
+        state = row.status === 'paid' ? 'paid' : 'in_progress';
+      } else {
+        state = attempted ? 'in_progress' : 'not_started';
+      }
     }
   }
-  const data: Order = toOrder(row);
-  ok(res, data);
+  return { ...toOrder(row), checkout_state: state };
+}
+
+/* POST /billing/orders/:id/refresh — after the customer returns from the payment page */
+billingRouter.post('/billing/orders/:id/refresh', async (req, res) => {
+  ok(res, await checkOrder(auth(req), uuidParam(req.params.id, 'Order')));
+});
+
+/*
+ * POST /billing/orders/:id/abandon — the customer came back without paying.
+ * Only when the provider shows no payment attempt: cancel the payment link
+ * (so it can't be paid later by mistake) and close the order, which then
+ * shows as "Not completed". A payment in progress is left alone.
+ */
+billingRouter.post('/billing/orders/:id/abandon', async (req, res) => {
+  const ctx = auth(req);
+  const id = uuidParam(req.params.id, 'Order');
+  const checked = await checkOrder(ctx, id);
+  if (checked.checkout_state !== 'not_started') return ok(res, checked);
+
+  const row = await loadOrderRow(ctx.db, id, ctx.accountId);
+  const checkoutRef = latestPayment(row)?.provider_checkout_ref;
+  if (checkoutRef) {
+    try {
+      await provider.cancelCheckout(checkoutRef);
+    } catch {
+      // Not cancellable any more (e.g. paid this second) — look again.
+      const again = await checkOrder(ctx, id);
+      if (again.checkout_state !== 'not_started') return ok(res, again);
+    }
+  }
+  must(await ctx.db.rpc('abandon_order', { p_order: id }));
+  await audit(ctx, 'billing.checkout_abandoned', { type: 'order', id });
+  ok(res, await checkOrder(ctx, id));
 });

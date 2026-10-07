@@ -1,7 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as WebBrowser from 'expo-web-browser';
 import { AppState, Platform } from 'react-native';
-import type { BackofficeOrder, CheckoutSession, Order, PlanQuote } from '@propittu/shared';
+import type {
+  BackofficeOrder,
+  CheckedOrder,
+  CheckoutSession,
+  Order,
+  PlanQuote,
+} from '@propittu/shared';
+import { dialog, toast } from '@/components/Dialog';
 import { api } from './client';
 
 /**
@@ -45,20 +52,48 @@ function backInForeground(): Promise<void> {
   });
 }
 
-/** Opens the payment page, then polls the order until it is paid (or we give up). */
-async function payInBrowser(session: CheckoutSession): Promise<Order> {
+/**
+ * Opens the payment page; when the customer is back, asks the API where the
+ * checkout stands. Nothing attempted → the order is closed at once ("Not
+ * completed"); a payment in progress → a few short checks for the capture.
+ */
+async function payInBrowser(session: CheckoutSession): Promise<CheckedOrder> {
   await WebBrowser.openBrowserAsync(session.checkout_url, {
     dismissButtonStyle: 'done',
     presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
   });
   await backInForeground();
-  let order = session.order;
-  for (let attempt = 0; attempt < 6; attempt++) {
-    order = await api<Order>(`/billing/orders/${session.order.id}/refresh`, { method: 'POST' });
-    if (order.status === 'paid') return order;
+  const path = `/billing/orders/${session.order.id}`;
+  let order = await api<CheckedOrder>(`${path}/refresh`, { method: 'POST' });
+  if (order.checkout_state === 'not_started') {
+    return api<CheckedOrder>(`${path}/abandon`, { method: 'POST' });
+  }
+  for (let attempt = 0; attempt < 4 && order.checkout_state === 'in_progress'; attempt++) {
     await sleep(2000);
+    order = await api<CheckedOrder>(`${path}/refresh`, { method: 'POST' });
   }
   return order;
+}
+
+/** What to tell the customer once they are back from the payment page. */
+export function showPaymentOutcome(order: CheckedOrder, paidMessage: string): void {
+  if (order.checkout_state === 'paid') {
+    void dialog.alert({
+      title: 'Payment received',
+      message: paidMessage,
+      tone: 'success',
+      icon: 'celebrate',
+      buttonLabel: 'Great',
+    });
+  } else if (order.checkout_state === 'in_progress') {
+    void dialog.alert({
+      title: 'Confirming your payment',
+      message: 'If you approved it in your UPI or bank app, it updates here within a minute.',
+      icon: 'clock',
+    });
+  } else {
+    toast('Payment not completed — no money was taken', 'info');
+  }
 }
 
 function useRefreshAfterPayment() {

@@ -3,7 +3,13 @@ import { z } from 'zod';
 import { env } from '../env.js';
 import { HttpError } from '../errors.js';
 import { logger } from '../logger.js';
-import type { Checkout, CheckoutInput, PaymentEvent, PaymentProvider } from './provider.js';
+import type {
+  CapturedEvent,
+  Checkout,
+  CheckoutInput,
+  PaymentEvent,
+  PaymentProvider,
+} from './provider.js';
 
 /**
  * Razorpay adapter (UPI + cards) using Payment Links: a hosted page the
@@ -91,7 +97,7 @@ export const razorpay: PaymentProvider = {
     return { checkoutRef: link.id, url: link.short_url };
   },
 
-  async fetchCheckout(checkoutRef: string): Promise<PaymentEvent | null> {
+  async inspectCheckout(checkoutRef: string) {
     const link = await call<{
       id: string;
       status: string;
@@ -100,10 +106,12 @@ export const razorpay: PaymentProvider = {
       notes?: Record<string, string>;
       payments?: LinkPayment[] | null;
     }>(`/payment_links/${encodeURIComponent(checkoutRef)}`, { method: 'GET' });
-    if (link.status !== 'paid') return null;
-    const paid = (link.payments ?? []).find((p) => p.status === 'captured');
-    if (!paid) return null;
-    return {
+    const payments = link.payments ?? [];
+    const attempted =
+      link.status === 'partially_paid' || payments.some((p) => p.status !== 'failed');
+    const paid = payments.find((p) => p.status === 'captured');
+    if (link.status !== 'paid' || !paid) return { captured: null, attempted };
+    const captured: CapturedEvent = {
       type: 'payment.captured',
       orderId: asOrderId(link.notes?.order_id),
       checkoutRef: link.id,
@@ -112,6 +120,12 @@ export const razorpay: PaymentProvider = {
       currency: link.currency,
       method: paid.method ?? null,
     };
+    return { captured, attempted: true };
+  },
+
+  async cancelCheckout(checkoutRef: string): Promise<void> {
+    // Only links still in `created` can be cancelled; anything else throws.
+    await call(`/payment_links/${encodeURIComponent(checkoutRef)}/cancel`, { method: 'POST' });
   },
 
   verifyWebhook(rawBody: Buffer, signature: string | undefined): boolean {

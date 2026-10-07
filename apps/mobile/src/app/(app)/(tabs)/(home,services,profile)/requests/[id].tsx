@@ -7,7 +7,7 @@ import {
   type ServiceRequestDetail,
 } from '@propittu/shared';
 import { PullRefresh } from '@/components/PullRefresh';
-import { useServiceCheckout } from '@/api/billing';
+import { showPaymentOutcome, useServiceCheckout } from '@/api/billing';
 import { useCancelServiceRequest, useServiceRequest } from '@/api/queries';
 import { dialog, toast } from '@/components/Dialog';
 import { Icon, type IconName } from '@/components/Icon';
@@ -205,14 +205,7 @@ function PaymentCard({ request }: { request: ServiceRequestDetail }) {
 
   const start = () =>
     pay.mutate(undefined, {
-      onSuccess: (order) =>
-        order.status === 'paid'
-          ? toast('Payment received — thank you!')
-          : void dialog.alert({
-              title: 'Payment not confirmed yet',
-              message: 'If you completed the payment, it will update here within a minute.',
-              icon: 'clock',
-            }),
+      onSuccess: (order) => showPaymentOutcome(order, 'Thank you — we’ll get started.'),
       onError: (err) =>
         void dialog.alert({
           title: "Couldn't start the payment",

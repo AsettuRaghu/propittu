@@ -827,12 +827,19 @@ select tst.ok((select amount_paise < 499900 and list_price_paise = 499900 and cr
                       and description like '%upgrade from Basic%'
                from public.orders where status = 'pending'),
   'the upgrade order is priced net of the credit');
+select id as up_order, amount_paise as up_amount from public.orders where status = 'pending' \gset
+-- Abandoned checkout: back from the payment page without paying.
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.ok(not public.abandon_order(:'up_order'), 'a customer cannot close someone else''s order');
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.ok(public.abandon_order(:'up_order'), 'B closes its unpaid checkout');
+select tst.ok((select status from public.orders where id = :'up_order') = 'cancelled',
+  'an abandoned order shows as not completed at once');
 reset role;
 set role service_role;
 select tst.ok(public.record_payment_event('razorpay', 'evt_up', 'payment.captured',
-  (select id from public.orders where account_id = 'acc0000b-0000-0000-0000-00000000000b' and status = 'pending'),
-  'pay_up', (select amount_paise from public.orders where account_id = 'acc0000b-0000-0000-0000-00000000000b' and status = 'pending'), 'INR')
-  = 'plan_activated', 'B pays the upgrade');
+  :'up_order', 'pay_up', :up_amount, 'INR')
+  = 'plan_activated', 'B pays the upgrade anyway (late payment on a closed order still activates)');
 reset role;
 set role authenticated;
 select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');

@@ -28,6 +28,14 @@ export const ORDER_DISPLAY_LABELS: Record<OrderDisplayStatus, string> = {
 /** A pending checkout older than this is treated as not completed. */
 export const CHECKOUT_STALE_MINUTES = 30;
 
+/**
+ * Where a checkout stands when the customer comes back from the payment page:
+ * paid · in_progress (a payment was started, e.g. a UPI approval pending) ·
+ * not_started (nothing was attempted) · closed (no longer pending).
+ */
+export type CheckoutState = 'paid' | 'in_progress' | 'not_started' | 'closed';
+export type CheckedOrder = Order & { checkout_state: CheckoutState };
+
 /** Payments tab: completed payments from the last 4 years; unfinished attempts from the last 2 months. */
 export const PAYMENT_HISTORY_YEARS = 4;
 export const FAILED_PAYMENT_HISTORY_DAYS = 60;

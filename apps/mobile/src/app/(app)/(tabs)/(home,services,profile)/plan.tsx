@@ -15,7 +15,7 @@ import {
   type PublicPlan,
 } from '@propittu/shared';
 import { PullRefresh } from '@/components/PullRefresh';
-import { fetchPlanQuote, useOrders, usePlanCheckout } from '@/api/billing';
+import { fetchPlanQuote, showPaymentOutcome, useOrders, usePlanCheckout } from '@/api/billing';
 import { useAccountPlan, usePlans, useProperties, useServices } from '@/api/queries';
 import { dialog } from '@/components/Dialog';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
@@ -181,21 +181,7 @@ export default function PlanScreen() {
     });
     if (!ok) return;
     checkout.mutate(plan.code, {
-      onSuccess: (order) =>
-        order.status === 'paid'
-          ? void dialog.alert({
-              title: 'Payment received',
-              message: `Your ${plan.name} plan is active.`,
-              tone: 'success',
-              icon: 'celebrate',
-              buttonLabel: 'Great',
-            })
-          : void dialog.alert({
-              title: 'Payment not confirmed yet',
-              message:
-                'If you completed the payment, it updates within a minute — pull down to refresh.',
-              icon: 'clock',
-            }),
+      onSuccess: (order) => showPaymentOutcome(order, `Your ${plan.name} plan is active.`),
       onError: (err) =>
         void dialog.alert({
           title: "Couldn't start the payment",
@@ -203,6 +189,18 @@ export default function PlanScreen() {
           tone: 'danger',
         }),
     });
+  };
+
+  // The header button acts directly: upgrade to the next plan up, or renew
+  // in the renewal window. Choosing a first plan opens the Plans tab.
+  const nextUp = [...(plans.data ?? [])]
+    .filter((p) => p.price_paise > currentPrice)
+    .sort((a, b) => a.price_paise - b.price_paise)[0];
+  const mine = plans.data?.find((p) => p.code === code);
+  const headerAction = () => {
+    if (paidPlan && code !== topCode && nextUp) return void choose(nextUp);
+    if (paidPlan && canRenew && mine) return void choose(mine);
+    setTab('plans');
   };
 
   return (
@@ -219,7 +217,8 @@ export default function PlanScreen() {
         state={s}
         onTop={!!code && code === topCode}
         canRenew={canRenew}
-        onAction={() => setTab('plans')}
+        busy={checkout.isPending}
+        onAction={headerAction}
       />
 
       {s.over_limit.length > 0 ? (
@@ -280,11 +279,13 @@ function PlanHeader({
   state: s,
   onTop,
   canRenew,
+  busy,
   onAction,
 }: {
   state: AccountPlanState;
   onTop: boolean;
   canRenew: boolean;
+  busy: boolean;
   onAction: () => void;
 }) {
   const trial = s.status === 'trialing';
@@ -307,7 +308,7 @@ function PlanHeader({
         </Text>
         <Badge {...planBadge({ status: s.status })} />
         <View style={styles.flex} />
-        {cta ? <Button title={cta} size="sm" icon="gem" onPress={onAction} /> : null}
+        {cta ? <Button title={cta} size="sm" icon="gem" loading={busy} onPress={onAction} /> : null}
       </View>
       {c ? (
         <Text style={typography.small}>
