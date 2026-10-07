@@ -87,6 +87,19 @@ const PROPERTY_KINDS = [
 ];
 const UNITS = ['sqft', 'sqyd', 'sqm', 'acre', 'guntha', 'cent'];
 
+/** "Plot in Bommasandra" — a recognisable name when the deed has no project or unit. */
+function placeName(kind: string | null, place: string | null): string | null {
+  if (!place) return null;
+  const what: Record<string, string> = {
+    land: 'Plot',
+    apartment: 'Flat',
+    independent_house: 'House',
+    commercial: 'Property',
+    industrial: 'Property',
+  };
+  return `${(kind && what[kind]) || 'Property'} in ${place}`;
+}
+
 /** Builds the pre-filled property from a reading's facts (nothing invented). */
 export function prefillFromFacts(facts: Pick<PropertyFact, 'key' | 'value'>[]): PropertyPrefill {
   const f = new Map(facts.map((x) => [x.key, x.value]));
@@ -125,7 +138,12 @@ export function prefillFromFacts(facts: Pick<PropertyFact, 'key' | 'value'>[]): 
 
   return {
     property_type: kind && PROPERTY_KINDS.includes(kind) ? kind : null,
-    name: project && unitLabel ? `${project} – ${unitLabel}` : (project ?? unitLabel),
+    name:
+      project && unitLabel
+        ? `${project} – ${unitLabel}`
+        : (project ??
+          unitLabel ??
+          placeName(kind, s('village') ?? s('taluk_or_mandal') ?? s('city'))),
     address_line: address || null,
     city: s('city'),
     state: s('state'),

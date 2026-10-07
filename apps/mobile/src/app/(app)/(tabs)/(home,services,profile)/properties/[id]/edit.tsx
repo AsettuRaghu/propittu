@@ -7,7 +7,6 @@ import { dialog, toast } from '@/components/Dialog';
 import { DocumentSlots } from '@/components/DocumentSlots';
 import { Footer } from '@/components/Footer';
 import {
-  FormSection,
   PropertyForm,
   propertyToForm,
   validatePropertyForm,
@@ -116,14 +115,7 @@ function EditForm({ property }: { property: PropertyDetail }) {
         {formError ? <Banner message={formError} /> : null}
         <PropertyForm values={values} errors={errors} onChange={onChange} />
 
-        <FormSection
-          icon="document"
-          accent="amber"
-          title="Documents"
-          subtitle="Upload a document straight into its type."
-        >
-          <DocumentSlots propertyId={property.id} />
-        </FormSection>
+        <DocumentSlots propertyId={property.id} />
 
         <Button
           title="Delete property"
@@ -143,5 +135,5 @@ function EditForm({ property }: { property: PropertyDetail }) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  content: { padding: space.lg, paddingTop: space.xs, gap: space.lg, paddingBottom: space.xxl },
+  content: { padding: space.lg, paddingTop: space.md, gap: space.xl, paddingBottom: space.xxl },
 });

@@ -277,6 +277,7 @@ export default function RequestServiceScreen() {
           <View style={styles.inner}>
             <TextField
               variant="flat"
+              hideLabel
               label="Notes for our team"
               multiline
               maxLength={2000}

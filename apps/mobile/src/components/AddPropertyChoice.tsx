@@ -1,22 +1,34 @@
 import * as DocumentPicker from 'expo-document-picker';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { formatFileSize, MAX_LONG_DOCUMENT_BYTES } from '@propittu/shared';
 import { createDraftProperty, startAnalysis } from '@/api/ai';
 import { api } from '@/api/client';
 import { prepareDocument, uploadDocument } from '@/api/uploads';
 import { errorMessage } from '@/lib/errors';
-import { accents, colors, font, radius, shadow, space, typography } from '@/theme';
+import {
+  accents,
+  colors,
+  font,
+  gradients,
+  radius,
+  shadow,
+  space,
+  typography,
+  type Accent,
+} from '@/theme';
 import { Icon, type IconName } from './Icon';
-import { Banner, Button, ProgressBar } from './ui';
+import { Banner, Button, ListGroup, ListRow, ProgressBar } from './ui';
 
 type Phase = { kind: 'idle' } | { kind: 'uploading'; progress: number } | { kind: 'handing' };
 
 /**
- * The first screen of Add property when Pittu is available: one card, two
- * equal choices. Choosing the deed opens the file picker straight away and
- * uploads right here — no second page. A failed upload removes the draft.
+ * The first screen of Add property when Pittu is available: a bold invite
+ * to hand over the sale deed (what Pittu picks up, listed below it), and a
+ * quiet way to type it in instead. The deed uploads right here — no second
+ * page. A failed upload removes the draft.
  */
 export function AddPropertyChoice({ onManual }: { onManual: () => void }) {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
@@ -64,103 +76,96 @@ export function AddPropertyChoice({ onManual }: { onManual: () => void }) {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
-      <View style={styles.pittu}>
-        <View style={styles.avatar}>
-          <Icon name="home" size={18} color="#FFFFFF" strokeWidth={2.2} />
+    <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <LinearGradient
+        colors={gradients.brand}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.hero, shadow]}
+      >
+        <View style={styles.heroIcon}>
+          <Icon name="deed" size={30} color="#FFFFFF" strokeWidth={1.8} />
+          <View style={styles.spark}>
+            <Icon name="sparkles" size={13} color={accents.amber.fg} strokeWidth={2.6} />
+          </View>
         </View>
-        <View style={styles.bubble}>
-          <Text style={styles.bubbleTitle}>Let’s add your property</Text>
-          <Text style={typography.body}>
-            Hand me the sale deed and I’ll do the reading and the typing. Or fill it in yourself —
-            your call.
+        <Text style={styles.heroTitle}>Upload your sale deed — we’ll do the rest</Text>
+        <Text style={styles.heroText}>
+          Pittu reads it and fills in the type, address, size and survey numbers. You just check and
+          save.
+        </Text>
+        {phase.kind === 'uploading' ? (
+          <View style={styles.progress}>
+            <Text style={styles.heroNote}>
+              Uploading securely… {Math.round(phase.progress * 100)}%
+            </Text>
+            <ProgressBar progress={phase.progress} />
+          </View>
+        ) : phase.kind === 'handing' ? (
+          <Text style={styles.heroNote}>Handing it to Pittu…</Text>
+        ) : (
+          <Button
+            title="Upload sale deed"
+            icon="attach"
+            variant="secondary"
+            onPress={() => void uploadDeed()}
+          />
+        )}
+        <View style={styles.privacy}>
+          <Icon name="lock" size={12} color="rgba(255,255,255,0.8)" />
+          <Text style={styles.heroNote}>
+            PDF up to {formatFileSize(MAX_LONG_DOCUMENT_BYTES)} · stored privately
           </Text>
         </View>
-      </View>
+      </LinearGradient>
 
-      <View style={[styles.group, shadow]}>
-        <Option
-          icon="document"
-          accent="indigo"
-          title="Upload the sale deed"
-          subtitle="Pittu fills in the details for you · about a minute"
-          tag="Recommended"
-          onPress={() => void uploadDeed()}
-          disabled={busy}
-        />
-        <View style={styles.divider} />
-        <Option
+      {problem ? <Banner message={problem} /> : null}
+
+      <ListGroup title="What Pittu picks up" plain>
+        {PICKS.map((p) => (
+          <ListRow
+            key={p.title}
+            icon={p.icon}
+            accent={p.accent}
+            title={p.title}
+            subtitle={p.text}
+          />
+        ))}
+      </ListGroup>
+
+      <ListGroup title="No deed at hand?" plain>
+        <ListRow
           icon="edit"
           accent="slate"
           title="Fill it in myself"
-          subtitle="Type the details · you can add the deed later"
-          onPress={onManual}
-          disabled={busy}
+          subtitle="Takes a couple of minutes · add the deed later"
+          onPress={busy ? undefined : onManual}
         />
-      </View>
-
-      {phase.kind === 'uploading' ? (
-        <View style={styles.progress}>
-          <Text style={typography.small}>
-            Uploading your deed securely… {Math.round(phase.progress * 100)}%
-          </Text>
-          <ProgressBar progress={phase.progress} />
-        </View>
-      ) : phase.kind === 'handing' ? (
-        <Text style={[typography.small, styles.center]}>Handing it to Pittu…</Text>
-      ) : null}
-      {problem ? <Banner message={problem} /> : null}
-
-      <View style={styles.privacy}>
-        <Icon name="lock" size={13} color={colors.textSubtle} />
-        <Text style={typography.caption}>
-          PDF up to {formatFileSize(MAX_LONG_DOCUMENT_BYTES)} · stored privately · you check
-          everything before it’s saved
-        </Text>
-      </View>
+      </ListGroup>
     </ScrollView>
   );
 }
 
-function Option({
-  icon,
-  accent,
-  title,
-  subtitle,
-  tag,
-  onPress,
-  disabled,
-}: {
-  icon: IconName;
-  accent: 'indigo' | 'slate';
-  title: string;
-  subtitle: string;
-  tag?: string;
-  onPress: () => void;
-  disabled: boolean;
-}) {
-  const a = accents[accent];
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      accessibilityRole="button"
-      style={({ pressed }) => [styles.option, (pressed || disabled) && { opacity: 0.7 }]}
-    >
-      <View style={[styles.optionIcon, { backgroundColor: a.bg }]}>
-        <Icon name={icon} size={22} color={a.fg} />
-      </View>
-      <View style={styles.flex}>
-        <View style={styles.titleRow}>
-          <Text style={typography.heading}>{title}</Text>
-          {tag ? <Text style={styles.tag}>{tag}</Text> : null}
-        </View>
-        <Text style={typography.small}>{subtitle}</Text>
-      </View>
-      <Icon name="chevron" size={18} color={colors.textSubtle} />
-    </Pressable>
-  );
-}
+const PICKS: { icon: IconName; accent: Accent; title: string; text: string }[] = [
+  {
+    icon: 'home',
+    accent: 'indigo',
+    title: 'What and where',
+    text: 'Type, address, village, district',
+  },
+  {
+    icon: 'area',
+    accent: 'teal',
+    title: 'Size and land records',
+    text: 'Area, survey and Khata numbers',
+  },
+  {
+    icon: 'receipt',
+    accent: 'amber',
+    title: 'The registration',
+    text: 'Number, date, buyers, sale price',
+  },
+];
 
 /** Shown instead of both choices when this term's property slots are all used. */
 export function PropertyLimitReached({
@@ -212,30 +217,33 @@ export function PropertyLimitReached({
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, minWidth: 0 },
   center: { textAlign: 'center' },
-  content: { padding: space.lg, paddingTop: space.sm, gap: space.lg, paddingBottom: space.xxl },
-  pittu: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start' },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: colors.primary,
+  content: { padding: space.lg, paddingTop: space.sm, gap: space.xl, paddingBottom: space.xxl },
+  hero: { borderRadius: radius.lg, padding: space.xl, gap: space.md },
+  heroIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  bubble: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderTopLeftRadius: 4,
-    padding: space.md,
-    gap: 4,
+  spark: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: accents.amber.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  bubbleTitle: { fontSize: font(16), fontWeight: '800', color: colors.text },
-  group: { backgroundColor: colors.surface, borderRadius: radius.lg, overflow: 'hidden' },
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 72 },
-  option: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.lg },
+  heroTitle: { fontSize: font(26), fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5 },
+  heroText: { fontSize: font(15), lineHeight: font(21), color: 'rgba(255,255,255,0.9)' },
+  heroNote: { fontSize: font(12.5), color: 'rgba(255,255,255,0.85)' },
+  progress: { gap: space.xs },
+  privacy: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   optionIcon: {
     width: 44,
     height: 44,
@@ -243,19 +251,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' },
-  tag: {
-    fontSize: font(11),
-    fontWeight: '800',
-    color: colors.primary,
-    backgroundColor: colors.primarySoft,
-    borderRadius: radius.pill,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    overflow: 'hidden',
-  },
-  progress: { gap: space.xs },
-  privacy: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   limit: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,

@@ -12,17 +12,37 @@ type FieldProps = Omit<TextInputProps, 'style'> & {
    * on the page with a hairline under it that turns brand-coloured when focused.
    */
   variant?: 'box' | 'flat';
+  /** Flat only: no caption above (when a section heading already names the field). */
+  hideLabel?: boolean;
 };
 
 export const TextField = forwardRef<TextInput, FieldProps>(function TextField(
-  { label, error, hint, optional, multiline, onFocus, onBlur, variant = 'box', ...input },
+  {
+    label,
+    error,
+    hint,
+    optional,
+    multiline,
+    onFocus,
+    onBlur,
+    variant = 'box',
+    hideLabel = false,
+    ...input
+  },
   ref,
 ) {
   const [focused, setFocused] = useState(false);
   const flat = variant === 'flat';
   return (
     <View style={styles.wrap}>
-      {flat ? null : (
+      {flat ? (
+        hideLabel ? null : (
+          <Text style={typography.caption}>
+            {label}
+            {optional ? ' · optional' : ''}
+          </Text>
+        )
+      ) : (
         <Text style={styles.label}>
           {label}
           {optional ? <Text style={styles.optional}> · optional</Text> : null}

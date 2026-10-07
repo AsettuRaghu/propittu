@@ -162,6 +162,14 @@ function PayCallout({ request, amount }: { request: ServiceRequestDetail; amount
   );
 }
 
+/** "Within 3–5 days of confirming" → "3–5 days" (falls back to the usual days, then the text). */
+function shortTimeline(s: { turnaround: string | null; expected_days: number | null }): string {
+  const m = s.turnaround?.match(/(\d+\s*[–-]\s*\d+|\d+)\s+(?:working\s+)?(days?|weeks?)/i);
+  if (m?.[1] && m[2]) return `${m[1].replace(/\s+/g, '')} ${m[2]}`;
+  if (s.expected_days) return `${s.expected_days} days`;
+  return s.turnaround ?? '';
+}
+
 /** The key facts as a row of icons rather than a list of labels. */
 function Glance({
   request: r,
@@ -182,8 +190,8 @@ function Glance({
             .filter(Boolean)
             .join(' · '),
         }
-      : r.service.turnaround
-        ? { label: 'Usually', value: r.service.turnaround }
+      : r.service.turnaround || r.service.expected_days
+        ? { label: 'Timeline', value: shortTimeline(r.service) }
         : null;
   const cost =
     payment.state === 'included'
@@ -300,6 +308,6 @@ const styles = StyleSheet.create({
   callout: { borderRadius: radius.lg, padding: space.lg, gap: space.md },
   calloutTop: { flexDirection: 'row', gap: space.md, alignItems: 'flex-start' },
   glance: { flexDirection: 'row', gap: space.md },
-  fact: { flex: 1, gap: 4 },
-  factValue: { fontSize: font(15), fontWeight: '700', color: colors.text },
+  fact: { flex: 1, gap: 4, alignItems: 'center' },
+  factValue: { fontSize: font(15), fontWeight: '700', color: colors.text, textAlign: 'center' },
 });

@@ -21,15 +21,6 @@ export const PROPERTY_TYPE_ICONS: Record<PropertyType, IconName> = {
   other: 'pin',
 };
 
-export const PROPERTY_TYPE_ACCENTS: Record<PropertyType, Accent> = {
-  land: 'teal',
-  apartment: 'indigo',
-  independent_house: 'violet',
-  commercial: 'amber',
-  industrial: 'slate',
-  other: 'sky',
-};
-
 /** Placeholder artwork when a property has no photo yet. */
 export const PROPERTY_TYPE_GRADIENTS: Record<PropertyType, readonly [string, string]> = {
   land: ['#0F9488', '#0284C7'],

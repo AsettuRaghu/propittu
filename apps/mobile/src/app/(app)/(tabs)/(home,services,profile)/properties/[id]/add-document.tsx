@@ -115,7 +115,7 @@ export default function AddDocumentScreen() {
     <View style={styles.flex}>
       <Stack.Screen options={{ headerBackVisible: !uploading, gestureEnabled: !uploading }} />
       <ScrollView contentContainerStyle={styles.content}>
-        <FormSection icon="folder" accent="amber" title="What is it?">
+        <FormSection title="What is it?">
           <View style={styles.typeGrid}>
             {DOCUMENT_TYPES.map((t) => {
               const selected = documentType === t;
@@ -145,8 +145,6 @@ export default function AddDocumentScreen() {
         </FormSection>
 
         <FormSection
-          icon="attach"
-          accent="indigo"
           title="Choose the file"
           subtitle={`PDF, JPG or PNG · up to ${formatFileSize(MAX_DOCUMENT_BYTES)}`}
         >
@@ -171,7 +169,7 @@ export default function AddDocumentScreen() {
           {fileError ? <Banner message={fileError} /> : null}
         </FormSection>
 
-        <FormSection icon="document" accent="slate" title="Description">
+        <FormSection title="Description">
           <TextField
             label="Description"
             optional

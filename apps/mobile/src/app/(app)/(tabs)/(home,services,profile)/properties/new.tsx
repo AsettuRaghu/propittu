@@ -158,8 +158,6 @@ function AddPropertyForm() {
 
         {/* Step 4 — Photos */}
         <FormSection
-          icon="camera"
-          accent="sky"
           title="Photos"
           subtitle={`Optional · up to ${MAX_PHOTOS_AT_CREATION} now, more later`}
         >
@@ -213,7 +211,7 @@ function AddPropertyForm() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  content: { padding: space.lg, paddingTop: space.xs, gap: space.lg, paddingBottom: space.xxl },
+  content: { padding: space.lg, paddingTop: space.md, gap: space.xl, paddingBottom: space.xxl },
   photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   photo: { width: 96, height: 96, borderRadius: radius.md, overflow: 'hidden' },
   photoImage: { width: '100%', height: '100%' },

@@ -177,3 +177,16 @@ test('edits are detected, formatting differences are not', () => {
   assert.ok(!sameFactValue('1371', '1372'));
   assert.ok(!sameFactValue('Anekal', null));
 });
+
+test('a recognisable name even without a project or unit', () => {
+  const f = (key: string, value: unknown) => ({ key, value }) as never;
+  assert.equal(
+    prefillFromFacts([f('property_kind', 'land'), f('village', 'Bommasandra')]).name,
+    'Plot in Bommasandra',
+  );
+  assert.equal(
+    prefillFromFacts([f('property_kind', 'apartment'), f('city', 'Bengaluru Urban')]).name,
+    'Flat in Bengaluru Urban',
+  );
+  assert.equal(prefillFromFacts([f('property_kind', 'land')]).name, null, 'no place → no guess');
+});

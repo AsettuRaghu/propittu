@@ -126,6 +126,7 @@ export default function NewTicketScreen() {
           <View style={styles.inner}>
             <TextField
               variant="flat"
+              hideLabel
               label="Explain the issue"
               value={description}
               onChangeText={setDescription}

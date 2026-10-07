@@ -16,16 +16,17 @@ import { startAnalysis, useAnalysis, useFinishSetup } from '@/api/ai';
 import { api, ApiError } from '@/api/client';
 import { dialog, toast } from '@/components/Dialog';
 import { Footer } from '@/components/Footer';
-import { Icon } from '@/components/Icon';
+import { DeedFindings, DeedReading } from '@/components/DeedReading';
 import {
+  FormSection,
   PropertyForm,
   emptyPropertyForm,
   validatePropertyForm,
   type PropertyFormValues,
 } from '@/components/PropertyForm';
-import { Banner, Button, Card } from '@/components/ui';
+import { Banner, Button, KeyValue, LinkButton } from '@/components/ui';
 import { errorMessage, fieldErrors } from '@/lib/errors';
-import { accents, colors, radius, space, typography } from '@/theme';
+import { space, typography } from '@/theme';
 
 /** Form labels, for "please check" notes. */
 const FIELD_LABELS: Record<PrefillField, string> = {
@@ -58,10 +59,9 @@ const EXTRA_KEYS = [
   'undivided_share',
 ];
 
-const STEPS = ['Uploaded securely', 'Finding the property details', 'Checking names and numbers'];
-
 /**
- * Pittu: reading the deed, then "We found these details". The draft becomes
+ * Pittu: reading the deed (a running commentary), what it found (revealed
+ * line by line), then the pre-filled form to check. The draft becomes
  * a real property only when the customer confirms; every edit is recorded
  * against what Pittu found (the improvement signal).
  */
@@ -70,6 +70,8 @@ export default function PropertySetupScreen() {
   const analysis = useAnalysis(doc);
   const started = useRef(false);
   const [elapsed, setElapsed] = useState(0);
+  const [sawReading, setSawReading] = useState(false);
+  const [revealed, setRevealed] = useState(false);
 
   // No reading yet (e.g. the start call was interrupted): start it once.
   useEffect(() => {
@@ -88,49 +90,28 @@ export default function PropertySetupScreen() {
   const a = analysis.data;
   const reading = !doc ? false : !a || a.status === 'queued' || a.status === 'reading';
 
+  // Seen reading in this visit? Then the findings are revealed before the form.
+  if (reading && !sawReading) setSawReading(true);
+
   if (reading) {
-    // The upload is already done; the rest is paced to a typical reading (~15–30 s).
-    const step = elapsed < 10 ? 1 : 2;
     return (
-      <View style={styles.reading}>
+      <>
         <Stack.Screen options={{ title: 'Reading your deed' }} />
-        <View style={styles.readingIcon}>
-          <Icon name="document" size={44} color={colors.primary} strokeWidth={1.8} />
-        </View>
-        <Text style={[typography.title, styles.center]}>Pittu is reading your deed…</Text>
-        <Text style={[typography.small, styles.center]}>
-          This usually takes under a minute. You can leave — we’ll keep it ready for you.
-        </Text>
-        <Card style={styles.steps}>
-          {STEPS.map((s, i) => {
-            const done = i < step;
-            const active = i === step;
-            return (
-              <View key={s} style={styles.stepRow}>
-                <View
-                  style={[
-                    styles.dot,
-                    done && { backgroundColor: accents.teal.fg, borderColor: accents.teal.fg },
-                    active && { borderColor: colors.primary },
-                  ]}
-                >
-                  {done ? <Icon name="check" size={12} color="#FFFFFF" strokeWidth={3} /> : null}
-                </View>
-                <Text
-                  style={[
-                    typography.body,
-                    done && { fontWeight: '600' },
-                    active && { color: colors.primary, fontWeight: '700' },
-                    !done && !active && { color: colors.textSubtle },
-                  ]}
-                >
-                  {s}
-                </Text>
-              </View>
-            );
-          })}
-        </Card>
-      </View>
+        <DeedReading elapsed={elapsed} />
+      </>
+    );
+  }
+
+  if (sawReading && !revealed && a?.status === 'ready') {
+    return (
+      <>
+        <Stack.Screen options={{ title: 'Pittu’s findings' }} />
+        <DeedFindings
+          prefill={prefillFromFacts(a.facts)}
+          facts={a.facts}
+          onContinue={() => setRevealed(true)}
+        />
+      </>
     );
   }
 
@@ -243,14 +224,11 @@ function Review({
         automaticallyAdjustKeyboardInsets
       >
         {ready ? (
-          <View style={styles.found}>
-            <View style={styles.foundIcon}>
-              <Icon name="check" size={20} color={accents.teal.fg} strokeWidth={3} />
-            </View>
-            <View style={styles.flex}>
-              <Text style={typography.title}>We found these details</Text>
-              <Text style={typography.small}>Check them, fix anything that’s off, and save.</Text>
-            </View>
+          <View style={styles.head}>
+            <Text style={typography.title}>Check the details</Text>
+            <Text style={typography.small}>
+              Pittu filled these in from your deed. Fix anything that’s off, then save.
+            </Text>
           </View>
         ) : (
           <Banner
@@ -263,37 +241,27 @@ function Review({
         )}
 
         {unsure.length ? (
-          <View style={styles.check}>
-            <Icon name="warning" size={16} color={colors.warning} />
-            <Text style={[typography.small, styles.flex, { color: colors.warning }]}>
-              Please double-check: {unsure.map((f) => FIELD_LABELS[f]).join(', ')} — part of it was
-              hard to read.
-            </Text>
-          </View>
+          <Banner
+            tone="warning"
+            icon="warning"
+            message={`Please double-check: ${unsure.map((f) => FIELD_LABELS[f]).join(', ')} — part of it was hard to read.`}
+          />
         ) : null}
         {formError ? <Banner message={formError} /> : null}
 
         <PropertyForm values={values} errors={errors} onChange={onChange} />
 
         {extras.length ? (
-          <Card style={styles.extras}>
-            <Text style={typography.heading}>More from your deed</Text>
+          <FormSection title="More from your deed" subtitle="Kept with your property’s records.">
             {extras.map((e) => (
-              <View key={e.key} style={styles.extraRow}>
-                <Text style={[typography.small, styles.extraLabel]}>{e.label}</Text>
-                <Text style={[typography.bodyStrong, styles.flex]}>{e.value}</Text>
-              </View>
+              <KeyValue key={e.key} label={e.label} value={e.value} />
             ))}
-            <Text style={typography.caption}>Kept with your property’s records.</Text>
-          </Card>
+          </FormSection>
         ) : null}
 
-        <Text
-          style={[typography.caption, styles.center, styles.link]}
-          onPress={() => void discard()}
-        >
-          Discard this property
-        </Text>
+        <View style={styles.discard}>
+          <LinkButton title="Discard this property" tone="danger" onPress={() => void discard()} />
+        </View>
       </ScrollView>
       <Footer>
         <Button
@@ -308,48 +276,7 @@ function Review({
 
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
-  center: { textAlign: 'center' },
-  reading: { flex: 1, alignItems: 'center', padding: space.xl, paddingTop: 56, gap: space.md },
-  readingIcon: {
-    width: 92,
-    height: 92,
-    borderRadius: 28,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: space.sm,
-  },
-  steps: { alignSelf: 'stretch', gap: space.xs, marginTop: space.sm },
-  stepRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 8 },
-  dot: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  content: { padding: space.lg, paddingTop: space.xs, gap: space.lg, paddingBottom: space.xxl },
-  found: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-  foundIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: accents.teal.bg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  check: {
-    flexDirection: 'row',
-    gap: space.sm,
-    alignItems: 'flex-start',
-    backgroundColor: colors.warningSoft,
-    borderRadius: radius.md,
-    padding: space.md,
-  },
-  extras: { gap: space.sm },
-  extraRow: { flexDirection: 'row', gap: space.md },
-  extraLabel: { width: 118 },
-  link: { color: colors.danger, fontWeight: '700', paddingVertical: space.sm },
+  content: { padding: space.lg, paddingTop: space.md, gap: space.xl, paddingBottom: space.xxl },
+  head: { gap: space.xs },
+  discard: { alignItems: 'center' },
 });
