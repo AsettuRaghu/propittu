@@ -6,9 +6,8 @@ import { SUPPORT_EMAIL } from '@propittu/shared';
  * listings: privacy policy, terms of use, and how to delete an account
  * (Google Play requires a web page for this).
  *
- * DRAFT for legal review by an Indian lawyer before launch. Items marked
- * [to be confirmed] (highlighted on the page) need the company's details
- * or a business decision.
+ * Operated by Asettulu Technologies LLP. A lawyer should still review
+ * these pages before launch.
  */
 export const legalRouter = Router();
 
@@ -27,7 +26,7 @@ main{max-width:760px;margin:0 auto;padding:32px 20px 64px}
 h1{font-size:28px;line-height:1.2;margin:0 0 4px}h2{font-size:19px;margin:32px 0 8px}
 .updated{color:var(--muted);font-size:14px;margin-bottom:24px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px 22px}
-p,li{color:var(--text)}mark{background:#FEF3C7;color:inherit;padding:0 2px;border-radius:3px}ul{padding-left:20px}a{color:var(--primary)}
+p,li{color:var(--text)}ul{padding-left:20px}a{color:var(--primary)}
 .note{color:var(--muted);font-size:14px}
 nav{margin-top:40px;font-size:14px;color:var(--muted)}nav a{margin-right:16px}
 </style></head><body><main>
@@ -40,8 +39,8 @@ nav{margin-top:40px;font-size:14px;color:var(--muted)}nav a{margin-right:16px}
 
 const mail = `<a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>`;
 
-const TBC = (what: string) => `<mark>[to be confirmed: ${what}]</mark>`;
-const OPERATOR = `${TBC('company legal name, CIN and registered address')}`;
+const OPERATOR = 'Asettulu Technologies LLP';
+const GRIEVANCE_OFFICER = 'Contact Propittu';
 
 const PRIVACY = page(
   'Privacy policy',
@@ -116,7 +115,7 @@ summary of the personal data we hold and who we shared it with.</li>
 <li><strong>Erasure:</strong> delete your account in the app (Profile, at the bottom: Delete account) or by writing to us.</li>
 <li><strong>Nomination:</strong> you may nominate a person to exercise these rights for you in the event of your death
 or incapacity, by writing to us.</li>
-<li><strong>Grievances:</strong> write to our Grievance Officer, ${TBC('name')}, at ${mail}. We acknowledge within
+<li><strong>Grievances:</strong> write to our Grievance Officer, ${GRIEVANCE_OFFICER}, at ${mail}. We acknowledge within
 48 hours and aim to resolve within 7 days. If you are not satisfied, you may approach the Data Protection Board
 of India.</li>
 </ul>
@@ -179,7 +178,9 @@ credits the unused part of your current plan. New prices apply only to new purch
 <li>Extra services are priced before you pay and charged only after we confirm them. Government fees, taxes,
 stamp duty, penalties and third-party charges are not included unless the price says so.</li>
 <li>Payments are processed by Razorpay. Prices include applicable taxes unless shown otherwise.</li>
-<li><strong>Cancellations and refunds:</strong> ${TBC('refund policy — suggested: a plan is refundable within 7 days of purchase if no included service was used; an extra service can be cancelled free until we confirm it, and is refunded in full if we cancel it')}.</li>
+<li><strong>No cancellations or refunds:</strong> plans and paid services cannot be cancelled or refunded once
+paid. A service request can be cancelled free of charge until we confirm it, as nothing is paid before then. If
+you have a concern about a payment, please write to ${mail} and we will look into it.</li>
 </ul>
 
 <h2>7. Where we serve</h2>
@@ -208,7 +209,7 @@ caused by events beyond our reasonable control. Nothing here limits your rights 
 the law, and will tell you why unless the law prevents it.</p>
 
 <h2>11. Changes and contact</h2>
-<p>We will tell you in the app before material changes to these terms apply. Grievance Officer: ${TBC('name')},
+<p>We will tell you in the app before material changes to these terms apply. Grievance Officer: ${GRIEVANCE_OFFICER},
 ${mail} — we acknowledge complaints within 48 hours and aim to resolve them within one month.</p>
 
 <h2>12. Law</h2>

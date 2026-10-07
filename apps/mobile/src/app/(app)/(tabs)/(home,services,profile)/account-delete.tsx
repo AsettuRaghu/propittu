@@ -11,7 +11,6 @@ import { Icon, type IconName } from '@/components/Icon';
 import { LoadingState } from '@/components/States';
 import { Banner, Button, ListGroup, ListRow } from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
-import { useLogout } from '@/lib/useLogout';
 import { accents, space, typography } from '@/theme';
 
 const PHRASE = 'DELETE MY ACCOUNT';
@@ -24,7 +23,6 @@ const PHRASE = 'DELETE MY ACCOUNT';
 export default function DeleteAccountScreen() {
   const { data: me, isPending } = useMe();
   const { signOut } = useSession();
-  const { signingOut, logout } = useLogout();
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -111,13 +109,6 @@ export default function DeleteAccountScreen() {
             title="Talk to us first"
             subtitle="Most things can be fixed without losing your records"
             onPress={() => router.replace('/support')}
-          />
-          <ListRow
-            icon="logout"
-            title={signingOut ? 'Logging out…' : 'Log out'}
-            destructive
-            showChevron={false}
-            onPress={() => void logout()}
           />
         </ListGroup>
 
