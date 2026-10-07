@@ -13,7 +13,7 @@ import { api } from './client';
 
 /** Help & Support tickets, profile editing and receipts. */
 
-export const supportKeys = {
+const supportKeys = {
   tickets: ['support', 'tickets'] as const,
   ticket: (id: string) => ['support', 'ticket', id] as const,
   boTickets: (status: string) => ['backoffice', 'tickets', status] as const,

@@ -54,7 +54,7 @@ export interface ActionItem<T> {
 }
 
 /** A row in a confirm's price summary; `total` is emphasised, `credit` shown in green. */
-export interface SummaryRow {
+interface SummaryRow {
   label: string;
   value: string;
   kind?: 'item' | 'credit' | 'total';

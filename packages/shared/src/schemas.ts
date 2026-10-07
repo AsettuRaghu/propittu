@@ -11,7 +11,6 @@ import {
   MAX_PHOTO_BYTES,
   MAX_VIDEO_BYTES,
   MAX_VIDEO_SECONDS,
-  OTP_LENGTH,
   PROPERTY_TYPES,
 } from './constants';
 
@@ -56,10 +55,6 @@ export const phoneLocalSchema = z
       .length(10, 'Enter a 10-digit mobile number')
       .regex(INDIAN_MOBILE_REGEX, 'Enter a valid Indian mobile number'),
   );
-
-export const otpSchema = z
-  .string()
-  .regex(new RegExp(`^\\d{${OTP_LENGTH}}$`), `Enter the ${OTP_LENGTH}-digit code`);
 
 /* ------------------------------------------------------------------ *
  * Properties (§16, §17)
@@ -226,12 +221,6 @@ export const createServiceRequestSchema = z.object({
 });
 
 export type CreateServiceRequestInput = z.input<typeof createServiceRequestSchema>;
-
-/* ------------------------------------------------------------------ *
- * Route params
- * ------------------------------------------------------------------ */
-
-export const idParamSchema = z.object({ id: uuidSchema });
 
 /* ------------------------------------------------------------------ *
  * Turning a ZodError into a flat field → message map for forms.

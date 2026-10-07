@@ -34,7 +34,6 @@ export interface ApiErrorBody {
 
 export type ApiSuccess<T> = { data: T };
 export type ApiFailure = { error: ApiErrorBody };
-export type ApiResponse<T> = ApiSuccess<T> | ApiFailure;
 
 /* ------------------------------------------------------------------ *
  * Profile (§25)

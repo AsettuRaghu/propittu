@@ -15,16 +15,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatFileSize, type SupportAttachment, type SupportMessage } from '@propittu/shared';
 import type { LocalFile } from '@/api/uploads';
+import { formatDateTime } from '@/lib/format';
 import { signedImage } from '@/lib/image';
 import { colors, radius, space, typography } from '@/theme';
 import { AttachmentPreviews, useAttachmentAdder } from './AttachmentPicker';
 import { Icon } from './Icon';
 import { IconButton } from './ui';
-
-function stamp(iso: string): string {
-  const d = new Date(iso);
-  return `${d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}, ${d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
-}
 
 const open = (a: SupportAttachment) => {
   if (a.url) void WebBrowser.openBrowserAsync(a.url);
@@ -138,7 +134,7 @@ export function ChatThread({
                 <Text style={[typography.body, own && { color: '#FFFFFF' }]}>{m.body}</Text>
                 <Attachments items={m.attachments ?? []} own={own} />
                 <Text style={[styles.time, own && { color: 'rgba(255,255,255,0.75)' }]}>
-                  {stamp(m.created_at)}
+                  {formatDateTime(m.created_at)}
                 </Text>
               </View>
             </View>

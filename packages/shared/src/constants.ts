@@ -275,12 +275,4 @@ export const STAFF_ROLES = [
 ] as const;
 export type StaffRole = (typeof STAFF_ROLES)[number];
 
-export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
-  super_admin: 'Super Admin',
-  operations: 'Operations',
-  support: 'Customer Support',
-  finance: 'Finance',
-  service_operations: 'Service Operations',
-};
-
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];

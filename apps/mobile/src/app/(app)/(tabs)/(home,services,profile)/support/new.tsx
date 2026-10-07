@@ -19,7 +19,7 @@ import { TextField } from '@/components/Field';
 import { Footer } from '@/components/Footer';
 import { Select } from '@/components/Select';
 import { Banner, Button, ListGroup, ListRow } from '@/components/ui';
-import { formatDate } from '@/lib/format';
+import { formatDateTime } from '@/lib/format';
 import { errorMessage, fieldErrors } from '@/lib/errors';
 import { TICKET_CATEGORY_ICONS } from '@/lib/icons';
 import { space } from '@/theme';
@@ -51,7 +51,6 @@ export default function NewTicketScreen() {
   const [propertyId, setPropertyId] = useState<string | null>(params.propertyId ?? null);
   const [requestId, setRequestId] = useState<string | null>(params.requestId ?? null);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [since] = useState(() => Date.now() - 30 * 86_400_000);
   const [files, setFiles] = useState<LocalFile[]>([]);
   const attach = useAttachmentAdder({ files, onChange: setFiles });
   const [uploading, setUploading] = useState(false);
@@ -86,11 +85,9 @@ export default function NewTicketScreen() {
     });
   };
 
-  // Open requests, plus those closed in the last 30 days.
-  const relevantRequests = (requests.data ?? []).filter(
-    (r) =>
-      OPEN_REQUEST_STATUSES.includes(r.status) ||
-      new Date(r.completed_at ?? r.cancelled_at ?? r.updated_at).getTime() >= since,
+  // Only requests still open — finished ones are followed up from the request itself.
+  const openRequests = (requests.data ?? []).filter((r) =>
+    OPEN_REQUEST_STATUSES.includes(r.status),
   );
 
   const props = properties.data ?? [];
@@ -140,33 +137,32 @@ export default function NewTicketScreen() {
           </View>
         </ListGroup>
 
-        {props.length > 0 || relevantRequests.length > 0 ? (
+        {props.length > 0 || openRequests.length > 0 ? (
           <ListGroup title="Related to (optional)" plain>
             <View style={styles.inner}>
               {props.length > 0 ? (
                 <Select
                   variant="flat"
                   label="Property"
+                  placeholder="Choose a property"
+                  clearable
                   value={propertyId}
-                  noneLabel="Not about a specific property"
                   options={props.map((p) => ({ value: p.id, label: p.name }))}
                   onChange={setPropertyId}
                 />
               ) : null}
-              {relevantRequests.length > 0 ? (
+              {openRequests.length > 0 ? (
                 <Select
                   variant="flat"
                   label="Service request"
+                  placeholder="Choose an open request"
+                  clearable
                   value={requestId}
-                  noneLabel="Not about a service request"
-                  options={relevantRequests.map((r) => ({
+                  options={openRequests.map((r) => ({
                     value: r.id,
-                    label: r.service.name,
-                    description: [
-                      r.property?.name,
-                      requestStatusLabel(r.status, r.fulfilment),
-                      formatDate(r.created_at),
-                    ]
+                    // Same service twice? The request time and property tell them apart.
+                    label: `${r.service.name} · ${formatDateTime(r.created_at)}`,
+                    description: [r.property?.name, requestStatusLabel(r.status, r.fulfilment)]
                       .filter(Boolean)
                       .join(' · '),
                   }))}

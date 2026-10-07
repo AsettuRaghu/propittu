@@ -11,7 +11,7 @@ import { PullRefresh } from '@/components/PullRefresh';
 import { ErrorState, LoadingState } from '@/components/States';
 import { Badge, LinkButton, ListGroup, ListRow } from '@/components/ui';
 import { env } from '@/lib/env';
-import { planBadge } from '@/lib/planBadge';
+import { planBadge } from '@/lib/plans';
 import { useLogout } from '@/lib/useLogout';
 import { colors, space, typography } from '@/theme';
 

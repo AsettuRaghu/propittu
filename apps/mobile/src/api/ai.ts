@@ -16,7 +16,7 @@ import { keys } from './queries';
  * shows the normal flow and never mentions Pittu.
  */
 
-export const aiKeys = {
+const aiKeys = {
   analysis: (documentId: string) => ['analysis', documentId] as const,
   drafts: ['properties', 'drafts'] as const,
 };

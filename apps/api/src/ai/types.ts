@@ -9,7 +9,7 @@
  * stored result records the task version and model that produced it.
  */
 
-export interface PdfDocument {
+interface PdfDocument {
   kind: 'pdf';
   bytes: Uint8Array;
 }

@@ -25,7 +25,7 @@ import { serviceClient } from '../supabase.js';
  */
 export const pittuRouter = Router();
 
-export async function loadState(ctx: AuthContext, propertyId: string): Promise<PittuState> {
+async function loadState(ctx: AuthContext, propertyId: string): Promise<PittuState> {
   const property = must<{
     id: string;
     state: string | null;

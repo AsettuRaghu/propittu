@@ -100,3 +100,32 @@ Mobile ──POST /billing/orders/:id/refresh──► API asks Razorpay server-
 | `supabase/migrations/` | All schema and RLS, in order |
 | `supabase/rls-check/` | Database security suite (`npm run test:rls`) |
 | `apps/api/test/smoke.mjs` | API security suite (`npm run test:api`) |
+
+## Mobile app structure and rules
+
+| Path | What |
+|---|---|
+| `apps/mobile/src/app/` | Screens only (Expo Router: every file is a route) |
+| `apps/mobile/src/api/` | Talking to the API: `client.ts` (auth token, timeout, errors) and React Query hooks per area |
+| `apps/mobile/src/auth/` | Session (Supabase Auth: sign-in only) |
+| `apps/mobile/src/components/` | Shared components; `ui/` holds the primitives (Buttons, Surfaces, Status, Selection) |
+| `apps/mobile/src/lib/` | Helpers and cross-screen hooks (`plans.ts`, `useLogout`, formatting, icons) |
+| `apps/mobile/src/theme.ts` | Design tokens (colours, spacing, type) |
+
+**How data flows.** The app reads and writes **only through the API** (`api()` in `client.ts`).
+Supabase is used directly for sign-in (OTP) and nothing else; files go up and down through
+short-lived signed URLs that the API issues after checking ownership. No secret is ever in the
+app: only `EXPO_PUBLIC_*` values (API URL, Supabase URL and publishable key, support phone).
+
+**Rules for every change.**
+- Screens compose shared components; logic used by more than one screen lives in `lib/` or `api/`.
+- Extend a shared component with an option rather than copying it (see `docs/UI_GUIDELINES.md`).
+- Keep files focused: when a screen grows past ~400 lines, move its flows into a hook.
+- No dead code: run `npx knip` (config in `knip.json`) before committing; it lists unused files,
+  exports and dependencies. `npm run typecheck`, `npm run lint`, `npm run format:check` and the
+  test suites must pass.
+- Business rules are enforced on the server (API + database); the app only explains them.
+
+**API protections** (`apps/api/src/app.ts`): baseline security headers, a 100 kb JSON limit,
+webhooks verified on the raw body before anything else, then `requireAuth`, then
+`requireActivePlan`; logs redact the authorization header.

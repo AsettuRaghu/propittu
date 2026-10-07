@@ -11,6 +11,7 @@ import { Icon, type IconName } from '@/components/Icon';
 import { LoadingState } from '@/components/States';
 import { Banner, Button, ListGroup, ListRow } from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
+import { plural } from '@/lib/format';
 import { accents, space, typography } from '@/theme';
 
 const PHRASE = 'DELETE MY ACCOUNT';
@@ -28,7 +29,6 @@ export default function DeleteAccountScreen() {
   const [problem, setProblem] = useState<string | null>(null);
   if (isPending || !me) return <LoadingState />;
 
-  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
   const daysLeft = me.plan.days_left ?? 0;
   const losses: { icon: IconName; text: string }[] = [
     {

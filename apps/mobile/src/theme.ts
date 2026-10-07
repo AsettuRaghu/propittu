@@ -6,7 +6,7 @@ import { Platform, type ViewStyle } from 'react-native';
  * One calm, trustworthy primary (deep indigo) plus a family of SOFT accent
  * tints. Accents are used sparingly — icon tiles, chips, the occasional
  * gradient hero — so screens feel lively without shouting. Each area of
- * the app owns one accent (see `accents` / `areas`), which keeps colour
+ * the app owns one accent (see `accents`), which keeps colour
  * meaningful and consistent everywhere.
  *
  * Light mode only for V1 (app.json userInterfaceStyle).
@@ -53,21 +53,6 @@ export const accents = {
   slate: { fg: '#5A6079', bg: '#F0F2F7' },
 } as const;
 export type Accent = keyof typeof accents;
-
-/** Which accent each part of the app uses. */
-export const areas = {
-  property: 'indigo',
-  documents: 'amber',
-  photos: 'sky',
-  videos: 'rose',
-  location: 'teal',
-  services: 'teal',
-  plan: 'violet',
-  payments: 'sky',
-  requests: 'coral',
-  account: 'indigo',
-  staff: 'slate',
-} as const satisfies Record<string, Accent>;
 
 /** Gradient heroes — used on a few highlight cards only. */
 export const gradients = {

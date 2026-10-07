@@ -1,10 +1,4 @@
-import {
-  AREA_UNIT_LABELS,
-  PROPERTY_TYPE_LABELS,
-  type AreaUnit,
-  type Property,
-  type PropertySummary,
-} from '@propittu/shared';
+import { AREA_UNIT_LABELS, type AreaUnit, type Property } from '@propittu/shared';
 
 const numberFormat = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 });
 
@@ -21,17 +15,20 @@ export function formatLocation(p: Pick<Property, 'city' | 'state'>): string | nu
 }
 
 /** Home card subtitle per §15: "Land • Hyderabad". */
-export function propertySubtitle(p: Pick<PropertySummary, 'property_type' | 'city'>): string {
-  const type = PROPERTY_TYPE_LABELS[p.property_type].split(' / ')[0];
-  return p.city ? `${type} • ${p.city}` : (type ?? '');
-}
-
 export function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-IN', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
   });
+}
+
+/** "7 Oct, 10:30 am" — a day and time, for messages and requests. */
+export function formatDateTime(iso: string): string {
+  const d = new Date(iso);
+  const day = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  const time = d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+  return `${day}, ${time}`;
 }
 
 export function greeting(now = new Date()): string {

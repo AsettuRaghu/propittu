@@ -14,7 +14,7 @@ import { AiOutputError, type AiTask, type ExtractedFact, type FactValue } from '
  * in code — not in the prompt — so they are deterministic and testable.
  */
 
-export const VERSION = 'sale-deed-v2';
+const VERSION = 'sale-deed-v2';
 const MODEL = 'claude-sonnet-5-5';
 
 const str = (description: string) => ({
@@ -185,7 +185,7 @@ const rawSchema = z.object({
     .max(1000),
 });
 
-export interface SaleDeedFact {
+interface SaleDeedFact {
   value: FactValue | null;
   pages: number[];
   confidence: 'high' | 'medium' | 'low' | null;

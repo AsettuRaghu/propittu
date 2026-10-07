@@ -40,7 +40,7 @@ export const PROPERTY_TYPE_GRADIENTS: Record<PropertyType, readonly [string, str
   other: ['#0284C7', '#4338CA'],
 };
 
-export const SERVICE_CATEGORY_ICONS: Record<ServiceCategory, IconName> = {
+const SERVICE_CATEGORY_ICONS: Record<ServiceCategory, IconName> = {
   property_government: 'government',
   property_care: 'shield-check',
   other: 'chat',

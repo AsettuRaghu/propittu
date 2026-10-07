@@ -78,7 +78,7 @@ function server(): SupabaseClient {
 }
 
 /** Is AI switched on for this account? (kill switch + pilot list + configuration) */
-export function aiAvailableFor(accountId: string): boolean {
+function aiAvailableFor(accountId: string): boolean {
   if (!env.AI_ENABLED || !serviceClient) return false;
   if (env.AI_PROVIDER === 'anthropic' && !env.ANTHROPIC_API_KEY) return false;
   return env.AI_PILOT_ACCOUNTS.length === 0 || env.AI_PILOT_ACCOUNTS.includes(accountId);

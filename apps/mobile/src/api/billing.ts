@@ -18,7 +18,7 @@ import { api } from './client';
  * anything the app says.
  */
 
-export const billingKeys = {
+const billingKeys = {
   orders: ['billing', 'orders'] as const,
   boPayments: ['backoffice', 'payments'] as const,
 };

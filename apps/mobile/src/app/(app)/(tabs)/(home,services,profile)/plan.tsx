@@ -2,7 +2,6 @@ import { router } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
-  BILLING_PERIOD_LABELS,
   formatPrice,
   formatStorageMb,
   INCLUDED_SERVICE_LABELS,
@@ -11,31 +10,23 @@ import {
   RENEWAL_WINDOW_DAYS,
   type AccountPlanState,
   type Order,
-  type PlanBenefits,
   type PublicPlan,
 } from '@propittu/shared';
 import { PullRefresh } from '@/components/PullRefresh';
-import { fetchPlanQuote, showPaymentOutcome, useOrders, usePlanCheckout } from '@/api/billing';
-import { useAccountPlan, usePlans, useProperties, useServices } from '@/api/queries';
-import { dialog } from '@/components/Dialog';
+import { useOrders } from '@/api/billing';
+import { useAccountPlan, usePlans } from '@/api/queries';
 import { PageHeader, Strong } from '@/components/PageHeader';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
 import { UsageRow } from '@/components/UsageRow';
 import { Badge, Banner, Button, ListGroup, ListRow, Segmented } from '@/components/ui';
-import { errorMessage } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
-import { planBadge } from '@/lib/planBadge';
-import { colors, space, typography, type Accent } from '@/theme';
+import { PLAN_ACCENT, planBadge, propertiesHeld, usePlanPurchase } from '@/lib/plans';
+import { colors, space, typography } from '@/theme';
 
 type Tab = 'usage' | 'plans' | 'payments';
 
 /** How a plan card relates to what the customer has now. */
 type CardState = 'choose' | 'current' | 'renew_later' | 'upgrade' | 'later' | 'too_small';
-
-const PLAN_ACCENT: Record<string, Accent> = { trial: 'teal', basic: 'sky', plus: 'violet' };
-
-/** Plans are compared on one thing for now: how many properties they hold. */
-const holds = (b: PlanBenefits | undefined) => b?.limits.max_properties;
 
 /**
  * Plan & Usage (M5/M6/M7), flat like Profile: where the plan stands, then
@@ -45,10 +36,8 @@ export default function PlanScreen() {
   const state = useAccountPlan();
   const plans = usePlans();
   const orders = useOrders();
-  const checkout = usePlanCheckout();
-  const properties = useProperties();
-  const services = useServices();
   const [tab, setTab] = useState<Tab>('usage');
+  const purchase = usePlanPurchase(state.data?.plan?.benefits);
 
   if (state.isPending) return <LoadingState />;
   if (state.error) return <ErrorState error={state.error} onRetry={() => void state.refetch()} />;
@@ -90,120 +79,14 @@ export default function PlanScreen() {
             ? 'upgrade'
             : 'later';
 
-  const choose = async (plan: PublicPlan) => {
-    let q;
-    try {
-      q = await fetchPlanQuote(plan.code);
-    } catch (err) {
-      void dialog.alert({
-        title: "Couldn't load the price",
-        message: errorMessage(err),
-        tone: 'danger',
-      });
-      return;
-    }
-    if (q.blocked_reason) {
-      void dialog.alert({
-        title: `${plan.name} isn't available yet`,
-        message: q.blocked_reason,
-        icon: 'clock',
-      });
-      return;
-    }
-    // Decision 2026-10-06: warn (never block) when the plan's included visits
-    // can't be used at any of the customer's properties yet.
-    const visitCodes = new Set(
-      (services.data ?? []).filter((x) => x.reach === 'area').map((x) => x.code),
-    );
-    const list = properties.data ?? [];
-    const includesVisits = plan.benefits.included.some((i) => visitCodes.has(i.code));
-    if (
-      q.mode !== 'renewal' &&
-      includesVisits &&
-      list.length > 0 &&
-      list.every((p) => p.reach && !p.reach.visits)
-    ) {
-      const goOn = await dialog.confirm({
-        title: 'Visits don’t reach your properties yet',
-        message:
-          `Our team doesn’t visit the area of ${list.length === 1 ? 'your property' : 'any of your properties'} yet, ` +
-          `so ${plan.name}’s included visits can’t be used there for now. Documents, Pittu and ` +
-          'reminders work as usual — we’ll tell you when we arrive.',
-        icon: 'map',
-        confirmLabel: 'Continue anyway',
-        cancelLabel: 'Not now',
-      });
-      if (!goOn) return;
-    }
-    const period = `${formatDate(q.starts_at)} – ${formatDate(q.ends_at)}`;
-    const upgrade = q.mode === 'upgrade';
-    const term = BILLING_PERIOD_LABELS[plan.billing_period];
-    const ok = await dialog.confirm({
-      title: upgrade
-        ? `Upgrade to ${plan.name}`
-        : q.mode === 'renewal'
-          ? `Renew ${plan.name}`
-          : `Welcome to ${plan.name}`,
-      message: upgrade
-        ? 'More room for your properties, starting today.'
-        : q.mode === 'renewal'
-          ? 'Another term, added after your current one — no days lost.'
-          : 'Everything you need to look after your properties.',
-      icon: upgrade ? 'gem' : 'sparkles',
-      accent: PLAN_ACCENT[plan.code] ?? 'indigo',
-      highlights:
-        q.mode === 'renewal' || holds(plan.benefits) === undefined
-          ? undefined
-          : [
-              upgrade && holds(s.plan?.benefits) !== undefined
-                ? `Up to ${holds(plan.benefits)} properties, up from ${holds(s.plan?.benefits)}`
-                : `Up to ${holds(plan.benefits)} properties`,
-            ],
-      summary: [
-        { label: `${plan.name} ${term}`, value: formatPrice(q.list_price_paise) },
-        ...(q.credit_paise > 0
-          ? [
-              {
-                label: `Credit for unused ${q.current_plan_name ?? 'plan'}`,
-                value: `− ${formatPrice(q.credit_paise)}`,
-                kind: 'credit' as const,
-              },
-            ]
-          : []),
-        { label: 'You pay today', value: formatPrice(q.amount_paise), kind: 'total' as const },
-      ],
-      note:
-        `Valid ${period}` +
-        (q.bonus_days > 0
-          ? ` · includes your ${q.bonus_days} trial day${q.bonus_days === 1 ? '' : 's'} left`
-          : '') +
-        (upgrade ? ' · visits used this year still count' : '') +
-        ' · secure UPI or card payment',
-      confirmLabel: upgrade
-        ? `Upgrade for ${formatPrice(q.amount_paise)}`
-        : `Pay ${formatPrice(q.amount_paise)}`,
-      cancelLabel: 'Maybe later',
-    });
-    if (!ok) return;
-    checkout.mutate(plan.code, {
-      onSuccess: (order) => showPaymentOutcome(order, `Your ${plan.name} plan is active.`),
-      onError: (err) =>
-        void dialog.alert({
-          title: "Couldn't start the payment",
-          message: errorMessage(err),
-          tone: 'danger',
-        }),
-    });
-  };
-
   // The header button acts directly: upgrade to the next plan up, or renew
   // in the renewal window. Choosing a first plan opens the Plans tab.
   const nextUp = [...(plans.data ?? [])]
     .filter((p) => p.code !== code && p.price_paise > ownPrice)
     .sort((a, b) => a.price_paise - b.price_paise)[0];
   const headerAction = () => {
-    if (paidPlan && code !== topCode && nextUp) return void choose(nextUp);
-    if (paidPlan && canRenew && mine) return void choose(mine);
+    if (paidPlan && code !== topCode && nextUp) return void purchase.choose(nextUp);
+    if (paidPlan && canRenew && mine) return void purchase.choose(mine);
     setTab('plans');
   };
 
@@ -221,7 +104,7 @@ export default function PlanScreen() {
         state={s}
         onTop={!!code && code === topCode}
         canRenew={canRenew}
-        busy={checkout.isPending}
+        busy={purchase.busy}
         onAction={headerAction}
       />
 
@@ -261,9 +144,9 @@ export default function PlanScreen() {
                 state={cardState(p)}
                 laterDate={s.current ? formatDate(s.current.ends_at) : null}
                 renewFrom={renewFrom}
-                busy={checkout.isPending && checkout.variables === p.code}
-                disabled={checkout.isPending}
-                onChoose={() => void choose(p)}
+                busy={purchase.busyCode === p.code}
+                disabled={purchase.busy}
+                onChoose={() => void purchase.choose(p)}
               />
             ))}
           </ListGroup>
@@ -410,7 +293,7 @@ function PlanRow({
   onChoose: () => void;
 }) {
   const price = formatPrice(plan.price_paise);
-  const holdsText = `Up to ${holds(plan.benefits) ?? '—'} properties`;
+  const holdsText = `Up to ${propertiesHeld(plan.benefits) ?? '—'} properties`;
   const action = (title: string) => (
     <Button title={title} size="sm" loading={busy} disabled={disabled} onPress={onChoose} />
   );

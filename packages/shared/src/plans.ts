@@ -15,13 +15,6 @@ export const FEATURE_CODES = [
 ] as const;
 export type FeatureCode = (typeof FEATURE_CODES)[number];
 
-export const FEATURE_LABELS: Record<FeatureCode, string> = {
-  property_profile: 'Property profiles',
-  document_upload: 'Document storage',
-  photo_upload: 'Property photos',
-  video_upload: 'Property videos',
-};
-
 export const LIMIT_CODES = [
   'max_properties',
   'max_documents_per_property',

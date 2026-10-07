@@ -26,6 +26,20 @@ export function createApp(): express.Express {
   const app = express();
 
   app.disable('x-powered-by');
+  // Baseline security headers (no dependency): no MIME sniffing, no framing,
+  // no referrer leaks, HTTPS only. The public pages (legal, payment return)
+  // are static HTML with inline styles only.
+  app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    res.setHeader(
+      'Content-Security-Policy',
+      "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'",
+    );
+    next();
+  });
   // The host (Vercel) terminates TLS at its proxy; trust one hop for client IPs.
   app.set('trust proxy', 1);
 

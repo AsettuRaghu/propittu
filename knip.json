@@ -1,0 +1,14 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "workspaces": {
+    "apps/api": {
+      "entry": ["src/index.ts", "src/vercel.ts", "scripts/*.{ts,mjs}", "test/*.{ts,mjs}"],
+      "ignoreDependencies": ["pino-pretty"]
+    },
+    "apps/mobile": {
+      "ignoreDependencies": ["expo-system-ui"]
+    },
+    "packages/shared": {}
+  },
+  "ignoreBinaries": ["supabase", "expo-doctor"]
+}

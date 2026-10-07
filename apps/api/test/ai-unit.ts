@@ -22,8 +22,8 @@ test('privacy filter removes PAN, Aadhaar, phone and email, and counts them', ()
   const report = { removed: 0 };
   const out = scrub(
     {
-      a: 'PAN BEFPK1557J here',
-      b: ['Aadhaar 3184 6936 8134', 'call +91 9686600095'],
+      a: 'PAN ABCDE1234F here',
+      b: ['Aadhaar 1234 5678 9012', 'call +91 9000000001'],
       c: { d: 'mail x.y@example.com' },
       e: 'Survey 207/1A stays',
     },
