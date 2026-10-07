@@ -31,6 +31,23 @@ Loose ends noted:
 
 Next planned: Home round 3 — "Around your property" news posted from Backoffice, the flash-news marker on cards, analytics groundwork.
 
+## Feature backlog to discuss (owner's notes, 7 Oct 2026)
+
+Nothing below is decided yet. Grouped by theme, in the suggested order.
+
+1. **Add-property improvements (small, next)**
+   - Photograph deed pages instead of a PDF (proposed; owner checking).
+   - "Let Pittu read this deed" for deeds uploaded as plain documents.
+   - Pittu's questions during onboarding — e.g. ask them while Pittu reads the deed, instead of after saving.
+2. **Configurable services and questions (one design, built in phases)**
+   - Service request templates: steps, what the app collects, what staff see, statuses, outcome fields (e.g. tax year, receipt number).
+   - Default schedule interval per service (e.g. a site visit every 3 months) and tracking deviation from it.
+   - Campaigns from Backoffice: time-limited lower prices; area pushes when an agent is visiting a region (needs notifications).
+   - Configurable Pittu questions (rules in the database, conditions, versions, editor with preview).
+3. **Home round 3** — "Around your property" news posted from Backoffice, the flash-news marker on cards, analytics groundwork.
+4. **Market value estimates** — design pending the owner's answers (area, rate setting, pricing, valuer partner).
+5. **Google Maps on both platforms** — iPhone uses Apple Maps today; Google Maps on iPhone needs a Google Maps API key and a native app build (not Expo Go), so it fits with the store builds.
+
 ## Go-live setup (5.B.4)
 
 - **Must do before launch — S1 (owner confirmed 7 Oct 2026):** move the login session from plain app
