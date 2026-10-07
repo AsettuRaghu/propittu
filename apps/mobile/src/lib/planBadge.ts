@@ -2,13 +2,14 @@ import type { PlanStatus } from '@propittu/shared';
 import type { Tone } from '@/components/ui';
 
 /**
- * One badge for "where does my plan stand", used on Profile and Plan &
- * Usage: Trial in orange, a paid plan in green, no active plan in red.
- * An account that isn't active (suspended) is always Locked.
+ * One badge for "where does my plan stand": Trial in orange, a paid plan in
+ * green, no active plan (or a suspended account) Locked in red. Pass a
+ * `planName` to show it on the paid badge (Profile); without it the badge
+ * says "Active" (Plan & Usage, where the name is already the title).
  */
 export function planBadge(p: {
   status: PlanStatus;
-  planName: string | null;
+  planName?: string | null;
   accountActive?: boolean;
 }): { label: string; tone: Tone } {
   if (p.accountActive === false || p.status === 'expired')

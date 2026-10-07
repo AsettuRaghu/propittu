@@ -21,16 +21,7 @@ import { dialog } from '@/components/Dialog';
 import { FadeIn } from '@/components/FadeIn';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
 import { UsageMeter } from '@/components/UsageMeter';
-import {
-  Badge,
-  Banner,
-  Button,
-  IconTile,
-  LinkButton,
-  ListGroup,
-  ProgressBar,
-  Segmented,
-} from '@/components/ui';
+import { Badge, Banner, Button, IconTile, ListGroup, Segmented } from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
 import { planBadge } from '@/lib/planBadge';
@@ -244,7 +235,7 @@ export default function PlanScreen() {
       ) : null}
 
       <Segmented
-        variant="underline"
+        variant="text"
         options={[
           { value: 'usage', label: 'Usage' },
           { value: 'plans', label: 'Plans' },
@@ -314,26 +305,20 @@ function PlanHeader({
           : null;
   const c = s.current;
   const days = c?.days_left ?? 0;
-  const termDays = c
-    ? Math.max(1, (new Date(c.ends_at).getTime() - new Date(c.starts_at).getTime()) / 86_400_000)
-    : 1;
   return (
     <View style={styles.header}>
       <View style={styles.headRow}>
         <Text style={typography.display} numberOfLines={1}>
           {s.plan?.name ?? 'No active plan'}
         </Text>
-        <Badge {...planBadge({ status: s.status, planName: s.plan?.name ?? null })} />
+        <Badge {...planBadge({ status: s.status })} />
         <View style={styles.flex} />
-        {cta ? <LinkButton title={cta} onPress={onAction} /> : null}
+        {cta ? <Button title={cta} size="sm" icon="gem" onPress={onAction} /> : null}
       </View>
       {c ? (
-        <>
-          <Text style={typography.small}>
-            {days} {days === 1 ? 'day' : 'days'} remaining · until {formatDate(c.ends_at)}
-          </Text>
-          <ProgressBar progress={days / termDays} height={4} />
-        </>
+        <Text style={typography.small}>
+          {days} {days === 1 ? 'day' : 'days'} remaining · until {formatDate(c.ends_at)}
+        </Text>
       ) : (
         <Text style={typography.small}>Your data is safe — choose a plan to carry on.</Text>
       )}

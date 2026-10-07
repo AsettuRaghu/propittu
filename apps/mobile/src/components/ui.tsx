@@ -676,10 +676,10 @@ export function Segmented<T extends string>({
   options: readonly { value: T; label: string }[];
   value: T;
   onChange: (value: T) => void;
-  /** `underline`: flat tabs flush with the page (no box). */
-  variant?: 'pill' | 'underline';
+  /** `text`: flat tabs — just words, the active one bold in the brand colour. */
+  variant?: 'pill' | 'text';
 }) {
-  const flat = variant === 'underline';
+  const flat = variant === 'text';
   return (
     <View style={flat ? styles.tabs : styles.segments} accessibilityRole="tablist">
       {options.map((o) => {
@@ -693,17 +693,13 @@ export function Segmented<T extends string>({
             }}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
-            style={
-              flat
-                ? [styles.tab, active && styles.tabActive]
-                : [styles.segment, active && [styles.segmentActive, shadow]]
-            }
+            style={flat ? styles.tab : [styles.segment, active && [styles.segmentActive, shadow]]}
           >
             <Text
               style={[
                 styles.segmentText,
                 active && styles.segmentTextActive,
-                flat && active && { color: colors.primary },
+                flat && (active ? styles.tabTextActive : styles.tabText),
               ]}
             >
               {o.label}
@@ -762,11 +758,7 @@ const styles = StyleSheet.create({
   listRowPressed: { backgroundColor: colors.surfaceMuted },
   listDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 56 },
   listDividerPlain: { marginLeft: 0 },
-  listPlain: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+  listPlain: {},
   listTitle: { marginBottom: space.sm, marginLeft: 2 },
   rowValue: { maxWidth: '45%' },
   rowRight: { justifyContent: 'center' },
@@ -858,18 +850,8 @@ const styles = StyleSheet.create({
   segmentActive: { backgroundColor: colors.surface },
   segmentText: { fontSize: 14, fontWeight: '600', color: colors.textMuted },
   segmentTextActive: { color: colors.text },
-  tabs: {
-    flexDirection: 'row',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  tab: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-    marginBottom: -StyleSheet.hairlineWidth,
-  },
-  tabActive: { borderBottomColor: colors.primary },
+  tabs: { flexDirection: 'row', gap: space.xl },
+  tab: { paddingVertical: 6 },
+  tabText: { fontSize: 15, color: colors.textSubtle },
+  tabTextActive: { fontSize: 15, fontWeight: '800', color: colors.primary },
 });
