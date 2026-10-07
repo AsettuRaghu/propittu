@@ -7,19 +7,27 @@ type FieldProps = Omit<TextInputProps, 'style'> & {
   error?: string;
   hint?: string;
   optional?: boolean;
+  /**
+   * `flat`: no box or label row (a section heading names it) — just the text
+   * on the page with a hairline under it that turns brand-coloured when focused.
+   */
+  variant?: 'box' | 'flat';
 };
 
 export const TextField = forwardRef<TextInput, FieldProps>(function TextField(
-  { label, error, hint, optional, multiline, onFocus, onBlur, ...input },
+  { label, error, hint, optional, multiline, onFocus, onBlur, variant = 'box', ...input },
   ref,
 ) {
   const [focused, setFocused] = useState(false);
+  const flat = variant === 'flat';
   return (
     <View style={styles.wrap}>
-      <Text style={styles.label}>
-        {label}
-        {optional ? <Text style={styles.optional}> · optional</Text> : null}
-      </Text>
+      {flat ? null : (
+        <Text style={styles.label}>
+          {label}
+          {optional ? <Text style={styles.optional}> · optional</Text> : null}
+        </Text>
+      )}
       <TextInput
         ref={ref}
         placeholderTextColor={colors.textSubtle}
@@ -34,12 +42,21 @@ export const TextField = forwardRef<TextInput, FieldProps>(function TextField(
           setFocused(false);
           onBlur?.(e);
         }}
-        style={[
-          styles.input,
-          multiline && styles.multiline,
-          focused && styles.inputFocused,
-          error ? styles.inputError : null,
-        ]}
+        style={
+          flat
+            ? [
+                styles.flat,
+                multiline && styles.flatMultiline,
+                focused && styles.flatFocused,
+                error ? styles.flatError : null,
+              ]
+            : [
+                styles.input,
+                multiline && styles.multiline,
+                focused && styles.inputFocused,
+                error ? styles.inputError : null,
+              ]
+        }
         {...input}
       />
       {error ? (
@@ -53,6 +70,17 @@ export const TextField = forwardRef<TextInput, FieldProps>(function TextField(
 
 const styles = StyleSheet.create({
   wrap: { gap: 6 },
+  flat: {
+    fontSize: 17,
+    lineHeight: 24,
+    color: colors.text,
+    paddingVertical: space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderStrong,
+  },
+  flatMultiline: { minHeight: 110, textAlignVertical: 'top' },
+  flatFocused: { borderBottomColor: colors.primary, borderBottomWidth: 1.5 },
+  flatError: { borderBottomColor: colors.danger },
   label: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
   optional: { fontWeight: '500', color: colors.textSubtle },
   input: {

@@ -13,17 +13,22 @@ import {
 import { useProperties, useServiceRequests } from '@/api/queries';
 import { useCreateTicket } from '@/api/support';
 import type { LocalFile } from '@/api/uploads';
-import { AttachmentPicker, uploadAll } from '@/components/AttachmentPicker';
+import { AttachmentPreviews, uploadAll, useAttachmentAdder } from '@/components/AttachmentPicker';
 import { toast } from '@/components/Dialog';
 import { TextField } from '@/components/Field';
 import { Footer } from '@/components/Footer';
 import { Select } from '@/components/Select';
-import { Banner, Button } from '@/components/ui';
+import { Banner, Button, Chips, ListGroup, ListRow } from '@/components/ui';
 import { formatDate } from '@/lib/format';
 import { errorMessage, fieldErrors } from '@/lib/errors';
-import { colors, space, typography } from '@/theme';
+import { TICKET_CATEGORY_ICONS } from '@/lib/icons';
+import { colors, space } from '@/theme';
 
-/** Raise a support ticket: category and the issue (both required), optionally a property / request. */
+/**
+ * Raise a support ticket, flat like Profile: headed sections with their
+ * content indented — what it's about (required), the issue (required),
+ * what it relates to and any photos or files (optional).
+ */
 export default function NewTicketScreen() {
   const params = useLocalSearchParams<{
     category?: string;
@@ -48,6 +53,7 @@ export default function NewTicketScreen() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [since] = useState(() => Date.now() - 30 * 86_400_000);
   const [files, setFiles] = useState<LocalFile[]>([]);
+  const attach = useAttachmentAdder({ files, onChange: setFiles });
   const [uploading, setUploading] = useState(false);
 
   const submit = () => {
@@ -87,6 +93,9 @@ export default function NewTicketScreen() {
       new Date(r.completed_at ?? r.cancelled_at ?? r.updated_at).getTime() >= since,
   );
 
+  const props = properties.data ?? [];
+  const busy = create.isPending || uploading;
+
   return (
     <View style={styles.flex}>
       <ScrollView
@@ -98,74 +107,92 @@ export default function NewTicketScreen() {
           <Banner message={errorMessage(create.error)} />
         ) : null}
 
-        <Select
-          label="Category"
-          value={category}
-          options={TICKET_CATEGORIES.map((c) => ({ value: c, label: TICKET_CATEGORY_LABELS[c] }))}
-          onChange={setCategory}
-          error={errors.category}
-        />
+        <ListGroup title="What is it about?" plain>
+          <View style={styles.inner}>
+            <Chips
+              variant="soft"
+              options={TICKET_CATEGORIES.map((c) => ({
+                value: c,
+                label: TICKET_CATEGORY_LABELS[c],
+                icon: TICKET_CATEGORY_ICONS[c],
+              }))}
+              value={category}
+              onChange={setCategory}
+            />
+            {errors.category ? <Text style={styles.error}>{errors.category}</Text> : null}
+          </View>
+        </ListGroup>
 
-        <TextField
-          label="Explain the issue"
-          value={description}
-          onChangeText={setDescription}
-          multiline
-          maxLength={4000}
-          placeholder="Tell us what you need help with — the more detail, the faster we can help."
-          error={errors.description}
-        />
+        <ListGroup title="Explain the issue" plain>
+          <View style={styles.inner}>
+            <TextField
+              variant="flat"
+              label="Explain the issue"
+              value={description}
+              onChangeText={setDescription}
+              multiline
+              maxLength={4000}
+              placeholder="What do you need help with? The more detail, the faster we can help."
+              error={errors.description}
+            />
+          </View>
+        </ListGroup>
 
-        {(properties.data ?? []).length > 0 ? (
-          <Select
-            label="Property"
-            optional
-            value={propertyId}
-            noneLabel="Not about a specific property"
-            options={(properties.data ?? []).map((p) => ({ value: p.id, label: p.name }))}
-            onChange={setPropertyId}
-          />
+        {props.length > 0 || relevantRequests.length > 0 ? (
+          <ListGroup title="Related to (optional)" plain>
+            {props.length > 0 ? (
+              <Select
+                variant="row"
+                icon="home"
+                label="Property"
+                value={propertyId}
+                noneLabel="Not about a specific property"
+                options={props.map((p) => ({ value: p.id, label: p.name }))}
+                onChange={setPropertyId}
+              />
+            ) : null}
+            {relevantRequests.length > 0 ? (
+              <Select
+                variant="row"
+                icon="requests"
+                label="Service request"
+                value={requestId}
+                noneLabel="Not about a service request"
+                options={relevantRequests.map((r) => ({
+                  value: r.id,
+                  label: r.service.name,
+                  description: [
+                    r.property?.name,
+                    requestStatusLabel(r.status, r.fulfilment),
+                    formatDate(r.created_at),
+                  ]
+                    .filter(Boolean)
+                    .join(' · '),
+                }))}
+                onChange={setRequestId}
+              />
+            ) : null}
+          </ListGroup>
         ) : null}
 
-        {relevantRequests.length > 0 ? (
-          <Select
-            label="Service request"
-            optional
-            value={requestId}
-            noneLabel="Not about a service request"
-            options={relevantRequests.map((r) => ({
-              value: r.id,
-              label: r.service.name,
-              description: [
-                r.property?.name,
-                requestStatusLabel(r.status, r.fulfilment),
-                formatDate(r.created_at),
-              ]
-                .filter(Boolean)
-                .join(' · '),
-            }))}
-            onChange={setRequestId}
-          />
-        ) : null}
-
-        <View style={styles.block}>
-          <Text style={styles.label}>
-            Photos or files <Text style={typography.caption}>· optional, up to 5</Text>
-          </Text>
-          <AttachmentPicker
-            files={files}
-            onChange={setFiles}
-            disabled={create.isPending || uploading}
-          />
-        </View>
+        <ListGroup title="Photos or files (optional)" plain>
+          {attach.room > 0 ? (
+            <ListRow
+              icon="attach"
+              title={files.length ? `Add more (${attach.room} left)` : 'Add photos or files'}
+              subtitle="Up to 5 · PDF, JPG or PNG"
+              onPress={() => (busy ? undefined : void attach.add())}
+            />
+          ) : null}
+          {files.length > 0 ? (
+            <View style={styles.inner}>
+              <AttachmentPreviews files={files} onChange={setFiles} disabled={busy} />
+            </View>
+          ) : null}
+        </ListGroup>
       </ScrollView>
       <Footer>
-        <Button
-          title="Raise ticket"
-          icon="arrow"
-          onPress={submit}
-          loading={create.isPending || uploading}
-        />
+        <Button title="Raise ticket" icon="arrow" onPress={submit} loading={busy} />
       </Footer>
     </View>
   );
@@ -173,8 +200,8 @@ export default function NewTicketScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  content: { padding: space.lg, gap: space.lg, paddingBottom: space.xxl },
-  block: { gap: space.sm },
-  label: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
+  content: { padding: space.lg, paddingTop: space.md, gap: space.xl, paddingBottom: space.xxl },
+  // Same 14 pt inset as list rows, so content lines up under each heading.
+  inner: { paddingHorizontal: 14, paddingVertical: space.xs, gap: space.sm },
   error: { fontSize: 13, color: colors.danger, fontWeight: '600' },
 });

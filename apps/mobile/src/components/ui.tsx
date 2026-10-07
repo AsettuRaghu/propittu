@@ -644,11 +644,15 @@ export function Chips<T extends string>({
   options,
   value,
   onChange,
+  variant = 'outline',
 }: {
   options: readonly Option<T>[];
   value: T | null;
   onChange: (value: T) => void;
+  /** `soft`: borderless tags on the page — the flat style. */
+  variant?: 'outline' | 'soft';
 }) {
+  const soft = variant === 'soft';
   return (
     <View style={styles.chips}>
       {options.map((o) => {
@@ -662,7 +666,11 @@ export function Chips<T extends string>({
               tap();
               onChange(o.value);
             }}
-            style={[styles.chip, selected && styles.chipSelected]}
+            style={[
+              styles.chip,
+              soft && styles.chipSoft,
+              selected && (soft ? styles.chipSoftSelected : styles.chipSelected),
+            ]}
           >
             {o.icon ? (
               <Icon name={o.icon} size={15} color={selected ? colors.primary : colors.textMuted} />
@@ -890,6 +898,8 @@ const styles = StyleSheet.create({
     borderColor: colors.surfaceMuted,
   },
   chipSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
+  chipSoft: { backgroundColor: colors.surface, borderColor: colors.surface },
+  chipSoftSelected: { backgroundColor: colors.primarySoft, borderColor: colors.primarySoft },
   chipText: { fontSize: 14, fontWeight: '500', color: colors.text },
   chipTextSelected: { color: colors.primary, fontWeight: '700' },
 

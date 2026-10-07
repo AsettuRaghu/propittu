@@ -10,7 +10,7 @@ import {
 } from '@/api/uploads';
 import { errorMessage } from '@/lib/errors';
 import { pickPhotos } from '@/lib/pickPhotos';
-import { colors, radius, space, typography } from '@/theme';
+import { colors, radius, space } from '@/theme';
 import { dialog } from './Dialog';
 import { Icon } from './Icon';
 
@@ -111,29 +111,6 @@ export function AttachmentPreviews({ files, onChange, disabled = false }: Props)
   );
 }
 
-/** Form version: previews plus an "Attach photos or files" link. */
-export function AttachmentPicker(props: Props) {
-  const { add, room } = useAttachmentAdder(props);
-  return (
-    <View style={styles.wrap}>
-      <AttachmentPreviews {...props} />
-      {room > 0 ? (
-        <Pressable
-          onPress={() => void add()}
-          disabled={props.disabled}
-          accessibilityRole="button"
-          style={styles.addRow}
-        >
-          <Icon name="attach" size={15} color={colors.primary} />
-          <Text style={styles.addText}>
-            {props.files.length ? `Add more (${room} left)` : 'Attach photos or files'}
-          </Text>
-        </Pressable>
-      ) : null}
-    </View>
-  );
-}
-
 /** Uploads picked files onto a message; returns how many failed. */
 export async function uploadAll(
   scope: 'support' | 'backoffice',
@@ -153,7 +130,6 @@ export async function uploadAll(
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: space.sm },
   strip: { gap: space.sm },
   item: { width: 64, height: 64 },
   thumb: { width: 64, height: 64, borderRadius: radius.sm },
@@ -176,6 +152,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  addRow: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' },
-  addText: { ...typography.small, color: colors.primary, fontWeight: '700' },
 });

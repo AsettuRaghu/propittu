@@ -1,5 +1,6 @@
 import type {
   DocumentType,
+  TicketCategory,
   TicketStatus,
   PropertyType,
   ServiceCategory,
@@ -115,4 +116,15 @@ export const TICKET_TONES: Record<TicketStatus, Tone> = {
   waiting_on_customer: 'warning',
   resolved: 'success',
   closed: 'neutral',
+};
+
+/** Support ticket categories. */
+export const TICKET_CATEGORY_ICONS: Record<TicketCategory, IconName> = {
+  account: 'user',
+  plan_billing: 'card',
+  property: 'home',
+  documents: 'document',
+  service_request: 'requests',
+  app_issue: 'mobile',
+  other: 'chat',
 };

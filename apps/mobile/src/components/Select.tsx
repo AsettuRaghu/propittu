@@ -1,7 +1,8 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, space, typography } from '@/theme';
 import { dialog } from './Dialog';
-import { Icon } from './Icon';
+import { Icon, type IconName } from './Icon';
+import { ListRow } from './ui';
 
 export interface SelectOption<T extends string> {
   value: T;
@@ -23,7 +24,12 @@ export function Select<T extends string>({
   noneLabel,
   optional = false,
   error,
+  variant = 'field',
+  icon,
 }: {
+  /** `row`: a flat list row (icon, label, the chosen value) — for plain sections. */
+  variant?: 'field' | 'row';
+  icon?: IconName;
   label: string;
   value: T | null;
   options: SelectOption<T>[];
@@ -47,6 +53,17 @@ export function Select<T extends string>({
     if (picked === null) return;
     onChange(picked === NONE ? null : (picked as T));
   };
+
+  if (variant === 'row') {
+    return (
+      <ListRow
+        icon={icon}
+        title={label}
+        subtitle={chosen?.label ?? noneLabel ?? placeholder}
+        onPress={() => void open()}
+      />
+    );
+  }
 
   return (
     <View style={styles.wrap}>
