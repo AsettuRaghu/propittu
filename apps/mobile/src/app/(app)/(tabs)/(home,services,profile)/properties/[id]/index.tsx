@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { openServicesTab } from '@/lib/nav';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import {
   pittuQuestions,
   type CompletionItem,
@@ -17,6 +17,7 @@ import { LocationIssueNotice } from '@/components/LocationIssueNotice';
 import { PropertyCover } from '@/components/PropertyCover';
 import { PropertyMapCard } from '@/components/PropertyMapCard';
 import { PullRefresh } from '@/components/PullRefresh';
+import { DataCredits } from '@/components/DataCredits';
 import { ReachNotice } from '@/components/ReachNotice';
 import { RequestRow } from '@/components/ServiceRequestList';
 import { ErrorState, LoadingState } from '@/components/States';
@@ -24,7 +25,7 @@ import { VideoSection } from '@/components/VideoSection';
 import { Banner, IconButton, KeyValue, LinkButton, ListGroup, ListRow } from '@/components/ui';
 import { formatArea } from '@/lib/format';
 import { goToCompletionStep } from '@/lib/propertySteps';
-import { radius, shadow, space, typography } from '@/theme';
+import { radius, shadow, space } from '@/theme';
 
 const STEP_ICONS: Record<CompletionKey, IconName> = {
   basics: 'home',
@@ -150,11 +151,7 @@ export default function PropertyDetailsScreen() {
 
       <Services property={property} />
 
-      {property.latitude !== null ? (
-        <Text style={[typography.caption, styles.credit]}>
-          Weather data: MET Norway (CC BY 4.0)
-        </Text>
-      ) : null}
+      <DataCredits weather={property.latitude !== null} />
     </ScrollView>
   );
 }
@@ -255,5 +252,4 @@ const styles = StyleSheet.create({
   // Same 14 pt inset as list rows, so content lines up under each heading.
   inner: { paddingHorizontal: 14, paddingVertical: space.xs },
   facts: { gap: space.sm },
-  credit: { textAlign: 'center' },
 });

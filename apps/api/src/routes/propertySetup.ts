@@ -5,12 +5,14 @@ import { z } from 'zod';
 import {
   createPropertySchema,
   PREFILL_FIELDS,
+  hasUsefulPrefill,
   prefillFromFacts,
   sameFactValue,
   type AnalysisStatus,
   type DraftProperty,
   type FactValue,
   type PrefillField,
+  type PropertyPrefill,
   type ValueSource,
 } from '@propittu/shared';
 import { assertAiAvailable, isRetryableFailure } from '../ai/jobs.js';
@@ -93,11 +95,17 @@ propertySetupRouter.post('/properties/draft', async (req, res) => {
 /* GET /properties/drafts — unfinished deed set-ups, for "Waiting for you" on Home */
 propertySetupRouter.get('/properties/drafts', async (req, res) => {
   const { db, accountId } = auth(req);
-  const drafts = await loadDrafts(db, accountId);
-  const names = await suggestedNames(
-    db,
-    drafts.flatMap((d) => (d.analysis?.status === 'ready' ? [d.analysis.id] : [])),
-  );
+  const all = await loadDrafts(db, accountId);
+  const read = await readings(db, all);
+  // Attempts Pittu found nothing in are never "waiting": hidden at once, and
+  // removed once the customer has had time to act on them on the Add screen.
+  const drafts: DraftState[] = [];
+  for (const d of all) {
+    if (!isEmptyAttempt(d, read)) drafts.push(d);
+    else if (Date.now() - Date.parse(d.analysis?.finished_at ?? d.created_at) > EMPTY_GRACE_MS) {
+      await removeProperty(db, accountId, d.id);
+    }
+  }
   const dupIds = drafts.flatMap((d) => (d.analysis?.duplicate_of ? [d.analysis.duplicate_of] : []));
   const dupNames = new Map(
     dupIds.length === 0
@@ -113,7 +121,7 @@ propertySetupRouter.get('/properties/drafts', async (req, res) => {
       created_at: d.created_at,
       document_id: d.document_id,
       status: d.analysis?.status ?? null,
-      name: d.analysis ? (names.get(d.analysis.id) ?? null) : null,
+      name: nameOf(d.analysis ? read.get(d.analysis.id) : undefined),
       duplicate_of: dup && dupNames.has(dup) ? { id: dup, name: dupNames.get(dup)! } : null,
     };
   });
@@ -130,6 +138,7 @@ interface DraftState {
     error_code: string | null;
     attempts: number;
     duplicate_of: string | null;
+    finished_at: string | null;
   } | null;
 }
 
@@ -155,7 +164,7 @@ async function loadDrafts(db: SupabaseClient, accountId: string): Promise<DraftS
       .order('created_at', { ascending: false }),
     db
       .from('document_analyses')
-      .select('id, property_id, status, error_code, attempts, duplicate_of')
+      .select('id, property_id, status, error_code, attempts, duplicate_of, finished_at')
       .in('property_id', ids)
       .order('created_at', { ascending: false }),
   ]);
@@ -174,47 +183,67 @@ async function loadDrafts(db: SupabaseClient, accountId: string): Promise<DraftS
             error_code: a.error_code,
             attempts: a.attempts,
             duplicate_of: a.duplicate_of,
+            finished_at: a.finished_at,
           }
         : null,
     };
   });
 }
 
-/** "Plot in Bommasandra" — what Pittu would call each read deed. */
-async function suggestedNames(
+/** What each finished reading would pre-fill (its facts, as Pittu read them). */
+async function readings(
   db: SupabaseClient,
-  analysisIds: string[],
-): Promise<Map<string, string>> {
-  if (analysisIds.length === 0) return new Map();
+  drafts: DraftState[],
+): Promise<Map<string, PropertyPrefill>> {
+  const ids = drafts.flatMap((d) => (d.analysis?.status === 'ready' ? [d.analysis.id] : []));
+  if (ids.length === 0) return new Map();
   const facts = must<{ analysis_id: string; key: string; value: FactValue }[]>(
-    await db
-      .from('property_facts')
-      .select('analysis_id, key, value')
-      .in('analysis_id', analysisIds),
+    await db.from('property_facts').select('analysis_id, key, value').in('analysis_id', ids),
   );
-  const out = new Map<string, string>();
-  for (const id of analysisIds) {
-    const name = prefillFromFacts(facts.filter((f) => f.analysis_id === id)).name;
-    if (typeof name === 'string' && name) out.set(id, name);
-  }
-  return out;
+  return new Map(
+    ids.map((id) => [id, prefillFromFacts(facts.filter((f) => f.analysis_id === id))]),
+  );
 }
+
+/** "Prasanthi Green Park – Site 28" — what Pittu would call a read deed. */
+const nameOf = (p: PropertyPrefill | undefined) =>
+  typeof p?.name === 'string' && p.name ? p.name : null;
+
+/** Read, but nothing about a property in it — or not a sale deed at all. */
+function isEmptyAttempt(d: DraftState, read: Map<string, PropertyPrefill>): boolean {
+  const a = d.analysis;
+  if (!a) return false;
+  if (a.status === 'failed') return a.error_code === 'not_a_sale_deed';
+  if (a.status !== 'ready' || a.duplicate_of) return false;
+  const p = read.get(a.id);
+  return !p || !hasUsefulPrefill(p);
+}
+
+/** How long an empty attempt is kept, so the Add screen can still show what happened. */
+const EMPTY_GRACE_MS = 10 * 60_000;
 
 const HOUR = 3600_000;
 
 /**
  * Failed and abandoned attempts don't pile up: before a new draft, clear
  * drafts whose deed never arrived (after an hour), whose reading failed for
- * good, or that were left for 30 days.
+ * good, that Pittu found nothing in, or that were left for 30 days.
  */
 async function clearStaleDrafts(db: SupabaseClient, accountId: string): Promise<void> {
   const now = Date.now();
-  for (const d of await loadDrafts(db, accountId)) {
+  const all = await loadDrafts(db, accountId);
+  const read = await readings(db, all);
+  for (const d of all) {
     const age = now - Date.parse(d.created_at);
     const a = d.analysis;
     const failedForGood =
       a?.status === 'failed' && (!isRetryableFailure(a.error_code) || a.attempts >= 3);
-    if ((!d.document_id && age > HOUR) || failedForGood || age > 30 * 24 * HOUR) {
+    if (
+      (!d.document_id && age > HOUR) ||
+      failedForGood ||
+      isEmptyAttempt(d, read) ||
+      age > 30 * 24 * HOUR
+    ) {
       await removeProperty(db, accountId, d.id);
     }
   }

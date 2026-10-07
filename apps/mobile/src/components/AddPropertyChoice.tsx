@@ -10,6 +10,7 @@ import { api } from '@/api/client';
 import { prepareDocument, uploadDocument } from '@/api/uploads';
 import { errorMessage } from '@/lib/errors';
 import { accents, colors, font, gradients, radius, shadow, space, typography } from '@/theme';
+import { AmbientGlow } from './Celebration';
 import { DeedArt } from './DeedArt';
 import { PittuAtWork } from './PittuAtWork';
 import { DraftRow } from './DraftRow';
@@ -98,8 +99,7 @@ export function AddPropertyChoice({ onManual }: { onManual: () => void }) {
           headerShadowVisible: false,
         }}
       />
-      <View style={[styles.glow, styles.glowA]} pointerEvents="none" />
-      <View style={[styles.glow, styles.glowB]} pointerEvents="none" />
+      <AmbientGlow />
 
       {phase.kind !== 'idle' ? (
         <PittuAtWork
@@ -241,9 +241,6 @@ const styles = StyleSheet.create({
     paddingBottom: space.xxl,
     gap: space.md,
   },
-  glow: { position: 'absolute', borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.08)' },
-  glowA: { width: 320, height: 320, top: -140, right: -120 },
-  glowB: { width: 240, height: 240, bottom: -110, left: -90 },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',

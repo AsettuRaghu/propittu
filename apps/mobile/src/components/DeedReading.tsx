@@ -10,6 +10,7 @@ import {
 } from '@propittu/shared';
 import { formatArea, formatDate } from '@/lib/format';
 import { accents, colors, font, gradients, space, typography } from '@/theme';
+import { CelebrationBadge } from './Celebration';
 import { DeedArt } from './DeedArt';
 import { Footer } from './Footer';
 import { Icon, type IconName } from './Icon';
@@ -145,7 +146,7 @@ export function DeedReading({
           end={{ x: 1, y: 1 }}
           style={styles.top}
         >
-          {feed.done ? <DoneBadge /> : <DeedArt />}
+          {feed.done ? <CelebrationBadge size={88} /> : <DeedArt />}
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.text}>{text}</Text>
         </LinearGradient>
@@ -292,31 +293,6 @@ function Line({
   );
 }
 
-/** A tick that springs in where the deed was being read. */
-export function DoneBadge({ size = 104 }: { size?: number }) {
-  const [scale] = useState(() => new Animated.Value(0.6));
-  useEffect(() => {
-    Animated.spring(scale, { toValue: 1, friction: 5, useNativeDriver: true }).start();
-  }, [scale]);
-  return (
-    <View style={size === 104 ? styles.badgeBox : null}>
-      <Animated.View
-        style={[
-          styles.badge,
-          { width: size, height: size, borderRadius: size / 2, transform: [{ scale }] },
-        ]}
-      >
-        <Icon
-          name="check"
-          size={Math.round(size * 0.44)}
-          color={accents.teal.fg}
-          strokeWidth={2.8}
-        />
-      </Animated.View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
   scroll: { flexGrow: 1, paddingBottom: space.xxl },
@@ -335,15 +311,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   text: { fontSize: font(14.5), color: 'rgba(255,255,255,0.88)', textAlign: 'center' },
-  badgeBox: { width: 220, height: 190, alignItems: 'center', justifyContent: 'center' },
-  badge: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   feed: { padding: space.lg, paddingTop: space.xl },
   feedLines: { gap: space.md },
   lightIcon: { backgroundColor: 'rgba(255,255,255,0.2)' },

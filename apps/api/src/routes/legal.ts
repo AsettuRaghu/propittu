@@ -96,7 +96,10 @@ Access is limited by role and recorded.</li>
 <li><strong>Processors that run Propittu for us</strong>, under contract and only for that purpose: database and file
 storage (Supabase — stored in Mumbai, India), application servers (Vercel — Mumbai region), payments (Razorpay),
 SMS delivery, app updates (Expo), document reading (Anthropic — USA, as described above), and
-local weather (MET Norway — only the property's approximate location, rounded to about a kilometre).</li>
+local weather (MET Norway — only the property's approximate location, rounded to about a kilometre), and
+place lookups (OpenStreetMap's Nominatim service — a property's map pin, its PIN code, the village or area
+named in its sale deed, and what you type into the map's search, to place the property and check that the pin
+and the PIN code agree; never your name, number or documents).</li>
 <li>Government authorities, where the law requires it.</li>
 </ul>
 

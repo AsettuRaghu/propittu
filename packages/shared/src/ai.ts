@@ -171,6 +171,23 @@ export function prefillFromFacts(facts: Pick<PropertyFact, 'key' | 'value'>[]): 
   };
 }
 
+/**
+ * Did the reading give us anything worth pre-filling? A file with none of
+ * these isn't much of a deed (Pittu "came up empty").
+ */
+export function hasUsefulPrefill(p: PropertyPrefill): boolean {
+  return [
+    p.property_type,
+    p.name,
+    p.address_line,
+    p.city,
+    p.area_value,
+    p.survey_number,
+    p.property_number,
+    p.khata_number,
+  ].some((v) => v !== null && v !== undefined && v !== '');
+}
+
 /** Which facts feed which field (for highlighting uncertain values). */
 export const PREFILL_SOURCES: Record<PrefillField, string[]> = {
   property_type: ['property_kind'],

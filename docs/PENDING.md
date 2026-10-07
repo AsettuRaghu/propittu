@@ -19,6 +19,21 @@ registration is through.
 |---|---|
 | **by 29 Oct 2026** | Replace the Anthropic **production** API key (`propittu-production`, created 6 Oct 2026, 30-day expiry → ~5 Nov). Console → API Keys → create new → paste into Vercel `ANTHROPIC_API_KEY` (Production, Sensitive) → redeploy → delete the old key. Until replaced, Pittu stops reading (nothing else is affected). |
 
+## Open from the UI/UX pass (7 Oct 2026)
+
+Waiting on the owner:
+- "Already in your locker": keep as is, drop "add as new", or skip the screen and open the property (owner testing).
+- Photographing deed pages instead of a PDF: proposed (in-app camera, 1–10 pages, server joins them into one PDF); waiting for go-ahead.
+- Configurable Pittu questions + configurable service templates: design together (recommended) or separately.
+- Location: how much to automate vs ask the customer — parked to think over.
+- Pittu reading screen: owner feedback to come; "More from your deed" could move above the form.
+- Publishing to testers (EAS preview): ask each time.
+
+Loose ends noted:
+- Deeds uploaded as plain documents (e.g. One's) are never read, so no deed-vs-pin check — offer "Let Pittu read this deed" (explained to the owner; awaiting decision).
+
+Next planned: Home round 3 — "Around your property" news posted from Backoffice, the flash-news marker on cards, analytics groundwork.
+
 ## Go-live setup (5.B.4)
 
 - **Must do before launch — S1 (owner confirmed 7 Oct 2026):** move the login session from plain app

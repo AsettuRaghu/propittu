@@ -118,7 +118,7 @@ test('task metadata is versioned and the schema has no union types (API limit)',
   assert.ok(!json.includes('"null"') && !json.includes('anyOf'), 'no nullable / anyOf fields');
 });
 
-import { prefillFromFacts, sameFactValue } from '@propittu/shared';
+import { hasUsefulPrefill, prefillFromFacts, sameFactValue } from '@propittu/shared';
 
 const facts = (o: Record<string, unknown>) =>
   Object.entries(o).map(([key, value]) => ({ key, value: value as never }));
@@ -203,4 +203,12 @@ test('the society / project name leads the suggested name', () => {
     'Prasanthi Green Park, Bommasandra',
   );
   assert.equal(prefillFromFacts([project]).name, 'Prasanthi Green Park');
+});
+
+test('a reading with nothing about a property counts as empty', () => {
+  const f = (key: string, value: unknown) => ({ key, value }) as never;
+  assert.equal(hasUsefulPrefill(prefillFromFacts([])), false);
+  assert.equal(hasUsefulPrefill(prefillFromFacts([f('buyers', ['A. Kumar'])])), false);
+  assert.equal(hasUsefulPrefill(prefillFromFacts([f('khata_number', '123/4')])), true);
+  assert.equal(hasUsefulPrefill(prefillFromFacts([f('village', 'Bommasandra')])), true);
 });

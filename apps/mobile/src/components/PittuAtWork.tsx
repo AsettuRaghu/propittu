@@ -1,11 +1,17 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { ANALYSIS_ERROR_LABELS, prefillFromFacts, type DocumentAnalysis } from '@propittu/shared';
+import {
+  ANALYSIS_ERROR_LABELS,
+  hasUsefulPrefill,
+  prefillFromFacts,
+  type DocumentAnalysis,
+} from '@propittu/shared';
 import { useAnalysis, useRemoveDraft } from '@/api/ai';
 import { font, space } from '@/theme';
 import { DeedArt } from './DeedArt';
-import { DoneBadge, feedHeadline, PittuFeed, usePittuFeed } from './DeedReading';
+import { Beckon, CelebrationBadge, FadeSwap } from './Celebration';
+import { feedHeadline, PittuFeed, usePittuFeed } from './DeedReading';
 import { Icon, type IconName } from './Icon';
 import { Button, ProgressBar } from './ui';
 
@@ -24,24 +30,13 @@ type Ending =
   | 'later' // Pittu is resting / today's readings used up: the deed can wait
   | 'unreadable'; // couldn't be read (too large, or failed): fill in by hand, deed kept
 
-/** Anything worth pre-filling? (a file with none of these isn't much of a deed) */
-const useful = (p: ReturnType<typeof prefillFromFacts>) =>
-  [
-    p.property_type,
-    p.name,
-    p.address_line,
-    p.city,
-    p.area_value,
-    p.survey_number,
-    p.property_number,
-    p.khata_number,
-  ].some((v) => v !== null && v !== undefined && v !== '');
-
 function endingOf(a: DocumentAnalysis | undefined): Ending | null {
   if (!a || a.status === 'queued' || a.status === 'reading') return null;
   if (a.status === 'ready') {
     if (a.duplicate_of) return 'duplicate';
-    return a.facts.length > 0 && useful(prefillFromFacts(a.facts)) ? 'findings' : 'nothing';
+    return a.facts.length > 0 && hasUsefulPrefill(prefillFromFacts(a.facts))
+      ? 'findings'
+      : 'nothing';
   }
   if (a.error_code === 'not_a_sale_deed') return 'not_deed';
   if (a.error_code === 'unavailable' || a.error_code === 'daily_limit') return 'later';
@@ -83,16 +78,18 @@ export function PittuAtWork({
   const feed = usePittuFeed(elapsed, result);
   const headline = feedHeadline(feed);
 
-  // The deed shrinks and moves up as soon as Pittu takes over.
-  const [compact] = useState(() => new Animated.Value(0));
+  // Stage 0 → 1: the deed shrinks to the top as soon as Pittu takes over (still
+  // reading, still alive). 1 → 2: done — room for the celebration, centre stage.
+  const celebrating = ending === 'findings' || ending === 'duplicate';
+  const [stage] = useState(() => new Animated.Value(0));
   useEffect(() => {
-    Animated.timing(compact, {
-      toValue: 1,
+    Animated.timing(stage, {
+      toValue: celebrating ? 2 : 1,
       duration: 600,
       easing: Easing.inOut(Easing.cubic),
       useNativeDriver: false,
     }).start();
-  }, [compact]);
+  }, [stage, celebrating]);
 
   const removeDraft = useRemoveDraft();
   const duplicate = ending === 'duplicate' ? a?.duplicate_of : null;
@@ -172,31 +169,45 @@ export function PittuAtWork({
       >
         <Animated.View
           style={{
-            height: compact.interpolate({ inputRange: [0, 1], outputRange: [190, 100] }),
+            height: stage.interpolate({ inputRange: [0, 1, 2], outputRange: [190, 130, 200] }),
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <Animated.View
-            style={{
-              transform: [
-                { scale: compact.interpolate({ inputRange: [0, 1], outputRange: [1, 0.5] }) },
-              ],
-            }}
-          >
-            {ending === 'findings' || ending === 'duplicate' ? (
-              <DoneBadge size={150} />
-            ) : ending ? (
-              <View style={styles.quiet}>
-                <Icon name="deed" size={64} color="#FFFFFF" strokeWidth={1.6} />
-              </View>
-            ) : (
-              <DeedArt />
-            )}
-          </Animated.View>
+          {celebrating ? (
+            <CelebrationBadge size={88} />
+          ) : (
+            <Animated.View
+              style={{
+                transform: [
+                  {
+                    scale: stage.interpolate({
+                      inputRange: [0, 1, 2],
+                      outputRange: [1, 0.66, 0.66],
+                    }),
+                  },
+                ],
+              }}
+            >
+              {ending ? (
+                <Beckon active>
+                  <View style={styles.quiet}>
+                    <Icon name="deed" size={64} color="#FFFFFF" strokeWidth={1.6} />
+                  </View>
+                </Beckon>
+              ) : (
+                <DeedArt />
+              )}
+            </Animated.View>
+          )}
         </Animated.View>
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.text}>{text}</Text>
+        <FadeSwap id={title}>
+          <Text style={styles.title}>{title}</Text>
+        </FadeSwap>
+        {/* Upload progress ticks without re-fading on every percent. */}
+        <FadeSwap id={phase.kind === 'uploading' ? 'uploading' : text}>
+          <Text style={styles.text}>{text}</Text>
+        </FadeSwap>
         {phase.kind === 'uploading' ? (
           <View style={styles.progress}>
             <ProgressBar progress={phase.progress} />
@@ -246,12 +257,14 @@ export function PittuAtWork({
       <View style={[styles.bar, { paddingBottom: Math.max(bottomInset, space.lg) }]}>
         {action ? (
           <>
-            <Button
-              title={action.main[0]}
-              variant="secondary"
-              onPress={action.main[1]}
-              loading={removeDraft.isPending}
-            />
+            <Beckon active={!removeDraft.isPending}>
+              <Button
+                title={action.main[0]}
+                variant="secondary"
+                onPress={action.main[1]}
+                loading={removeDraft.isPending}
+              />
+            </Beckon>
             <Pressable
               onPress={action.alt[1]}
               disabled={removeDraft.isPending}
@@ -263,12 +276,14 @@ export function PittuAtWork({
             </Pressable>
           </>
         ) : (
-          <Button
-            title={feed.done ? 'Check and save' : 'Pittu is reading…'}
-            variant="secondary"
-            onPress={() => next()}
-            disabled={!feed.done}
-          />
+          <Beckon active={feed.finished}>
+            <Button
+              title={feed.done ? 'Check and save' : 'Pittu is reading…'}
+              variant="secondary"
+              onPress={() => next()}
+              disabled={!feed.done}
+            />
+          </Beckon>
         )}
       </View>
     </View>

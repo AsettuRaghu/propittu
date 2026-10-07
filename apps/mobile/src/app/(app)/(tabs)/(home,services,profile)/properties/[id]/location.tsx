@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker, type LatLng, type Region } from 'react-native-maps';
 import { useProperty, useUpdateProperty } from '@/api/queries';
 import { dialog, toast } from '@/components/Dialog';
+import { DataCredits } from '@/components/DataCredits';
 import { Icon } from '@/components/Icon';
 import { MapSearch, type FoundPlace } from '@/components/MapSearch';
 import { ErrorState, LoadingState } from '@/components/States';
@@ -252,6 +253,7 @@ export default function PropertyLocationScreen() {
           loading={update.isPending}
           disabled={!pin}
         />
+        <DataCredits />
       </View>
     </View>
   );
