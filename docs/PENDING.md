@@ -10,7 +10,7 @@ registration is through.
 | 1 | **Real SMS (OTP)** | DLT registration (Entity ID, sender header e.g. `PROPTU`, OTP template), MSG91 account + KYC. No Twilio needed. | Owner: DLT in progress. Then ~1 day build: Supabase Send-SMS hook → API → MSG91; keep one reviewer test number. |
 | 2 | **Store fee model** | Decide: (a) service-only — app features free for all with one fair-use limit, plans = visit memberships, Razorpay 0%; or (b) keep plans unlocking capacity, sell them on the web (no in-app Buy). | Deferred. Today plans unlock app capacity (Limited Access + per-plan limits) → a reviewer would likely require store billing. |
 | 3 | **Store accounts** | Apple Developer (organisation, D-U-N-S), Google Play Console (organisation). | Deferred (5.A). |
-| 4 | **Legal page details** | Company legal name + address, grievance officer, refund policy, court city; lawyer review; move to propittu.com. Pages live at `/legal/privacy`, `/legal/terms`, `/legal/delete-account`. | Placeholders marked “[to be confirmed]”. |
+| 4 | **Legal page details** | Company legal name, CIN + address, grievance officer name, refund policy (a suggested default is in the terms, highlighted), confirm Bengaluru courts; lawyer review; move to propittu.com. Pages live at `/legal/privacy`, `/legal/terms`, `/legal/delete-account`. | Placeholders marked “[to be confirmed]”. |
 | 5 | **Support phone** | A customer-care number (shown in Help & Support when `EXPO_PUBLIC_SUPPORT_PHONE` is set). | Hidden until available. |
 
 ## Dates to remember
@@ -33,6 +33,8 @@ registration is through.
 - `eas build` (production) → TestFlight + Play internal testing → submit. Only when the owner says go.
 
 ## Product follow-ups noted
+
+- Account deletion: consider a 7-day grace period (deletion scheduled, cancelled by logging in) — needs the delete function to run from the server, and the delete page wording updated.
 
 - Where we serve: tell interested customers when their PIN code is added (needs notifications); use the map pin as a cross-check on wrong PIN codes; per-area service lists, if one area ever offers fewer services.
 - Market value estimate (discussed 6 Oct): design doc pending the owner's answers on area, rate setting, pricing and a valuer partner.
