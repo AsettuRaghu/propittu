@@ -346,7 +346,7 @@ export function ListRow({
           {value}
         </Text>
       ) : null}
-      {right}
+      {right ? <View style={styles.rowRight}>{right}</View> : null}
       {onPress && showChevron ? <Icon name="chevron" size={18} color={colors.textSubtle} /> : null}
     </>
   );
@@ -378,7 +378,7 @@ export function ListGroup({
   const items = (Array.isArray(children) ? children : [children]).filter(Boolean);
   return (
     <View>
-      {title ? <Text style={[typography.overline, styles.listTitle]}>{title}</Text> : null}
+      {title ? <Text style={[typography.heading, styles.listTitle]}>{title}</Text> : null}
       <View style={plain ? styles.listPlain : [styles.listGroup, shadow]}>
         {items.map((child, i) => (
           <View key={i}>
@@ -671,13 +671,17 @@ export function Segmented<T extends string>({
   options,
   value,
   onChange,
+  variant = 'pill',
 }: {
   options: readonly { value: T; label: string }[];
   value: T;
   onChange: (value: T) => void;
+  /** `underline`: flat tabs flush with the page (no box). */
+  variant?: 'pill' | 'underline';
 }) {
+  const flat = variant === 'underline';
   return (
-    <View style={styles.segments} accessibilityRole="tablist">
+    <View style={flat ? styles.tabs : styles.segments} accessibilityRole="tablist">
       {options.map((o) => {
         const active = o.value === value;
         return (
@@ -689,9 +693,21 @@ export function Segmented<T extends string>({
             }}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
-            style={[styles.segment, active && [styles.segmentActive, shadow]]}
+            style={
+              flat
+                ? [styles.tab, active && styles.tabActive]
+                : [styles.segment, active && [styles.segmentActive, shadow]]
+            }
           >
-            <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{o.label}</Text>
+            <Text
+              style={[
+                styles.segmentText,
+                active && styles.segmentTextActive,
+                flat && active && { color: colors.primary },
+              ]}
+            >
+              {o.label}
+            </Text>
           </Pressable>
         );
       })}
@@ -751,8 +767,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
-  listTitle: { marginBottom: space.xs, marginLeft: 2 },
+  listTitle: { marginBottom: space.sm, marginLeft: 2 },
   rowValue: { maxWidth: '45%' },
+  rowRight: { justifyContent: 'center' },
   keyValue: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start' },
   divider: {
     height: StyleSheet.hairlineWidth,
@@ -841,4 +858,18 @@ const styles = StyleSheet.create({
   segmentActive: { backgroundColor: colors.surface },
   segmentText: { fontSize: 14, fontWeight: '600', color: colors.textMuted },
   segmentTextActive: { color: colors.text },
+  tabs: {
+    flexDirection: 'row',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  tab: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+    marginBottom: -StyleSheet.hairlineWidth,
+  },
+  tabActive: { borderBottomColor: colors.primary },
 });

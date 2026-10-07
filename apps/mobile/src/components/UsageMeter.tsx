@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Animated, StyleSheet, Text, View } from 'react-native';
 import { accents, colors, radius, space, typography, type Accent } from '@/theme';
 import { type IconName } from './Icon';
 import { IconTile } from './ui';
@@ -32,6 +33,17 @@ export function UsageMeter({
   const share = limit ? used / limit : 0;
   const fill = share >= 1 ? colors.danger : share >= 0.8 ? colors.warning : a.fg;
   const left = limit !== undefined ? Math.max(0, limit - used) : null;
+  // The bar fills gently on first show.
+  const [grow] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    Animated.timing(grow, {
+      toValue: 1,
+      duration: 600,
+      delay: 150,
+      useNativeDriver: false,
+    }).start();
+  }, [grow]);
+  const width = Math.min(100, Math.max(share > 0 ? 3 : 0, share * 100));
 
   return (
     <View style={styles.wrap}>
@@ -70,12 +82,12 @@ export function UsageMeter({
           style={[styles.track, { backgroundColor: a.bg }]}
           accessibilityLabel={`${Math.round(share * 100)}% used`}
         >
-          <View
+          <Animated.View
             style={[
               styles.bar,
               {
                 backgroundColor: fill,
-                width: `${Math.min(100, Math.max(share > 0 ? 3 : 0, share * 100))}%`,
+                width: grow.interpolate({ inputRange: [0, 1], outputRange: ['0%', `${width}%`] }),
               },
             ]}
           />
@@ -87,7 +99,7 @@ export function UsageMeter({
 
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
-  wrap: { gap: space.sm, paddingVertical: space.md },
+  wrap: { gap: space.sm, paddingVertical: space.md, paddingHorizontal: 14 },
   top: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   numbers: { alignItems: 'flex-end' },
   used: { fontSize: 16, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },

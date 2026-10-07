@@ -9,8 +9,9 @@ import { TextField } from '@/components/Field';
 import { Footer } from '@/components/Footer';
 import { Icon, type IconName } from '@/components/Icon';
 import { LoadingState } from '@/components/States';
-import { Banner, Button, Card } from '@/components/ui';
+import { Banner, Button, ListGroup, ListRow } from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
+import { useLogout } from '@/lib/useLogout';
 import { accents, space, typography } from '@/theme';
 
 const PHRASE = 'DELETE MY ACCOUNT';
@@ -23,6 +24,7 @@ const PHRASE = 'DELETE MY ACCOUNT';
 export default function DeleteAccountScreen() {
   const { data: me, isPending } = useMe();
   const { signOut } = useSession();
+  const { signingOut, logout } = useLogout();
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -88,27 +90,36 @@ export default function DeleteAccountScreen() {
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets
       >
-        <Card style={styles.card}>
-          <Text style={typography.bodyStrong}>Deleting your account removes</Text>
-          {losses.map((l) => (
-            <View key={l.text} style={styles.point}>
-              <Icon name={l.icon} size={16} color={accents.coral.fg} />
-              <Text style={[typography.body, styles.flex]}>{l.text}</Text>
-            </View>
-          ))}
-          <Text style={typography.caption}>
+        <View>
+          <ListGroup title="Deleting your account removes" plain>
+            {losses.map((l) => (
+              <View key={l.text} style={styles.point}>
+                <Icon name={l.icon} size={16} color={accents.coral.fg} />
+                <Text style={[typography.body, styles.flex]}>{l.text}</Text>
+              </View>
+            ))}
+          </ListGroup>
+          <Text style={[typography.caption, styles.note]}>
             Payment records are kept as tax law requires, no longer linked to you.
           </Text>
-        </Card>
+        </View>
 
-        <Card style={styles.card}>
-          <Text style={typography.bodyStrong}>Something not working for you?</Text>
-          <Text style={typography.small}>
-            Most things can be fixed without losing your records.
-          </Text>
-          <Button title="Talk to us" icon="support" onPress={() => router.replace('/support')} />
-          <Button title="Just log out" variant="secondary" onPress={() => void signOut()} />
-        </Card>
+        <ListGroup title="Something not working?" plain>
+          <ListRow
+            icon="support"
+            accent="teal"
+            title="Talk to us first"
+            subtitle="Most things can be fixed without losing your records"
+            onPress={() => router.replace('/support')}
+          />
+          <ListRow
+            icon="logout"
+            title={signingOut ? 'Logging out…' : 'Log out'}
+            destructive
+            showChevron={false}
+            onPress={() => void logout()}
+          />
+        </ListGroup>
 
         {problem ? <Banner message={problem} /> : null}
         <TextField
@@ -136,7 +147,13 @@ export default function DeleteAccountScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
-  content: { padding: space.lg, paddingTop: space.xs, gap: space.lg, paddingBottom: space.xxl },
-  card: { gap: space.md },
-  point: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  content: { padding: space.lg, paddingTop: space.md, gap: space.xl, paddingBottom: space.xxl },
+  point: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  note: { marginTop: space.sm, marginLeft: 2 },
 });

@@ -43,37 +43,23 @@ export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
 };
 export const OPEN_TICKET_STATUSES: TicketStatus[] = ['open', 'in_progress', 'waiting_on_customer'];
 
-/** Our promise: a reply within one working day (Mon–Sat). */
-export const SUPPORT_REPLY_PROMISE = 'within 1 working day';
+/** Our reply promise, shown next to the reply box. */
+export const SUPPORT_REPLY_PROMISE = 'We’ll reply within 1–3 working days.';
 
-/** When a reply is due for a message sent at `sentAt`: +1 day, skipping Sunday. */
-export function replyDueBy(sentAt: string | Date): Date {
-  const due = new Date(new Date(sentAt).getTime() + 86_400_000);
-  if (due.getDay() === 0) due.setDate(due.getDate() + 1);
-  return due;
-}
+/** Internal codes (PR-000146, ST-000012) are for staff; customers see names. */
+export const withoutCodes = (text: string) =>
+  text.replace(/\s*[·:-]?\s*\b(PR|ST|ORD)-\d{3,}\b/g, '').trim() || text;
 
-/**
- * What the customer is waiting for on a ticket, for the line above the
- * chat: our reply (with when), their reply, or nothing (resolved/closed).
- */
+/** The small note above the reply box: whose turn it is (null once resolved). */
 export function ticketWaitingNote(t: {
   status: TicketStatus;
-  messages: { author_type: 'customer' | 'staff'; created_at: string }[];
 }): { tone: 'info' | 'warning'; text: string } | null {
   if (t.status === 'waiting_on_customer') {
     return { tone: 'warning', text: 'We need a reply from you to carry on.' };
   }
-  const last = t.messages[t.messages.length - 1];
-  if (!OPEN_TICKET_STATUSES.includes(t.status) || !last || last.author_type !== 'customer') {
-    return null;
-  }
-  const by = replyDueBy(last.created_at).toLocaleDateString('en-IN', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-  });
-  return { tone: 'info', text: `Expect our reply by ${by} — we reply ${SUPPORT_REPLY_PROMISE}.` };
+  return OPEN_TICKET_STATUSES.includes(t.status)
+    ? { tone: 'info', text: SUPPORT_REPLY_PROMISE }
+    : null;
 }
 
 export interface SupportAttachment {

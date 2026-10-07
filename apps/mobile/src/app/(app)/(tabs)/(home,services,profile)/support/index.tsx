@@ -14,15 +14,16 @@ import {
   SUPPORT_EMAIL,
   TICKET_STATUS_LABELS,
   type SupportTicket,
+  withoutCodes,
 } from '@propittu/shared';
-import { PullRefresh } from '@/components/PullRefresh';
 import { useTickets } from '@/api/support';
-import { dialog } from '@/components/Dialog';
-import { Icon, type IconName } from '@/components/Icon';
-import { Badge, IconTile, ListGroup, ListRow, SectionTitle } from '@/components/ui';
-import { TICKET_TONES } from '@/lib/icons';
+import { FadeIn } from '@/components/FadeIn';
+import { Icon } from '@/components/Icon';
+import { PullRefresh } from '@/components/PullRefresh';
+import { Badge, Button, ListGroup, ListRow } from '@/components/ui';
 import { formatDate } from '@/lib/format';
-import { colors, radius, shadow, space, typography, type Accent } from '@/theme';
+import { TICKET_TONES } from '@/lib/icons';
+import { colors, space, typography } from '@/theme';
 
 /** Customer care number, configured per environment (EXPO_PUBLIC_SUPPORT_PHONE). */
 const SUPPORT_PHONE = process.env.EXPO_PUBLIC_SUPPORT_PHONE ?? '';
@@ -50,22 +51,14 @@ const FAQS: { q: string; a: string }[] = [
   },
 ];
 
-/** Help & Support: reach us · open tickets (resolved ones folded away) · FAQs. */
+/** Help & Support, flat like Profile: contact · raise a ticket · your tickets · FAQs. */
 export default function SupportScreen() {
   const tickets = useTickets();
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [showClosed, setShowClosed] = useState(false);
-
-  const email = async () => {
-    const url = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Propittu support')}`;
-    const can = await Linking.canOpenURL(url).catch(() => false);
-    if (can) await Linking.openURL(url);
-    else
-      void dialog.alert({
-        title: 'Email us',
-        message: `Write to ${SUPPORT_EMAIL} — we usually reply within a working day.`,
-        icon: 'mail',
-      });
+  const toggle = (fn: () => void) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    fn();
   };
 
   const all = tickets.data ?? [];
@@ -78,51 +71,41 @@ export default function SupportScreen() {
       showsVerticalScrollIndicator={false}
       refreshControl={<PullRefresh onRefresh={() => tickets.refetch()} />}
     >
-      <View>
-        <SectionTitle title="Reach us" />
-        <View style={styles.reach}>
-          <Reach
-            icon="mail"
-            accent="sky"
-            title="Email us"
-            subtitle={SUPPORT_EMAIL}
-            onPress={() => void email()}
-          />
-          <Reach
-            icon="requests"
-            accent="indigo"
-            title="Raise a ticket"
-            subtitle="Track the reply here"
-            onPress={() => router.push('/support/new')}
-          />
+      <FadeIn>
+        <ListGroup title="Contact us" plain>
+          <ListRow icon="mail" accent="sky" title={SUPPORT_EMAIL} subtitle="Write to us any time" />
           {SUPPORT_PHONE ? (
-            <Reach
+            <ListRow
               icon="phone"
               accent="teal"
-              title="Call us"
-              subtitle="Mon–Sat, 9–7"
+              title={SUPPORT_PHONE}
+              subtitle="Mon–Sat, 9 am – 7 pm"
               onPress={() => void Linking.openURL(`tel:${SUPPORT_PHONE.replace(/\s/g, '')}`)}
             />
           ) : null}
-        </View>
-      </View>
-
-      <View>
-        <SectionTitle title="Open tickets" />
-        {open.length === 0 ? (
-          <Text style={[typography.small, styles.none]}>
-            {tickets.isPending ? 'Loading…' : 'No open tickets — raise one any time.'}
+        </ListGroup>
+        <View style={styles.raise}>
+          <Button title="Raise a ticket" icon="add" onPress={() => router.push('/support/new')} />
+          <Text style={[typography.caption, styles.center]}>
+            We reply in the app — usually within 1–3 working days.
           </Text>
-        ) : (
-          <TicketList tickets={open} />
-        )}
+        </View>
+      </FadeIn>
+
+      <FadeIn index={1}>
+        <ListGroup title="Your tickets" plain>
+          {open.length === 0 ? (
+            <Text style={[typography.small, styles.none]}>
+              {tickets.isPending ? 'Loading…' : 'No open tickets.'}
+            </Text>
+          ) : (
+            open.map((t) => <TicketRow key={t.id} ticket={t} />)
+          )}
+        </ListGroup>
         {closed.length > 0 ? (
           <>
             <Pressable
-              onPress={() => {
-                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                setShowClosed((v) => !v);
-              }}
+              onPress={() => toggle(() => setShowClosed((v) => !v))}
               accessibilityRole="button"
               style={styles.closedToggle}
             >
@@ -133,21 +116,23 @@ export default function SupportScreen() {
                 color={colors.textMuted}
               />
             </Pressable>
-            {showClosed ? <TicketList tickets={closed} /> : null}
+            {showClosed ? (
+              <ListGroup plain>
+                {closed.map((t) => (
+                  <TicketRow key={t.id} ticket={t} />
+                ))}
+              </ListGroup>
+            ) : null}
           </>
         ) : null}
-      </View>
+      </FadeIn>
 
-      <View>
-        <SectionTitle title="FAQs" />
-        <ListGroup>
+      <FadeIn index={2}>
+        <ListGroup title="FAQs" plain>
           {FAQS.map((f, i) => (
             <Pressable
               key={f.q}
-              onPress={() => {
-                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                setOpenFaq(openFaq === i ? null : i);
-              }}
+              onPress={() => toggle(() => setOpenFaq(openFaq === i ? null : i))}
               accessibilityRole="button"
               style={styles.faq}
             >
@@ -163,64 +148,27 @@ export default function SupportScreen() {
             </Pressable>
           ))}
         </ListGroup>
-      </View>
+      </FadeIn>
     </ScrollView>
   );
 }
 
-function TicketList({ tickets }: { tickets: SupportTicket[] }) {
+function TicketRow({ ticket: t }: { ticket: SupportTicket }) {
   return (
-    <ListGroup>
-      {tickets.map((t) => (
-        <ListRow
-          key={t.id}
-          title={t.subject}
-          subtitle={`Raised ${formatDate(t.created_at)}`}
-          right={<Badge label={TICKET_STATUS_LABELS[t.status]} tone={TICKET_TONES[t.status]} />}
-          onPress={() => router.push(`/support/${t.id}`)}
-        />
-      ))}
-    </ListGroup>
-  );
-}
-
-function Reach({
-  icon,
-  accent,
-  title,
-  subtitle,
-  onPress,
-}: {
-  icon: IconName;
-  accent: Accent;
-  title: string;
-  subtitle: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      style={({ pressed }) => [styles.reachTile, shadow, pressed && { opacity: 0.85 }]}
-    >
-      <IconTile icon={icon} accent={accent} size={34} />
-      <Text style={typography.bodyStrong}>{title}</Text>
-      <Text style={typography.caption}>{subtitle}</Text>
-    </Pressable>
+    <ListRow
+      title={withoutCodes(t.subject)}
+      subtitle={`Raised ${formatDate(t.created_at)}`}
+      right={<Badge label={TICKET_STATUS_LABELS[t.status]} tone={TICKET_TONES[t.status]} />}
+      onPress={() => router.push(`/support/${t.id}`)}
+    />
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  content: { padding: space.lg, paddingTop: space.xs, gap: space.lg, paddingBottom: space.xxl },
-  reach: { flexDirection: 'row', gap: space.sm },
-  reachTile: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: space.md,
-    gap: 4,
-  },
+  content: { padding: space.lg, paddingTop: space.md, gap: space.xl, paddingBottom: space.xxl },
+  raise: { gap: space.sm, marginTop: space.lg },
+  center: { textAlign: 'center' },
   closedToggle: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -229,7 +177,7 @@ const styles = StyleSheet.create({
     paddingVertical: space.md,
   },
   closedText: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
-  none: { paddingHorizontal: space.xs },
-  faq: { paddingHorizontal: 14, paddingVertical: 12, gap: 6 },
+  none: { paddingHorizontal: 14, paddingVertical: space.md },
+  faq: { paddingHorizontal: 14, paddingVertical: 14, gap: 6 },
   faqRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
 });

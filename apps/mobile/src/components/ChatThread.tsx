@@ -1,14 +1,25 @@
 import { Image } from 'expo-image';
 import * as WebBrowser from 'expo-web-browser';
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useRef, useState, type ReactElement, type ReactNode } from 'react';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type RefreshControlProps,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatFileSize, type SupportAttachment, type SupportMessage } from '@propittu/shared';
 import type { LocalFile } from '@/api/uploads';
 import { signedImage } from '@/lib/image';
 import { colors, radius, space, typography } from '@/theme';
 import { AttachmentPreviews, useAttachmentAdder } from './AttachmentPicker';
 import { Icon } from './Icon';
-import { Banner, IconButton } from './ui';
+import { IconButton } from './ui';
 
 function stamp(iso: string): string {
   const d = new Date(iso);
@@ -57,11 +68,15 @@ function Attachments({ items, own }: { items: SupportAttachment[]; own: boolean 
 }
 
 /**
- * A conversation (support tickets, for customers and staff): bubbles with
- * attachments, an optional notice (e.g. when to expect a reply), and a
- * reply box with a paperclip. `mine` = whose bubbles go on the right.
+ * A conversation screen (support tickets, for customers and staff): an
+ * optional header, the bubbles (scrolling, newest at the bottom), and a
+ * reply bar docked at the bottom — a one-line note (e.g. when we reply)
+ * above a text box with the paperclip on the right, then send.
+ * `mine` = whose bubbles go on the right.
  */
 export function ChatThread({
+  header,
+  refreshControl,
   messages,
   mine,
   onSend,
@@ -69,6 +84,8 @@ export function ChatThread({
   closedNote,
   notice,
 }: {
+  header?: ReactNode;
+  refreshControl?: ReactElement<RefreshControlProps>;
   messages: SupportMessage[];
   mine: 'customer' | 'staff';
   onSend: (body: string, files: LocalFile[]) => Promise<boolean>;
@@ -76,6 +93,8 @@ export function ChatThread({
   closedNote?: string | null;
   notice?: { tone: 'info' | 'warning'; text: string } | null;
 }) {
+  const insets = useSafeAreaInsets();
+  const scroll = useRef<ScrollView>(null);
   const [draft, setDraft] = useState('');
   const [files, setFiles] = useState<LocalFile[]>([]);
   const attach = useAttachmentAdder({ files, onChange: setFiles, disabled: sending });
@@ -92,38 +111,71 @@ export function ChatThread({
   };
 
   return (
-    <View style={styles.wrap}>
-      {messages.map((m) => {
-        const own = m.author_type === mine;
-        return (
-          <View key={m.id} style={[styles.bubbleRow, own && styles.bubbleRowOwn]}>
-            <View style={[styles.bubble, own ? styles.bubbleOwn : styles.bubbleOther]}>
-              {!own ? (
-                <Text style={styles.author}>
-                  {m.author_type === 'staff' ? 'Propittu team' : 'Customer'}
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      // Below the navigation header (44 pt + status bar) on iPhone.
+      keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 44 : 0}
+    >
+      <ScrollView
+        ref={scroll}
+        contentContainerStyle={styles.messages}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={refreshControl}
+        onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: false })}
+      >
+        {header}
+        {messages.map((m) => {
+          const own = m.author_type === mine;
+          return (
+            <View key={m.id} style={[styles.bubbleRow, own && styles.bubbleRowOwn]}>
+              <View style={[styles.bubble, own ? styles.bubbleOwn : styles.bubbleOther]}>
+                {!own ? (
+                  <Text style={styles.author}>
+                    {m.author_type === 'staff' ? 'Propittu team' : 'Customer'}
+                  </Text>
+                ) : null}
+                <Text style={[typography.body, own && { color: '#FFFFFF' }]}>{m.body}</Text>
+                <Attachments items={m.attachments ?? []} own={own} />
+                <Text style={[styles.time, own && { color: 'rgba(255,255,255,0.75)' }]}>
+                  {stamp(m.created_at)}
                 </Text>
-              ) : null}
-              <Text style={[typography.body, own && { color: '#FFFFFF' }]}>{m.body}</Text>
-              <Attachments items={m.attachments ?? []} own={own} />
-              <Text style={[styles.time, own && { color: 'rgba(255,255,255,0.75)' }]}>
-                {stamp(m.created_at)}
+              </View>
+            </View>
+          );
+        })}
+        {closedNote ? <Text style={[typography.small, styles.closed]}>{closedNote}</Text> : null}
+      </ScrollView>
+
+      {closedNote ? null : (
+        <View style={styles.bar}>
+          {notice ? (
+            <View style={styles.notice}>
+              <Icon
+                name="clock"
+                size={13}
+                color={notice.tone === 'warning' ? colors.warning : colors.textSubtle}
+              />
+              <Text
+                style={[typography.caption, notice.tone === 'warning' && { color: colors.warning }]}
+              >
+                {notice.text}
               </Text>
             </View>
-          </View>
-        );
-      })}
-
-      {notice && !closedNote ? (
-        <Banner tone={notice.tone} icon="clock" message={notice.text} />
-      ) : null}
-
-      {closedNote ? (
-        <Text style={[typography.small, styles.closed]}>{closedNote}</Text>
-      ) : (
-        <View style={styles.composer}>
+          ) : null}
           <AttachmentPreviews files={files} onChange={setFiles} disabled={sending} />
           <View style={styles.reply}>
             <View style={styles.box}>
+              <TextInput
+                value={draft}
+                onChangeText={setDraft}
+                placeholder={sending ? 'Sending…' : 'Write a reply…'}
+                placeholderTextColor={colors.textSubtle}
+                multiline
+                maxLength={4000}
+                editable={!sending}
+                style={styles.input}
+              />
               {attach.room > 0 ? (
                 <IconButton
                   icon="attach"
@@ -133,16 +185,6 @@ export function ChatThread({
                   onPress={() => void attach.add()}
                 />
               ) : null}
-              <TextInput
-                value={draft}
-                onChangeText={setDraft}
-                placeholder="Write a reply…"
-                placeholderTextColor={colors.textSubtle}
-                multiline
-                maxLength={4000}
-                editable={!sending}
-                style={styles.input}
-              />
             </View>
             <IconButton
               icon="arrow"
@@ -152,16 +194,15 @@ export function ChatThread({
               onPress={() => void send()}
             />
           </View>
-          {sending ? <Text style={typography.caption}>Sending…</Text> : null}
         </View>
       )}
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
-  wrap: { gap: space.sm },
+  messages: { padding: space.lg, paddingTop: space.md, gap: space.sm },
   bubbleRow: { flexDirection: 'row' },
   bubbleRowOwn: { justifyContent: 'flex-end' },
   bubble: {
@@ -190,21 +231,32 @@ const styles = StyleSheet.create({
   attFileOwn: { backgroundColor: 'rgba(255,255,255,0.18)' },
   attName: { fontSize: 13, fontWeight: '700', color: colors.text },
   attSize: { fontSize: 11, color: colors.textSubtle },
-  composer: { gap: space.sm, marginTop: space.sm },
-  reply: { flexDirection: 'row', alignItems: 'flex-end', gap: space.sm },
+  bar: {
+    gap: space.sm,
+    paddingHorizontal: space.lg,
+    paddingTop: space.sm,
+    paddingBottom: space.md,
+    backgroundColor: colors.background,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  notice: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  reply: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   box: {
     flex: 1,
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderStrong,
     backgroundColor: colors.surface,
-    paddingLeft: 4,
+    paddingRight: 4,
   },
   input: {
     flex: 1,
     minHeight: 44,
     maxHeight: 140,
-    paddingHorizontal: space.sm,
+    paddingHorizontal: space.md,
     paddingTop: 12,
     paddingBottom: 12,
     fontSize: 15,

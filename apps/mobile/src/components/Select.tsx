@@ -86,8 +86,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     borderRadius: radius.md,
     borderWidth: 1.5,
-    borderColor: colors.surfaceMuted,
-    backgroundColor: colors.surfaceMuted,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surface,
   },
   error: { fontSize: 13, color: colors.danger, fontWeight: '600' },
 });

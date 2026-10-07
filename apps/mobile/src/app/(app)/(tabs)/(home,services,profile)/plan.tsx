@@ -8,10 +8,8 @@ import {
   INCLUDED_SERVICE_LABELS,
   LIMIT_LABELS,
   ORDER_DISPLAY_LABELS,
-  PLAN_STATUS_LABELS,
   RENEWAL_WINDOW_DAYS,
   type AccountPlanState,
-  type LimitCode,
   type Order,
   type PlanBenefits,
   type PublicPlan,
@@ -20,22 +18,23 @@ import { PullRefresh } from '@/components/PullRefresh';
 import { fetchPlanQuote, useOrders, usePlanCheckout } from '@/api/billing';
 import { useAccountPlan, usePlans, useProperties, useServices } from '@/api/queries';
 import { dialog } from '@/components/Dialog';
-import { Icon } from '@/components/Icon';
+import { FadeIn } from '@/components/FadeIn';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
 import { UsageMeter } from '@/components/UsageMeter';
-import { Badge, Banner, Card, GradientCard, IconTile, Segmented } from '@/components/ui';
+import {
+  Badge,
+  Banner,
+  Button,
+  IconTile,
+  LinkButton,
+  ListGroup,
+  ProgressBar,
+  Segmented,
+} from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
-import {
-  accents,
-  colors,
-  gradients,
-  radius,
-  shadow,
-  space,
-  typography,
-  type Accent,
-} from '@/theme';
+import { planBadge } from '@/lib/planBadge';
+import { accents, colors, space, typography, type Accent } from '@/theme';
 
 type Tab = 'usage' | 'plans' | 'payments';
 
@@ -43,16 +42,13 @@ type Tab = 'usage' | 'plans' | 'payments';
 type CardState = 'choose' | 'current' | 'renew_later' | 'upgrade' | 'later' | 'too_small';
 
 const PLAN_ACCENT: Record<string, Accent> = { trial: 'teal', basic: 'sky', plus: 'violet' };
-const PLAN_GRADIENT: Record<string, readonly [string, string]> = {
-  trial: gradients.trial,
-  basic: gradients.basic,
-  plus: gradients.plus,
-};
+
+/** Plans are compared on one thing for now: how many properties they hold. */
+const holds = (b: PlanBenefits | undefined) => b?.limits.max_properties;
 
 /**
- * Plan & Usage (M5/M6/M7) — one place for the plan, what's used and left,
- * what Propittu has delivered, upgrades, and payments with receipts.
- * Available in Limited Access.
+ * Plan & Usage (M5/M6/M7), flat like Profile: where the plan stands, then
+ * Usage · Plans · Payments. Available in Limited Access.
  */
 export default function PlanScreen() {
   const state = useAccountPlan();
@@ -161,7 +157,13 @@ export default function PlanScreen() {
       icon: upgrade ? 'gem' : 'sparkles',
       accent: PLAN_ACCENT[plan.code] ?? 'indigo',
       highlights:
-        q.mode === 'renewal' ? undefined : gains(plan.benefits, s.plan?.benefits, upgrade),
+        q.mode === 'renewal' || holds(plan.benefits) === undefined
+          ? undefined
+          : [
+              upgrade && holds(s.plan?.benefits) !== undefined
+                ? `Up to ${holds(plan.benefits)} properties, up from ${holds(s.plan?.benefits)}`
+                : `Up to ${holds(plan.benefits)} properties`,
+            ],
       summary: [
         { label: `${plan.name} ${term}`, value: formatPrice(q.list_price_paise) },
         ...(q.credit_paise > 0
@@ -223,12 +225,14 @@ export default function PlanScreen() {
         />
       }
     >
-      <CurrentPlan
-        state={s}
-        onTop={!!code && code === topCode}
-        canRenew={canRenew}
-        onAction={() => setTab('plans')}
-      />
+      <FadeIn>
+        <PlanHeader
+          state={s}
+          onTop={!!code && code === topCode}
+          canRenew={canRenew}
+          onAction={() => setTab('plans')}
+        />
+      </FadeIn>
 
       {s.over_limit.length > 0 ? (
         <Banner
@@ -240,6 +244,7 @@ export default function PlanScreen() {
       ) : null}
 
       <Segmented
+        variant="underline"
         options={[
           { value: 'usage', label: 'Usage' },
           { value: 'plans', label: 'Plans' },
@@ -249,42 +254,44 @@ export default function PlanScreen() {
         onChange={setTab}
       />
 
-      {tab === 'usage' ? (
-        <UsageTab state={s} />
-      ) : tab === 'plans' ? (
-        plans.isPending ? (
+      <FadeIn key={tab}>
+        {tab === 'usage' ? (
+          <UsageTab state={s} />
+        ) : tab === 'plans' ? (
+          plans.isPending ? (
+            <LoadingState />
+          ) : plans.error ? (
+            <ErrorState error={plans.error} onRetry={() => void plans.refetch()} />
+          ) : (
+            <ListGroup plain>
+              {plans.data.map((p) => (
+                <PlanRow
+                  key={p.code}
+                  plan={p}
+                  state={cardState(p)}
+                  laterDate={s.current ? formatDate(s.current.ends_at) : null}
+                  renewFrom={renewFrom}
+                  popular={!paidPlan && p.code === topCode}
+                  busy={checkout.isPending && checkout.variables === p.code}
+                  disabled={checkout.isPending}
+                  onChoose={() => void choose(p)}
+                />
+              ))}
+            </ListGroup>
+          )
+        ) : orders.isPending ? (
           <LoadingState />
-        ) : plans.error ? (
-          <ErrorState error={plans.error} onRetry={() => void plans.refetch()} />
         ) : (
-          <View style={styles.list}>
-            {plans.data.map((p) => (
-              <PlanCard
-                key={p.code}
-                plan={p}
-                state={cardState(p)}
-                laterDate={s.current ? formatDate(s.current.ends_at) : null}
-                renewFrom={renewFrom}
-                popular={!paidPlan && p.code === topCode}
-                busy={checkout.isPending && checkout.variables === p.code}
-                disabled={checkout.isPending}
-                onChoose={() => void choose(p)}
-              />
-            ))}
-          </View>
-        )
-      ) : orders.isPending ? (
-        <LoadingState />
-      ) : (
-        <Payments orders={orders.data ?? []} />
-      )}
+          <Payments orders={orders.data ?? []} />
+        )}
+      </FadeIn>
     </ScrollView>
   );
 }
 
-/* ---- Current plan: one slim card with the one action that matters ---- */
+/* ---- Where the plan stands: name, status, days left, the one action ---- */
 
-function CurrentPlan({
+function PlanHeader({
   state: s,
   onTop,
   canRenew,
@@ -295,7 +302,6 @@ function CurrentPlan({
   canRenew: boolean;
   onAction: () => void;
 }) {
-  const code = s.plan?.code ?? '';
   const trial = s.status === 'trialing';
   // On the top plan the only action is renewing — and only in the renewal window.
   const cta =
@@ -306,151 +312,33 @@ function CurrentPlan({
         : canRenew
           ? 'Renew'
           : null;
-  const days = s.current?.days_left ?? 0;
+  const c = s.current;
+  const days = c?.days_left ?? 0;
+  const termDays = c
+    ? Math.max(1, (new Date(c.ends_at).getTime() - new Date(c.starts_at).getTime()) / 86_400_000)
+    : 1;
   return (
-    <GradientCard colors={PLAN_GRADIENT[code] ?? gradients.limited} style={styles.hero}>
-      <View style={styles.flex}>
-        <Text style={styles.heroOver}>{PLAN_STATUS_LABELS[s.status]}</Text>
-        <Text style={styles.heroTitle} numberOfLines={1}>
+    <View style={styles.header}>
+      <View style={styles.headRow}>
+        <Text style={typography.display} numberOfLines={1}>
           {s.plan?.name ?? 'No active plan'}
         </Text>
-        <Text style={styles.heroLine} numberOfLines={1}>
-          {s.current
-            ? `${days} ${days === 1 ? 'day' : 'days'} remaining · until ${formatDate(s.current.ends_at)}`
-            : 'Your data is safe — choose a plan to carry on'}
-        </Text>
+        <Badge {...planBadge({ status: s.status, planName: s.plan?.name ?? null })} />
+        <View style={styles.flex} />
+        {cta ? <LinkButton title={cta} onPress={onAction} /> : null}
       </View>
-      {cta ? (
-        <Pressable
-          onPress={onAction}
-          accessibilityRole="button"
-          style={({ pressed }) => [styles.heroCta, pressed && { opacity: 0.85 }]}
-        >
-          <Text style={styles.heroCtaText}>{cta}</Text>
-        </Pressable>
-      ) : null}
-    </GradientCard>
-  );
-}
-
-/* ---- Payments: completed first; attempts that didn't go through, muted ---- */
-
-function Payments({ orders }: { orders: Order[] }) {
-  const done = orders.filter((o) => o.display_status !== 'failed');
-  const failed = orders.filter((o) => o.display_status === 'failed').slice(0, 10);
-  if (orders.length === 0) {
-    return (
-      <View style={styles.empty}>
-        <EmptyState
-          icon="receipt"
-          accent="sky"
-          title="No payments yet"
-          message="Plan and service payments will appear here with receipts."
-        />
-      </View>
-    );
-  }
-  return (
-    <View style={styles.list}>
-      {done.length > 0 ? (
-        <Card style={styles.history}>
-          {done.map((o, i) => (
-            <PaymentRow key={o.id} order={o} first={i === 0} />
-          ))}
-        </Card>
-      ) : (
-        <Text style={[typography.small, styles.centerText]}>No completed payments yet.</Text>
-      )}
-      {failed.length > 0 ? (
+      {c ? (
         <>
-          <Text style={typography.overline}>Not completed</Text>
-          <Card style={[styles.history, styles.muted]}>
-            {failed.map((o, i) => (
-              <PaymentRow key={o.id} order={o} first={i === 0} />
-            ))}
-          </Card>
-          <Text style={typography.caption}>
-            These payments were started but not finished. You were not charged.
+          <Text style={typography.small}>
+            {days} {days === 1 ? 'day' : 'days'} remaining · until {formatDate(c.ends_at)}
           </Text>
+          <ProgressBar progress={days / termDays} height={4} />
         </>
-      ) : null}
+      ) : (
+        <Text style={typography.small}>Your data is safe — choose a plan to carry on.</Text>
+      )}
     </View>
   );
-}
-
-function PaymentRow({ order: o, first }: { order: Order; first: boolean }) {
-  const st = o.display_status;
-  const tone = st === 'paid' ? 'success' : st === 'processing' ? 'warning' : 'neutral';
-  return (
-    <Pressable
-      onPress={() => router.push(`/receipts/${o.id}`)}
-      accessibilityRole="button"
-      style={({ pressed }) => [
-        styles.payment,
-        !first && styles.paymentBorder,
-        pressed && { opacity: 0.7 },
-      ]}
-    >
-      <IconTile
-        icon="receipt"
-        accent={st === 'paid' ? 'teal' : st === 'processing' ? 'amber' : 'slate'}
-        size={30}
-      />
-      <View style={styles.flex}>
-        <Text style={typography.bodyStrong} numberOfLines={1}>
-          {o.description}
-        </Text>
-        <Text style={typography.caption} numberOfLines={1}>
-          {o.period
-            ? `${formatDate(o.period.starts_at)} – ${formatDate(o.period.ends_at)}`
-            : formatDate(o.paid_at ?? o.created_at)}
-        </Text>
-        {o.credit_paise > 0 ? (
-          <Text style={typography.caption} numberOfLines={1}>
-            {formatPrice(o.credit_paise)} credit applied
-          </Text>
-        ) : null}
-      </View>
-      <View style={styles.amount}>
-        <Text style={[typography.bodyStrong, st === 'failed' && styles.struck]}>
-          {formatPrice(o.amount_paise)}
-        </Text>
-        <Badge label={ORDER_DISPLAY_LABELS[st]} tone={tone} />
-      </View>
-    </Pressable>
-  );
-}
-
-/** What a plan adds (vs the current one on an upgrade) — at most four lines. */
-function gains(next: PlanBenefits, cur: PlanBenefits | undefined, upgrade: boolean): string[] {
-  const fmt = (c: LimitCode, v: number) =>
-    c === 'max_storage_mb'
-      ? `${formatStorageMb(v)} storage`
-      : `${v} ${LIMIT_LABELS[c].toLowerCase()}`;
-  const out: string[] = [];
-  // Most persuasive first.
-  const order: LimitCode[] = [
-    'max_properties',
-    'max_storage_mb',
-    'max_documents_per_property',
-    'max_photos_per_property',
-    'max_videos_per_property',
-  ];
-  for (const c of order) {
-    const v = next.limits[c];
-    const was = cur?.limits[c];
-    if (v === undefined || (upgrade && was !== undefined && v <= was)) continue;
-    const from = c === 'max_storage_mb' ? formatStorageMb(was ?? 0) : String(was);
-    out.push(upgrade && was !== undefined ? `${fmt(c, v)}, up from ${from}` : fmt(c, v));
-  }
-  for (const i of next.included) {
-    const was = cur?.included.find((x) => x.code === i.code)?.quantity ?? 0;
-    if (upgrade && i.quantity <= was) continue;
-    out.unshift(
-      `${i.quantity} ${(INCLUDED_SERVICE_LABELS[i.code] ?? i.code).toLowerCase()} a year`,
-    );
-  }
-  return out.slice(0, 4);
 }
 
 /* ---- Usage: every allowance, measured in full ---- */
@@ -460,7 +348,7 @@ function UsageTab({ state: s }: { state: AccountPlanState }) {
   const u = s.usage;
   const deleted = u.deleted_still_counted.length;
   return (
-    <Card style={styles.usage}>
+    <ListGroup plain>
       <UsageMeter
         icon="home"
         accent="indigo"
@@ -512,26 +400,13 @@ function UsageTab({ state: s }: { state: AccountPlanState }) {
         used={u.max_videos_on_a_property}
         limit={l.max_videos_per_property}
       />
-    </Card>
+    </ListGroup>
   );
 }
 
-/* ---- Plans: one card each, showing only what matters when choosing ---- */
+/* ---- Plans: one row each — name, price, properties, the action ---- */
 
-/** The four things people choose a plan on. */
-function keyBenefits(b: PlanBenefits): string[] {
-  const visits = b.included.find((i) => i.code === 'property_visit')?.quantity ?? 0;
-  return [
-    b.limits.max_properties !== undefined ? `${b.limits.max_properties} properties` : null,
-    b.limits.max_storage_mb ? `${formatStorageMb(b.limits.max_storage_mb)} storage` : null,
-    b.limits.max_documents_per_property !== undefined
-      ? `${b.limits.max_documents_per_property} documents per property`
-      : null,
-    `${visits} property visit${visits === 1 ? '' : 's'} a year`,
-  ].filter((x): x is string => x !== null);
-}
-
-function PlanCard({
+function PlanRow({
   plan,
   state,
   laterDate,
@@ -553,113 +428,150 @@ function PlanCard({
   const a = accents[PLAN_ACCENT[plan.code] ?? 'slate'];
   const mine = state === 'current' || state === 'renew_later';
   const locked = state === 'later' || state === 'too_small' || state === 'renew_later';
-  const label = busy
-    ? 'Opening payment…'
-    : state === 'current'
+  const label =
+    state === 'current'
       ? 'Renew'
       : state === 'renew_later'
         ? `Renew from ${renewFrom ?? 'later'}`
         : state === 'upgrade'
           ? `Upgrade to ${plan.name}`
           : state === 'too_small'
-            ? `Holds ${plan.benefits.limits.max_properties} properties — you have more`
+            ? 'Holds fewer properties than you have'
             : state === 'later'
               ? `Available after ${laterDate ?? 'your plan ends'}`
               : `Choose ${plan.name}`;
   return (
-    <View style={[styles.planCard, shadow, mine && { borderColor: a.fg }]}>
-      <View style={styles.planHead}>
-        <View style={styles.flex}>
-          <View style={styles.planNameRow}>
-            <Text style={typography.title}>{plan.name}</Text>
-            {mine ? <Badge label="Your plan" tone="success" icon="check" /> : null}
-            {popular ? <Badge label="Most popular" tone="brand" icon="sparkles" /> : null}
-          </View>
-          {plan.description ? (
-            <Text style={typography.small} numberOfLines={2}>
-              {plan.description}
-            </Text>
-          ) : null}
-        </View>
+    <View style={styles.plan}>
+      <View style={styles.headRow}>
+        <View style={[styles.dot, { backgroundColor: a.fg }]} />
+        <Text style={typography.title}>{plan.name}</Text>
+        {mine ? <Badge label="Your plan" tone="success" /> : null}
+        {popular ? <Badge label="Most popular" tone="brand" /> : null}
+        <View style={styles.flex} />
         <Text style={styles.price}>
           {formatPrice(plan.price_paise)}
           <Text style={styles.per}>/{plan.billing_period === 'month' ? 'mo' : 'yr'}</Text>
         </Text>
       </View>
-      <View style={styles.benefits}>
-        {keyBenefits(plan.benefits).map((l) => (
-          <View key={l} style={styles.benefit}>
-            <Icon name="check" size={14} color={a.fg} strokeWidth={3} />
-            <Text style={[typography.small, styles.benefitText]}>{l}</Text>
-          </View>
-        ))}
-      </View>
+      <Text style={typography.body}>
+        Up to <Text style={typography.bodyStrong}>{holds(plan.benefits) ?? '—'} properties</Text>
+      </Text>
       {state === 'upgrade' ? (
         <Text style={typography.caption}>
-          Pay only the difference — unused days on your current plan are credited.
+          You pay only the difference — unused days are credited.
         </Text>
       ) : null}
-      <Pressable
-        onPress={onChoose}
+      <Button
+        title={label}
+        variant={mine || locked ? 'secondary' : 'primary'}
         disabled={disabled || locked}
-        accessibilityRole="button"
-        style={({ pressed }) => [
-          styles.cta,
-          { backgroundColor: mine || locked ? a.bg : a.fg },
-          (pressed || disabled) && { opacity: 0.8 },
-        ]}
-      >
-        <Text style={[styles.ctaText, (mine || locked) && { color: a.fg }]}>{label}</Text>
-      </Pressable>
+        loading={busy}
+        onPress={onChoose}
+      />
     </View>
+  );
+}
+
+/* ---- Payments: completed first; attempts that didn't go through, muted ---- */
+
+function Payments({ orders }: { orders: Order[] }) {
+  const done = orders.filter((o) => o.display_status !== 'failed');
+  const failed = orders.filter((o) => o.display_status === 'failed').slice(0, 10);
+  if (orders.length === 0) {
+    return (
+      <View style={styles.empty}>
+        <EmptyState
+          icon="receipt"
+          accent="sky"
+          title="No payments yet"
+          message="Plan and service payments will appear here with receipts."
+        />
+      </View>
+    );
+  }
+  return (
+    <View style={styles.sections}>
+      {done.length > 0 ? (
+        <ListGroup plain>
+          {done.map((o) => (
+            <PaymentRow key={o.id} order={o} />
+          ))}
+        </ListGroup>
+      ) : (
+        <Text style={[typography.small, styles.centerText]}>No completed payments yet.</Text>
+      )}
+      {failed.length > 0 ? (
+        <View style={styles.muted}>
+          <ListGroup title="Not completed" plain>
+            {failed.map((o) => (
+              <PaymentRow key={o.id} order={o} />
+            ))}
+          </ListGroup>
+          <Text style={[typography.caption, styles.note]}>
+            Started but not finished — you were not charged.
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function PaymentRow({ order: o }: { order: Order }) {
+  const st = o.display_status;
+  const tone = st === 'paid' ? 'success' : st === 'processing' ? 'warning' : 'neutral';
+  return (
+    <Pressable
+      onPress={() => router.push(`/receipts/${o.id}`)}
+      accessibilityRole="button"
+      style={({ pressed }) => [styles.payment, pressed && { opacity: 0.7 }]}
+    >
+      <IconTile
+        icon="receipt"
+        accent={st === 'paid' ? 'teal' : st === 'processing' ? 'amber' : 'slate'}
+        size={30}
+      />
+      <View style={styles.flex}>
+        <Text style={typography.bodyStrong} numberOfLines={1}>
+          {o.description}
+        </Text>
+        <Text style={typography.caption} numberOfLines={1}>
+          {o.period
+            ? `${formatDate(o.period.starts_at)} – ${formatDate(o.period.ends_at)}`
+            : formatDate(o.paid_at ?? o.created_at)}
+          {o.credit_paise > 0 ? ` · ${formatPrice(o.credit_paise)} credit applied` : ''}
+        </Text>
+      </View>
+      <View style={styles.amount}>
+        <Text style={[typography.bodyStrong, st === 'failed' && styles.struck]}>
+          {formatPrice(o.amount_paise)}
+        </Text>
+        <Badge label={ORDER_DISPLAY_LABELS[st]} tone={tone} />
+      </View>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
-  content: { padding: space.lg, paddingTop: space.xs, gap: space.md, paddingBottom: space.xxl },
-  list: { gap: space.md },
+  content: { padding: space.lg, paddingTop: space.md, gap: space.lg, paddingBottom: space.xxl },
+  sections: { gap: space.xl },
   empty: { minHeight: 260 },
-  hero: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md },
-  heroOver: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-  },
-  heroTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
-  heroLine: { color: 'rgba(255,255,255,0.9)', fontSize: 12 },
-  heroCta: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: radius.pill,
-    paddingVertical: 8,
-    paddingHorizontal: space.lg,
-  },
-  heroCtaText: { color: colors.primary, fontSize: 13, fontWeight: '800' },
-  usage: { paddingVertical: 0 },
-  planCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: 14,
-    gap: space.md,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-  },
-  planHead: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },
-  planNameRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' },
-  price: { fontSize: 22, fontWeight: '800', color: colors.text },
+  header: { gap: space.sm },
+  headRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  plan: { gap: space.sm, paddingHorizontal: 14, paddingVertical: space.lg },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  price: { fontSize: 18, fontWeight: '800', color: colors.text },
   per: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
-  benefits: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 6 },
-  benefit: { width: '50%', flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: 4 },
-  benefitText: { flex: 1, color: colors.text },
-  cta: { borderRadius: radius.md, paddingVertical: 12, alignItems: 'center' },
-  ctaText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
-  history: { paddingVertical: space.xs },
-  payment: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 10 },
-  paymentBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  payment: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
   amount: { alignItems: 'flex-end', gap: 3 },
   muted: { opacity: 0.75 },
+  note: { marginTop: space.sm, marginLeft: 2 },
   struck: { color: colors.textSubtle, textDecorationLine: 'line-through' },
   centerText: { textAlign: 'center' },
 });

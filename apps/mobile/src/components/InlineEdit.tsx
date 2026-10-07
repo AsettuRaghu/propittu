@@ -1,13 +1,23 @@
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
+import { useState, type ReactNode } from 'react';
+import {
+  Keyboard,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type TextInputProps,
+} from 'react-native';
 import { colors, space, typography } from '@/theme';
 import { Icon, type IconName } from './Icon';
 import { IconButton, IconTile } from './ui';
 
 /**
- * A list row whose value is edited in place: tap it, type, tick to save.
- * `validate` returns an error message (or null). Saving failures stay in
- * edit mode with the message, so nothing typed is lost.
+ * A list row whose value is edited in place: tap, type, tick (or the
+ * keyboard's Done) to save. The new value shows at once while it saves;
+ * on failure the row stays in edit mode with the message, nothing lost.
+ * Put it in a ScrollView with keyboardShouldPersistTaps="handled" so the
+ * first tap on the tick saves instead of only closing the keyboard.
  */
 export function InlineEdit({
   icon,
@@ -16,6 +26,7 @@ export function InlineEdit({
   placeholder,
   onSave,
   validate,
+  badge,
   inputProps,
 }: {
   icon: IconName;
@@ -24,30 +35,35 @@ export function InlineEdit({
   placeholder: string;
   onSave: (value: string) => Promise<unknown>;
   validate?: (value: string) => string | null;
+  /** Shown on the right when not editing (e.g. Complete / Incomplete). */
+  badge?: ReactNode;
   inputProps?: Omit<TextInputProps, 'value' | 'onChangeText' | 'style'>;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
+  const [shown, setShown] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
   const editing = draft !== null;
+  const display = shown ?? value;
 
   const save = async () => {
     const next = (draft ?? '').trim();
-    if (next === (value ?? '')) return setDraft(null);
+    if (next === (display ?? '')) return setDraft(null);
     const problem = validate?.(next) ?? null;
     if (problem) return setError(problem);
-    setSaving(true);
+    Keyboard.dismiss();
+    setShown(next);
+    setDraft(null);
     try {
       await onSave(next);
-      setDraft(null);
     } catch (err) {
+      setShown(null);
+      setDraft(next);
       setError(err instanceof Error ? err.message : "Couldn't save");
-    } finally {
-      setSaving(false);
     }
   };
 
   const cancel = () => {
+    Keyboard.dismiss();
     setDraft(null);
     setError(null);
   };
@@ -55,7 +71,7 @@ export function InlineEdit({
   return (
     <View>
       <Pressable
-        onPress={() => !editing && setDraft(value ?? '')}
+        onPress={() => !editing && setDraft(display ?? '')}
         accessibilityRole="button"
         accessibilityLabel={`Edit ${label}`}
         style={styles.row}
@@ -74,17 +90,17 @@ export function InlineEdit({
               placeholderTextColor={colors.textSubtle}
               autoFocus
               returnKeyType="done"
+              submitBehavior="submit"
               onSubmitEditing={() => void save()}
-              editable={!saving}
               style={[typography.bodyStrong, styles.input]}
               {...inputProps}
             />
           ) : (
             <Text
-              style={[typography.bodyStrong, !value && { color: colors.textSubtle }]}
+              style={[typography.bodyStrong, !display && { color: colors.textSubtle }]}
               numberOfLines={1}
             >
-              {value || placeholder}
+              {display || placeholder}
             </Text>
           )}
         </View>
@@ -100,7 +116,10 @@ export function InlineEdit({
             />
           </View>
         ) : (
-          <Icon name="edit" size={16} color={colors.textSubtle} />
+          <View style={styles.actions}>
+            {badge}
+            <Icon name="edit" size={16} color={colors.textSubtle} />
+          </View>
         )}
       </Pressable>
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -122,6 +141,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.primary,
   },
-  actions: { flexDirection: 'row', gap: space.xs },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   error: { ...typography.caption, color: colors.danger, paddingHorizontal: 14, paddingBottom: 8 },
 });

@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import {
   formatIndianMobile,
   staffCan,
@@ -35,109 +35,104 @@ export default function BoTicketScreen() {
     void dialog.alert({ title, message: errorMessage(err), tone: 'danger' });
 
   return (
-    <ScrollView
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled"
-      automaticallyAdjustKeyboardInsets
+    <ChatThread
       refreshControl={<PullRefresh onRefresh={() => refetch()} />}
-    >
-      <Card style={styles.head}>
-        <View style={styles.row}>
-          <Text style={[typography.heading, styles.flex]} numberOfLines={2}>
-            {t.subject}
-          </Text>
-          <Badge label={TICKET_STATUS_LABELS[t.status]} tone={TICKET_TONES[t.status]} />
-        </View>
-        <Text style={typography.small}>
-          {t.reference} · {TICKET_CATEGORY_LABELS[t.category]} · opened {formatDate(t.created_at)}
-        </Text>
-      </Card>
+      header={
+        <View style={styles.content}>
+          <Card style={styles.head}>
+            <View style={styles.row}>
+              <Text style={[typography.heading, styles.flex]} numberOfLines={2}>
+                {t.subject}
+              </Text>
+              <Badge label={TICKET_STATUS_LABELS[t.status]} tone={TICKET_TONES[t.status]} />
+            </View>
+            <Text style={typography.small}>
+              {t.reference} · {TICKET_CATEGORY_LABELS[t.category]} · opened{' '}
+              {formatDate(t.created_at)}
+            </Text>
+          </Card>
 
-      <ListGroup>
-        <ListRow
-          icon="user"
-          accent="indigo"
-          title={
-            t.customer_name ??
-            (t.customer_phone ? formatIndianMobile(t.customer_phone) : 'Customer')
-          }
-          subtitle={
-            t.customer_name && t.customer_phone
-              ? formatIndianMobile(t.customer_phone)
-              : 'View account, plan and usage'
-          }
-          onPress={() => router.push(`/backoffice/accounts/${t.account_id}`)}
-        />
-        {t.property ? (
-          <ListRow
-            icon="home"
-            accent="teal"
-            title={t.property.name}
-            subtitle="Property"
-            onPress={() => router.push(`/backoffice/properties/${t.property?.id}`)}
-          />
-        ) : null}
-        {t.service_request ? (
-          <ListRow
-            icon="requests"
-            accent="coral"
-            title={`${t.service_request.service?.name ?? 'Service request'} · ${t.service_request.reference}`}
-            subtitle="Service request"
-            onPress={() => router.push(`/backoffice/requests/${t.service_request?.id}`)}
-          />
-        ) : null}
-      </ListGroup>
-
-      {canManage ? (
-        <View>
-          <SectionTitle title="Status" />
-          <Chips
-            options={TICKET_STATUSES.map((s) => ({ value: s, label: TICKET_STATUS_LABELS[s] }))}
-            value={t.status}
-            onChange={(s) =>
-              setStatus.mutate(s, {
-                onSuccess: () => toast(`Marked ${TICKET_STATUS_LABELS[s].toLowerCase()}`),
-                onError: fail("Couldn't update"),
-              })
-            }
-          />
-        </View>
-      ) : null}
-
-      <View>
-        <SectionTitle title="Conversation" />
-        <ChatThread
-          messages={t.messages}
-          mine="staff"
-          sending={reply.isPending}
-          closedNote={!canManage ? 'Your staff role can view but not reply to tickets.' : null}
-          onSend={async (body, files) => {
-            try {
-              const detail = await reply.mutateAsync(body);
-              const mineLast = [...detail.messages]
-                .reverse()
-                .find((m) => m.author_type === 'staff');
-              if (files.length && mineLast) {
-                const failed = await uploadAll('backoffice', id, mineLast.id, files);
-                await refetch();
-                if (failed)
-                  toast(`${failed} file${failed === 1 ? '' : 's'} couldn't be uploaded`, 'danger');
+          <ListGroup>
+            <ListRow
+              icon="user"
+              accent="indigo"
+              title={
+                t.customer_name ??
+                (t.customer_phone ? formatIndianMobile(t.customer_phone) : 'Customer')
               }
-              return true;
-            } catch (err) {
-              fail("Couldn't send")(err);
-              return false;
-            }
-          }}
-        />
-      </View>
-    </ScrollView>
+              subtitle={
+                t.customer_name && t.customer_phone
+                  ? formatIndianMobile(t.customer_phone)
+                  : 'View account, plan and usage'
+              }
+              onPress={() => router.push(`/backoffice/accounts/${t.account_id}`)}
+            />
+            {t.property ? (
+              <ListRow
+                icon="home"
+                accent="teal"
+                title={t.property.name}
+                subtitle="Property"
+                onPress={() => router.push(`/backoffice/properties/${t.property?.id}`)}
+              />
+            ) : null}
+            {t.service_request ? (
+              <ListRow
+                icon="requests"
+                accent="coral"
+                title={`${t.service_request.service?.name ?? 'Service request'} · ${t.service_request.reference}`}
+                subtitle="Service request"
+                onPress={() => router.push(`/backoffice/requests/${t.service_request?.id}`)}
+              />
+            ) : null}
+          </ListGroup>
+
+          {canManage ? (
+            <View>
+              <SectionTitle title="Status" />
+              <Chips
+                options={TICKET_STATUSES.map((s) => ({ value: s, label: TICKET_STATUS_LABELS[s] }))}
+                value={t.status}
+                onChange={(s) =>
+                  setStatus.mutate(s, {
+                    onSuccess: () => toast(`Marked ${TICKET_STATUS_LABELS[s].toLowerCase()}`),
+                    onError: fail("Couldn't update"),
+                  })
+                }
+              />
+            </View>
+          ) : null}
+
+          <SectionTitle title="Conversation" />
+        </View>
+      }
+      messages={t.messages}
+      mine="staff"
+      sending={reply.isPending}
+      closedNote={!canManage ? 'Your staff role can view but not reply to tickets.' : null}
+      onSend={async (body, files) => {
+        try {
+          const detail = await reply.mutateAsync(body);
+          const mineLast = [...detail.messages].reverse().find((m) => m.author_type === 'staff');
+          if (files.length && mineLast) {
+            const failed = await uploadAll('backoffice', id, mineLast.id, files);
+            await refetch();
+            if (failed)
+              toast(`${failed} file${failed === 1 ? '' : 's'} couldn't be uploaded`, 'danger');
+          }
+          return true;
+        } catch (err) {
+          fail("Couldn't send")(err);
+          return false;
+        }
+      }}
+    />
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  content: { padding: space.lg, paddingTop: space.xs, gap: space.md, paddingBottom: space.xxl },
+  content: { gap: space.md, paddingBottom: space.sm },
   head: { gap: 6 },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },
 });
