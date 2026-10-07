@@ -18,6 +18,12 @@ reworked screen, and check them before handing anything over.
   14 pt inner padding as rows so it lines up.
 - **Section page header**: `PageHeader` — big title + optional badge, one line right beneath
   (rich text via `Strong`), the page's main action on the right, vertically centred.
+- **Never stack tabs inside tabs.** Inside a tab, split content into headed sections instead
+  (e.g. My requests: "In progress", then a collapsible "Past requests").
+- **Pages about something happening should feel alive**, not like a document: a hero in the
+  item's colours with a plain-language headline, the key date and its progress (current step
+  gently pulsing); actions the customer must take as a clear call-out; facts at a glance as a
+  row of icons rather than a list of labels.
 - **Fixed things at the bottom**: the primary action in `Footer`; chat reply bar docked by
   `ChatThread`.
 
@@ -60,6 +66,7 @@ reworked screen, and check them before handing anything over.
 | Payment state of a request | `requestPayment()` (shared) → included · quote pending · pay later · pay now · paid |
 | Can the customer cancel? | `canCustomerCancel()` (shared) — show the action only when it is true; no refunds |
 | Expected date | `requestExpectedBy()` (shared) — the visit date, else start + the service's usual days |
+| A request's hero (status, stages) | `RequestHero` |
 | "About this…" explainer | `dialog.alert` with `highlights` (✓ list) and `summary` rows |
 | Choosing a day / time | `Select variant="flat"` with the options (no pill grids) |
 | A property's cover | `PropertyCover` (photo or type colours, name, place, live weather) — Home card and property page |

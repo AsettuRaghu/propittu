@@ -1,7 +1,7 @@
 /**
  * Shared UI primitives — import from '@/components/ui'.
  *   Buttons    Button, LinkButton, IconButton
- *   Surfaces   Card, GradientCard, IconTile, SectionTitle, ListRow, ListGroup, KeyValue
+ *   Surfaces   Card, IconTile, SectionTitle, ListRow, ListGroup, KeyValue
  *   Status     Badge, Banner, ProgressBar, ProgressRing (and the Tone type)
  *   Selection  Chips, Segmented (and the Option type)
  */

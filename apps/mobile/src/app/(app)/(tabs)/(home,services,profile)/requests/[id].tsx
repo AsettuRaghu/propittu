@@ -1,13 +1,13 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import type { ReactNode } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   canCustomerCancel,
   formatPrice,
   PAYMENT_TIMING_LABELS,
   PREFERRED_SLOT_LABELS,
-  requestExpectedBy,
   requestPayment,
-  requestStatusLabel,
+  type RequestPayment,
   type ServiceRequestDetail,
 } from '@propittu/shared';
 import { showPaymentOutcome, useServiceCheckout } from '@/api/billing';
@@ -15,20 +15,20 @@ import { useCancelServiceRequest, useServiceRequest } from '@/api/queries';
 import { dialog } from '@/components/Dialog';
 import { Icon, type IconName } from '@/components/Icon';
 import { OutcomeView } from '@/components/OutcomeView';
-import { PageHeader } from '@/components/PageHeader';
 import { PullRefresh } from '@/components/PullRefresh';
+import { RequestHero } from '@/components/RequestHero';
 import { ErrorState, LoadingState } from '@/components/States';
 import { VisitReportView } from '@/components/VisitReportView';
-import { Badge, Button, KeyValue, ListGroup, ListRow } from '@/components/ui';
+import { Button, IconTile, ListGroup, ListRow } from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
-import { STATUS_TONES } from '@/lib/icons';
-import { colors, space, typography } from '@/theme';
+import { accents, colors, font, radius, space, typography, type Accent } from '@/theme';
 
 /**
- * A service request, flat like Profile: what and where, anything we need
- * from you, the details, payment, the steps, what's included, your notes,
- * the result — and help (cancel only where this request allows it).
+ * A service request that feels alive: a hero in the service's colours with
+ * where things stand and the stages, anything you need to do (reply, pay)
+ * as a clear call-out, the facts at a glance, what's included, our
+ * updates, the result — and help (cancel only where this request allows).
  */
 export default function ServiceRequestScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -37,13 +37,7 @@ export default function ServiceRequestScreen() {
   if (isPending) return <LoadingState />;
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
 
-  const expected = requestExpectedBy(r);
-  const preferred = [
-    r.preferred_date ? formatDate(r.preferred_date) : null,
-    r.preferred_slot ? PREFERRED_SLOT_LABELS[r.preferred_slot] : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  const payment = requestPayment(r);
 
   return (
     <ScrollView
@@ -51,67 +45,38 @@ export default function ServiceRequestScreen() {
       showsVerticalScrollIndicator={false}
       refreshControl={<PullRefresh onRefresh={() => refetch()} />}
     >
-      <PageHeader
-        title={r.service.name}
-        badge={
-          <Badge
-            label={requestStatusLabel(r.status, r.fulfilment)}
-            tone={STATUS_TONES[r.status]}
-            size="lg"
-          />
-        }
-        subtitle={r.property?.name ?? 'Property removed'}
-      />
+      <RequestHero request={r} />
 
       {r.status === 'awaiting_customer' ? (
-        <ListGroup title="We need something from you" plain>
-          <View style={styles.inner}>
-            {r.status_note ? <Text style={typography.body}>{r.status_note}</Text> : null}
-            {r.info_ticket ? (
+        <Callout
+          icon="chat"
+          accent="coral"
+          title="We need something from you"
+          text={r.status_note ?? 'Reply so we can carry on — you can attach files.'}
+          action={
+            r.info_ticket ? (
               <Button
                 title="Reply"
                 icon="chat"
-                size="sm"
                 onPress={() => router.push(`/support/${r.info_ticket?.id}`)}
               />
-            ) : null}
-          </View>
-        </ListGroup>
-      ) : r.status_note ? (
+            ) : null
+          }
+        />
+      ) : null}
+      {payment.state === 'due' ? <PayCallout request={r} amount={payment.amount} /> : null}
+
+      <Glance request={r} payment={payment} />
+
+      {r.status_note && r.status !== 'awaiting_customer' ? (
         <ListGroup title="Update from our team" plain>
-          <View style={styles.inner}>
-            <Text style={typography.body}>{r.status_note}</Text>
-          </View>
+          <ListRow icon="chat" accent="indigo" title={r.status_note} subtitleLines={4} />
         </ListGroup>
       ) : null}
 
-      <ListGroup title="Details" plain>
-        <View style={[styles.inner, styles.facts]}>
-          <KeyValue label="Requested" value={formatDate(r.created_at)} />
-          <KeyValue label="Preferred" value={preferred || null} />
-          {r.status !== 'cancelled' && r.status !== 'completed' ? (
-            <KeyValue
-              label={r.scheduled_for ? 'Visit on' : 'Expected by'}
-              value={expected ? formatDate(expected) : 'We’ll confirm a date with you'}
-            />
-          ) : null}
-          {r.service.turnaround ? (
-            <KeyValue label="Usually takes" value={r.service.turnaround} />
-          ) : null}
-        </View>
-      </ListGroup>
-
-      <Payment request={r} />
-
-      <ListGroup title="Steps" plain>
-        <View style={styles.inner}>
-          <Steps request={r} />
-        </View>
-      </ListGroup>
-
       {r.service.includes.length ? (
         <ListGroup title="What’s included" plain>
-          <View style={[styles.inner, styles.facts]}>
+          <View style={styles.inner}>
             {r.service.includes.map((line) => (
               <View key={line} style={styles.point}>
                 <Icon name="check" size={16} color={colors.success} strokeWidth={2.5} />
@@ -138,60 +103,136 @@ export default function ServiceRequestScreen() {
   );
 }
 
-/** Where the payment stands, and the Pay button when it's time. */
-function Payment({ request: r }: { request: ServiceRequestDetail }) {
-  const pay = useServiceCheckout(r.id);
-  const p = requestPayment(r);
-  if (p.state === 'none') return null;
-
-  const start = () =>
-    pay.mutate(undefined, {
-      onSuccess: (order) => showPaymentOutcome(order, 'Thank you — we’ll get started.'),
-      onError: (err) =>
-        void dialog.alert({
-          title: "Couldn't start the payment",
-          message: errorMessage(err),
-          tone: 'danger',
-        }),
-    });
-
+/** Something for the customer to do, standing out from the page. */
+function Callout({
+  icon,
+  accent,
+  title,
+  text,
+  action,
+}: {
+  icon: IconName;
+  accent: Accent;
+  title: string;
+  text: string;
+  action?: ReactNode;
+}) {
+  const a = accents[accent];
   return (
-    <ListGroup title="Payment" plain>
-      {p.state === 'included' ? (
-        <ListRow icon="success" accent="teal" title="Included in your plan" />
-      ) : p.state === 'quote_pending' ? (
-        <ListRow
-          icon="rupee"
-          accent="sky"
-          title="Price on quote"
-          subtitle="We’ll share the price here before any work starts"
-          subtitleLines={2}
+    <View style={[styles.callout, { backgroundColor: a.bg }]}>
+      <View style={styles.calloutTop}>
+        <IconTile icon={icon} accent={accent} size={36} />
+        <View style={styles.flex}>
+          <Text style={[typography.bodyStrong, { color: a.fg }]}>{title}</Text>
+          <Text style={typography.body}>{text}</Text>
+        </View>
+      </View>
+      {action}
+    </View>
+  );
+}
+
+function PayCallout({ request, amount }: { request: ServiceRequestDetail; amount: number }) {
+  const pay = useServiceCheckout(request.id);
+  return (
+    <Callout
+      icon="card"
+      accent="indigo"
+      title={`${formatPrice(amount)} to pay`}
+      text="Pay securely by UPI or card — then we get going."
+      action={
+        <Button
+          title={`Pay ${formatPrice(amount)}`}
+          icon="lock"
+          loading={pay.isPending}
+          onPress={() =>
+            pay.mutate(undefined, {
+              onSuccess: (order) => showPaymentOutcome(order, 'Thank you — we’ll get started.'),
+              onError: (err) =>
+                void dialog.alert({
+                  title: "Couldn't start the payment",
+                  message: errorMessage(err),
+                  tone: 'danger',
+                }),
+            })
+          }
         />
-      ) : p.state === 'later' ? (
-        <ListRow
-          icon="rupee"
-          accent="sky"
-          title={formatPrice(p.amount)}
-          subtitle={PAYMENT_TIMING_LABELS[p.timing]}
-        />
-      ) : p.state === 'paid' ? (
-        <ListRow
-          icon="success"
-          accent="teal"
-          title={`Paid ${formatPrice(p.amount)}`}
-          subtitle="View receipt"
-          onPress={() => router.push(`/receipts/${p.orderId}`)}
-        />
-      ) : (
-        <ListRow
-          icon="card"
-          accent="sky"
-          title={`${formatPrice(p.amount)} to pay`}
-          subtitle="Secure UPI or card payment"
-          right={<Button title="Pay" size="sm" loading={pay.isPending} onPress={start} />}
-        />
-      )}
-    </ListGroup>
+      }
+    />
+  );
+}
+
+/** The key facts as a row of icons rather than a list of labels. */
+function Glance({
+  request: r,
+  payment,
+}: {
+  request: ServiceRequestDetail;
+  payment: RequestPayment;
+}) {
+  const when = r.scheduled_for
+    ? { label: 'Visit', value: formatDate(r.scheduled_for) }
+    : r.preferred_date || r.preferred_slot
+      ? {
+          label: 'Preferred',
+          value: [
+            r.preferred_date ? formatDate(r.preferred_date) : null,
+            r.preferred_slot ? PREFERRED_SLOT_LABELS[r.preferred_slot] : null,
+          ]
+            .filter(Boolean)
+            .join(' · '),
+        }
+      : r.service.turnaround
+        ? { label: 'Usually', value: r.service.turnaround }
+        : null;
+  const cost =
+    payment.state === 'included'
+      ? 'In your plan'
+      : payment.state === 'quote_pending'
+        ? 'On quote'
+        : payment.state === 'paid'
+          ? `Paid ${formatPrice(payment.amount)}`
+          : payment.state === 'later'
+            ? formatPrice(payment.amount)
+            : payment.state === 'due'
+              ? `${formatPrice(payment.amount)} due`
+              : '—';
+  const facts: {
+    icon: IconName;
+    accent: Accent;
+    label: string;
+    value: string;
+    onPress?: () => void;
+  }[] = [
+    { icon: 'clock', accent: 'sky', label: 'Requested', value: formatDate(r.created_at) },
+    ...(when ? [{ icon: 'calendar' as const, accent: 'teal' as const, ...when }] : []),
+    {
+      icon: 'rupee',
+      accent: 'violet',
+      label: payment.state === 'later' ? PAYMENT_TIMING_LABELS[payment.timing] : 'Cost',
+      value: cost,
+      onPress:
+        payment.state === 'paid' ? () => router.push(`/receipts/${payment.orderId}`) : undefined,
+    },
+  ];
+  return (
+    <View style={styles.glance}>
+      {facts.map((f) => (
+        <View key={f.label} style={styles.fact}>
+          <IconTile icon={f.icon} accent={f.accent} size={32} />
+          <Text style={typography.caption} numberOfLines={1}>
+            {f.label}
+          </Text>
+          <Text
+            style={[styles.factValue, f.onPress && { color: colors.primary }]}
+            numberOfLines={2}
+            onPress={f.onPress}
+          >
+            {f.value}
+          </Text>
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -250,148 +291,15 @@ function Help({ request: r }: { request: ServiceRequestDetail }) {
   );
 }
 
-interface Step {
-  key: string;
-  icon: IconName;
-  title: string;
-  detail?: string | null;
-  done: boolean;
-  current?: boolean;
-}
-
-/** The steps for this kind of request, with dates as they happen. */
-function Steps({ request: r }: { request: ServiceRequestDetail }) {
-  const s = r.status;
-  const assistance = r.fulfilment === 'assistance';
-  const order = assistance
-    ? ['requested', 'confirmed', 'in_progress', 'completed']
-    : ['requested', 'confirmed', 'scheduled', 'in_progress', 'completed'];
-  // "Need info from you" sits on the "Working on it" step.
-  const at = s === 'awaiting_customer' ? 'in_progress' : s;
-  const reached = (k: string) => s !== 'cancelled' && order.indexOf(at) >= order.indexOf(k);
-  const result = r.report ? ' · report below' : r.outcome ? ' · result below' : '';
-
-  const steps: Step[] = [
-    {
-      key: 'requested',
-      icon: 'clock',
-      title: 'Requested',
-      detail: formatDate(r.created_at),
-      done: true,
-    },
-    {
-      key: 'confirmed',
-      icon: 'check',
-      title: 'Accepted by our team',
-      detail: r.confirmed_at ? formatDate(r.confirmed_at) : 'Usually within a working day',
-      done: reached('confirmed'),
-    },
-    ...(assistance
-      ? []
-      : [
-          {
-            key: 'scheduled',
-            icon: 'calendar' as const,
-            title: 'Visit scheduled',
-            detail: r.scheduled_for ? formatDate(r.scheduled_for) : null,
-            done: reached('scheduled'),
-          },
-        ]),
-    {
-      key: 'in_progress',
-      icon: s === 'awaiting_customer' ? 'chat' : 'bolt',
-      title: assistance ? 'Working on it' : 'Visit in progress',
-      detail: s === 'awaiting_customer' ? 'Waiting for your reply' : null,
-      done: reached('in_progress'),
-    },
-    {
-      key: 'completed',
-      icon: 'success',
-      title: 'Completed',
-      detail: r.completed_at ? `${formatDate(r.completed_at)}${result}` : null,
-      done: reached('completed'),
-    },
-  ];
-  if (s === 'cancelled') {
-    steps.splice(1, steps.length - 1, {
-      key: 'cancelled',
-      icon: 'cancelled',
-      title: r.cancelled_by === 'customer' ? 'Cancelled by you' : 'Cancelled',
-      detail: r.cancelled_at ? formatDate(r.cancelled_at) : null,
-      done: true,
-    });
-  }
-  const firstPending = steps.findIndex((x) => !x.done);
-  if (firstPending >= 0) steps[firstPending] = { ...steps[firstPending], current: true } as Step;
-
-  return (
-    <View>
-      {steps.map((step, i) => {
-        const last = i === steps.length - 1;
-        const color =
-          step.key === 'cancelled'
-            ? colors.textMuted
-            : step.done
-              ? colors.primary
-              : colors.borderStrong;
-        return (
-          <View key={step.key} style={styles.step}>
-            <View style={styles.rail}>
-              <View
-                style={[
-                  styles.dot,
-                  { borderColor: color },
-                  step.done && { backgroundColor: color },
-                  step.current && styles.dotCurrent,
-                ]}
-              >
-                {step.done ? (
-                  <Icon name={step.icon} size={12} color="#FFFFFF" strokeWidth={3} />
-                ) : null}
-              </View>
-              {!last ? (
-                <View
-                  style={[styles.line, steps[i + 1]?.done && { backgroundColor: colors.primary }]}
-                />
-              ) : null}
-            </View>
-            <View style={[styles.stepBody, !last && { paddingBottom: space.lg }]}>
-              <Text
-                style={[
-                  typography.bodyStrong,
-                  !step.done && !step.current && { color: colors.textSubtle },
-                ]}
-              >
-                {step.title}
-              </Text>
-              {step.detail ? <Text style={typography.small}>{step.detail}</Text> : null}
-            </View>
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
-  content: { padding: space.lg, paddingTop: space.md, gap: space.xl, paddingBottom: space.xxl },
+  content: { padding: space.lg, paddingTop: space.xs, gap: space.xl, paddingBottom: space.xxl },
   // Same 14 pt inset as list rows, so content lines up under each heading.
-  inner: { paddingHorizontal: 14, paddingVertical: space.xs, gap: space.md },
-  facts: { gap: space.sm },
+  inner: { paddingHorizontal: 14, paddingVertical: space.xs, gap: space.sm },
   point: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
-  step: { flexDirection: 'row', gap: space.md },
-  rail: { alignItems: 'center', width: 24 },
-  dot: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dotCurrent: { borderColor: colors.primary, borderWidth: 3 },
-  line: { flex: 1, width: 2, backgroundColor: colors.border, marginVertical: 2 },
-  stepBody: { flex: 1, gap: 2, paddingTop: 2 },
+  callout: { borderRadius: radius.lg, padding: space.lg, gap: space.md },
+  calloutTop: { flexDirection: 'row', gap: space.md, alignItems: 'flex-start' },
+  glance: { flexDirection: 'row', gap: space.md },
+  fact: { flex: 1, gap: 4 },
+  factValue: { fontSize: font(15), fontWeight: '700', color: colors.text },
 });

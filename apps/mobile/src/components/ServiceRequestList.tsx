@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { FlatList, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, Text } from 'react-native';
 import {
   OPEN_REQUEST_STATUSES,
   requestExpectedBy,
@@ -10,24 +10,21 @@ import {
 import { useServiceRequests } from '@/api/queries';
 import { formatDate } from '@/lib/format';
 import { serviceVisual, STATUS_TONES } from '@/lib/icons';
-import { colors, space } from '@/theme';
+import { space, typography } from '@/theme';
 import { PullRefresh } from './PullRefresh';
 import { EmptyState, ErrorState, LoadingState } from './States';
-import { Badge, ListRow, Segmented } from './ui';
+import { Badge, Button, ListGroup, ListRow } from './ui';
 
-type Tab = 'active' | 'history';
-/** History shows the last 18 months; older requests are kept, just not listed. */
+/** Past requests shown: the last 18 months (older ones are kept, just not listed). */
 const HISTORY_MONTHS = 18;
 
 /**
- * Service requests (§8.4), flat: Active (still open) · History (closed,
- * last 18 months, newest first). One row each: the service, the property
- * (may wrap — names can be long), when it was requested and is expected,
- * and its status.
+ * My requests (§8.4) — one page, no second row of tabs: what's in progress
+ * first, then past requests (last 18 months, newest first) in a section
+ * that folds away while something is in progress.
  */
 export function ServiceRequestList({ propertyId }: { propertyId?: string }) {
   const { data, isPending, error, refetch } = useServiceRequests(propertyId);
-  const [tab, setTab] = useState<Tab>('active');
   const [since] = useState(() => {
     const d = new Date();
     d.setMonth(d.getMonth() - HISTORY_MONTHS);
@@ -37,49 +34,48 @@ export function ServiceRequestList({ propertyId }: { propertyId?: string }) {
   if (isPending) return <LoadingState />;
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
 
-  const open = (r: ServiceRequest) => OPEN_REQUEST_STATUSES.includes(r.status);
-  const rows = data.filter((r) =>
-    tab === 'active' ? open(r) : !open(r) && new Date(r.created_at).getTime() >= since,
-  );
-  const activeCount = data.filter(open).length;
+  const isOpen = (r: ServiceRequest) => OPEN_REQUEST_STATUSES.includes(r.status);
+  const active = data.filter(isOpen);
+  const past = data.filter((r) => !isOpen(r) && new Date(r.created_at).getTime() >= since);
+
+  if (active.length === 0 && past.length === 0) {
+    return (
+      <EmptyState
+        icon="requests"
+        accent="coral"
+        title="No requests yet"
+        message="Book a visit, an inspection or paperwork help — you'll follow it here."
+        action={<Button title="Browse services" onPress={() => router.push('/services')} />}
+      />
+    );
+  }
 
   return (
-    <FlatList
-      data={rows}
-      keyExtractor={(r) => r.id}
-      contentContainerStyle={styles.list}
+    <ScrollView
+      contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
       refreshControl={<PullRefresh onRefresh={() => refetch()} />}
-      ListHeaderComponent={
-        <View style={styles.header}>
-          <Segmented
-            variant="text"
-            options={[
-              { value: 'active', label: activeCount ? `Active · ${activeCount}` : 'Active' },
-              { value: 'history', label: 'History' },
-            ]}
-            value={tab}
-            onChange={setTab}
-          />
-        </View>
-      }
-      ItemSeparatorComponent={() => <View style={styles.divider} />}
-      renderItem={({ item }) => <RequestRow request={item} />}
-      ListEmptyComponent={
-        <View style={styles.empty}>
-          <EmptyState
-            icon="requests"
-            accent="coral"
-            title={tab === 'active' ? 'Nothing in progress' : 'No past requests'}
-            message={
-              tab === 'active'
-                ? 'Requests you book appear here until they are done.'
-                : 'Completed and cancelled requests from the last 18 months appear here.'
-            }
-          />
-        </View>
-      }
-    />
+    >
+      <ListGroup title={active.length ? `In progress · ${active.length}` : 'In progress'} plain>
+        {active.length ? (
+          active.map((r) => <RequestRow key={r.id} request={r} />)
+        ) : (
+          <Text style={[typography.small, styles.none]}>Nothing in progress right now.</Text>
+        )}
+      </ListGroup>
+      {past.length ? (
+        <ListGroup
+          title={`Past requests · ${past.length}`}
+          plain
+          collapsible
+          initiallyOpen={active.length === 0}
+        >
+          {past.map((r) => (
+            <RequestRow key={r.id} request={r} />
+          ))}
+        </ListGroup>
+      ) : null}
+    </ScrollView>
   );
 }
 
@@ -114,9 +110,6 @@ export function RequestRow({ request: r }: { request: ServiceRequest }) {
 }
 
 const styles = StyleSheet.create({
-  // Rows bleed by their 14 pt padding so their content sits on the 16 pt page edge.
-  list: { paddingHorizontal: 2, paddingTop: space.md, paddingBottom: space.xxl },
-  header: { paddingHorizontal: 14, marginBottom: space.sm },
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
-  empty: { minHeight: 260 },
+  content: { padding: space.lg, paddingTop: space.md, gap: space.xl, paddingBottom: space.xxl },
+  none: { paddingHorizontal: 14, paddingVertical: space.md },
 });

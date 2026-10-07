@@ -177,6 +177,7 @@ export function ListGroup({
   plain = false,
   indent,
   collapsible = false,
+  initiallyOpen = true,
 }: {
   children: ReactNode;
   title?: string;
@@ -187,8 +188,10 @@ export function ListGroup({
   indent?: boolean;
   /** Tapping the title folds the entries away (a chevron shows which way). */
   collapsible?: boolean;
+  /** Collapsible only: start folded. */
+  initiallyOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(initiallyOpen);
   const inset = indent ?? !!title;
   const items = Children.toArray(children);
   const heading = title ? (
