@@ -31,6 +31,18 @@ Loose ends noted:
 
 Next planned: Home round 3 — "Around your property" news posted from Backoffice, the flash-news marker on cards, analytics groundwork.
 
+## Value features — agreed direction (owner, 7 Oct 2026)
+
+Goal: make the basic details valuable enough that owners keep the app, trust us, then use services.
+Cities first: **Bengaluru and Hyderabad**. Information gathered by **AI at low cost plus the
+backend team's own knowledge**, always reviewed by the team before customers see it.
+
+Order: (1) richer property details, mostly from the deed (purchase price, sellers, land use, Khata
+type, approving authority, plot details …) · (2) reminders — "Coming up" on Home + on-phone
+notifications · (3) property health score · then (4) "Around your property" news and government
+alerts · (5) value then and now · (6) legal health check (paid). Server push notifications wait
+for the store build.
+
 ## Feature backlog to discuss (owner's notes, 7 Oct 2026)
 
 Nothing below is decided yet. Grouped by theme, in the suggested order.
