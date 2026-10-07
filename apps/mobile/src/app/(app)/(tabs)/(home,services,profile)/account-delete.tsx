@@ -146,5 +146,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
-  note: { marginTop: space.sm },
+  note: { marginTop: space.sm, marginLeft: space.md },
 });

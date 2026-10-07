@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
   used: { fontSize: 16, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
   of: { fontSize: 13, fontWeight: '600', color: colors.textSubtle },
   slots: { flexDirection: 'row', gap: 4 },
-  slot: { flex: 1, height: 4, borderRadius: radius.pill },
-  track: { height: 4, borderRadius: radius.pill, overflow: 'hidden' },
+  slot: { flex: 1, height: 3, borderRadius: radius.pill },
+  track: { height: 3, borderRadius: radius.pill, overflow: 'hidden' },
   bar: { height: '100%', borderRadius: radius.pill },
 });

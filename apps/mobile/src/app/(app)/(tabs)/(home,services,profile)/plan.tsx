@@ -18,6 +18,7 @@ import { PullRefresh } from '@/components/PullRefresh';
 import { fetchPlanQuote, showPaymentOutcome, useOrders, usePlanCheckout } from '@/api/billing';
 import { useAccountPlan, usePlans, useProperties, useServices } from '@/api/queries';
 import { dialog } from '@/components/Dialog';
+import { PageHeader, Strong } from '@/components/PageHeader';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
 import { UsageMeter } from '@/components/UsageMeter';
 import { Badge, Banner, Button, ListGroup, ListRow, Segmented } from '@/components/ui';
@@ -304,23 +305,25 @@ function PlanHeader({
   const c = s.current;
   const days = c?.days_left ?? 0;
   return (
-    <View style={styles.header}>
-      <View style={styles.headRow}>
-        <Text style={typography.display} numberOfLines={1}>
-          {s.plan?.name ?? 'No active plan'}
-        </Text>
-        <Badge {...planBadge({ status: s.status })} />
-        <View style={styles.flex} />
-        {cta ? <Button title={cta} size="sm" icon="gem" loading={busy} onPress={onAction} /> : null}
-      </View>
-      {c ? (
-        <Text style={typography.small}>
-          {days} {days === 1 ? 'day' : 'days'} remaining · until {formatDate(c.ends_at)}
-        </Text>
-      ) : (
-        <Text style={typography.small}>Your data is safe — choose a plan to carry on.</Text>
-      )}
-    </View>
+    <PageHeader
+      title={s.plan?.name ?? 'No active plan'}
+      badge={<Badge {...planBadge({ status: s.status })} />}
+      subtitle={
+        c ? (
+          <>
+            <Strong>
+              {days} {days === 1 ? 'day' : 'days'} remaining
+            </Strong>
+            {` · until ${formatDate(c.ends_at)}`}
+          </>
+        ) : (
+          'Your data is safe — choose a plan to carry on.'
+        )
+      }
+      action={
+        cta ? <Button title={cta} size="sm" icon="gem" loading={busy} onPress={onAction} /> : null
+      }
+    />
   );
 }
 
@@ -438,12 +441,9 @@ function PlanRow({
   );
 }
 
-/* ---- Payments: completed first; attempts that didn't go through, muted ---- */
+/* ---- Payments: one list, newest first ---- */
 
 function Payments({ orders }: { orders: Order[] }) {
-  const done = orders.filter((o) => o.display_status !== 'failed');
-  // Only the latest two attempts that didn't go through — enough to explain, not clutter.
-  const failed = orders.filter((o) => o.display_status === 'failed').slice(0, 2);
   if (orders.length === 0) {
     return (
       <View style={styles.empty}>
@@ -456,30 +456,13 @@ function Payments({ orders }: { orders: Order[] }) {
       </View>
     );
   }
+  // One list, newest first (the API sends the last 18 months, sorted).
   return (
-    <View style={styles.sections}>
-      {done.length > 0 ? (
-        <ListGroup plain>
-          {done.map((o) => (
-            <PaymentRow key={o.id} order={o} />
-          ))}
-        </ListGroup>
-      ) : (
-        <Text style={[typography.small, styles.centerText]}>No completed payments yet.</Text>
-      )}
-      {failed.length > 0 ? (
-        <View style={styles.muted}>
-          <ListGroup title="Not completed" plain>
-            {failed.map((o) => (
-              <PaymentRow key={o.id} order={o} />
-            ))}
-          </ListGroup>
-          <Text style={[typography.caption, styles.note]}>
-            Started but not finished — you were not charged.
-          </Text>
-        </View>
-      ) : null}
-    </View>
+    <ListGroup plain>
+      {orders.map((o) => (
+        <PaymentRow key={o.id} order={o} />
+      ))}
+    </ListGroup>
   );
 }
 
@@ -514,13 +497,7 @@ function PaymentRow({ order: o }: { order: Order }) {
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
   content: { padding: space.lg, paddingTop: space.md, gap: space.lg, paddingBottom: space.xxl },
-  sections: { gap: space.xl },
   empty: { minHeight: 260 },
-  header: { gap: space.sm },
-  headRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   amount: { alignItems: 'flex-end', gap: 3 },
-  muted: { opacity: 0.75 },
-  note: { marginTop: space.sm },
   struck: { color: colors.textSubtle, textDecorationLine: 'line-through' },
-  centerText: { textAlign: 'center' },
 });

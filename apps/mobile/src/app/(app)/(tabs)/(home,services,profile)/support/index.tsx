@@ -19,6 +19,7 @@ import {
 import { useTickets } from '@/api/support';
 import { Icon } from '@/components/Icon';
 import { PullRefresh } from '@/components/PullRefresh';
+import { PageHeader, Strong } from '@/components/PageHeader';
 import { LoadingState } from '@/components/States';
 import { Badge, Button, ListGroup, ListRow } from '@/components/ui';
 import { formatDate } from '@/lib/format';
@@ -51,15 +52,20 @@ const FAQS: { q: string; a: string }[] = [
   },
 ];
 
+/** Closed tickets stay listed for 30 days after they close. */
+const RECENT_DAYS = 30;
+
 /**
- * Help & Support, flat like Profile: your tickets (with "Raise a ticket"
- * as the first row) · contact · FAQs. Shown once tickets have loaded, so
- * nothing below jumps when they arrive.
+ * Help & Support, laid out like Plan & Usage: a "Tickets" header with the
+ * Raise a ticket button, the open and recently closed tickets (collapsible),
+ * then Contact us and FAQs as headed, indented sections. Shown once tickets
+ * have loaded, so nothing jumps.
  */
 export default function SupportScreen() {
   const tickets = useTickets();
   const [openFaq, setOpenFaq] = useState<number | null>(null);
-  const [showClosed, setShowClosed] = useState(false);
+  const [showTickets, setShowTickets] = useState(true);
+  const [since] = useState(() => Date.now() - RECENT_DAYS * 86_400_000);
   const toggle = (fn: () => void) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     fn();
@@ -68,7 +74,12 @@ export default function SupportScreen() {
   if (tickets.isPending) return <LoadingState />;
   const all = tickets.data ?? [];
   const open = all.filter((t) => OPEN_TICKET_STATUSES.includes(t.status));
-  const closed = all.filter((t) => !OPEN_TICKET_STATUSES.includes(t.status));
+  const recent = all.filter(
+    (t) =>
+      !OPEN_TICKET_STATUSES.includes(t.status) &&
+      new Date(t.resolved_at ?? t.last_message_at).getTime() >= since,
+  );
+  const listed = [...open, ...recent];
 
   return (
     <ScrollView
@@ -77,9 +88,17 @@ export default function SupportScreen() {
       refreshControl={<PullRefresh onRefresh={() => tickets.refetch()} />}
     >
       <View>
-        <ListGroup
-          title="Your tickets"
-          plain
+        <PageHeader
+          title="Tickets"
+          subtitle={
+            open.length ? (
+              <>
+                <Strong>{open.length} open</Strong> · we reply within 1–3 working days
+              </>
+            ) : (
+              'We reply within 1–3 working days'
+            )
+          }
           action={
             <Button
               title="Raise a ticket"
@@ -88,38 +107,35 @@ export default function SupportScreen() {
               onPress={() => router.push('/support/new')}
             />
           }
-        >
-          {open.length === 0 ? (
-            <Text style={[typography.small, styles.none]}>
-              No open tickets. We reply in the app within 1–3 working days.
-            </Text>
-          ) : (
-            open.map((t) => <TicketRow key={t.id} ticket={t} />)
-          )}
-        </ListGroup>
-        {closed.length > 0 ? (
+        />
+        {listed.length > 0 ? (
           <>
             <Pressable
-              onPress={() => toggle(() => setShowClosed((v) => !v))}
+              onPress={() => toggle(() => setShowTickets((v) => !v))}
               accessibilityRole="button"
-              style={styles.closedToggle}
+              accessibilityState={{ expanded: showTickets }}
+              style={styles.toggle}
             >
-              <Text style={styles.closedText}>Resolved &amp; closed ({closed.length})</Text>
+              <Text style={styles.toggleText}>
+                {showTickets ? 'Hide' : 'Show'} tickets ({listed.length})
+              </Text>
               <Icon
-                name={showClosed ? 'chevron-up' : 'chevron-down'}
+                name={showTickets ? 'chevron-up' : 'chevron-down'}
                 size={15}
                 color={colors.textMuted}
               />
             </Pressable>
-            {showClosed ? (
+            {showTickets ? (
               <ListGroup plain>
-                {closed.map((t) => (
+                {listed.map((t) => (
                   <TicketRow key={t.id} ticket={t} />
                 ))}
               </ListGroup>
             ) : null}
           </>
-        ) : null}
+        ) : (
+          <Text style={[typography.small, styles.none]}>No tickets in the last 30 days.</Text>
+        )}
       </View>
 
       <ListGroup title="Contact us" plain>
@@ -173,15 +189,15 @@ function TicketRow({ ticket: t }: { ticket: SupportTicket }) {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { padding: space.lg, paddingTop: space.md, gap: space.xl, paddingBottom: space.xxl },
-  none: { paddingHorizontal: 14, paddingVertical: space.md },
-  closedToggle: {
+  none: { paddingVertical: space.md },
+  toggle: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 4,
-    paddingVertical: space.md,
+    paddingTop: space.md,
+    paddingBottom: space.xs,
   },
-  closedText: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
+  toggleText: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
   faq: { paddingHorizontal: 14, paddingVertical: 14, gap: 6 },
   faqRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
 });

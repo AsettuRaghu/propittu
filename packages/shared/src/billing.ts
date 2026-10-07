@@ -36,9 +36,8 @@ export const CHECKOUT_STALE_MINUTES = 30;
 export type CheckoutState = 'paid' | 'in_progress' | 'not_started' | 'closed';
 export type CheckedOrder = Order & { checkout_state: CheckoutState };
 
-/** Payments tab: completed payments from the last 4 years; unfinished attempts from the last 2 months. */
-export const PAYMENT_HISTORY_YEARS = 4;
-export const FAILED_PAYMENT_HISTORY_DAYS = 60;
+/** Payments tab: every payment (paid or not completed) from the last 18 months, newest first. */
+export const PAYMENT_HISTORY_MONTHS = 18;
 
 export const PAYMENT_STATUSES = ['created', 'captured', 'failed'] as const;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];

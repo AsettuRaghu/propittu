@@ -98,7 +98,7 @@ export default function ProfileScreen() {
 
         <View style={styles.footer}>
           <View style={styles.logout}>
-            <ListGroup plain>
+            <ListGroup plain indent>
               <ListRow
                 icon="logout"
                 title={signingOut ? 'Logging out…' : 'Log out'}

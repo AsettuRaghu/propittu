@@ -2,8 +2,7 @@ import { Router } from 'express';
 import {
   type CheckedOrder,
   type CheckoutState,
-  FAILED_PAYMENT_HISTORY_DAYS,
-  PAYMENT_HISTORY_YEARS,
+  PAYMENT_HISTORY_MONTHS,
   planCheckoutSchema,
   type CheckoutSession,
   type PlanQuote,
@@ -119,16 +118,14 @@ billingRouter.post('/billing/service-requests/:id/checkout', async (req, res) =>
 });
 
 /*
- * GET /billing/orders — this Account's payment history: the last
- * PAYMENT_HISTORY_YEARS, and attempts that did not complete only from the
- * last FAILED_PAYMENT_HISTORY_DAYS. (Records are kept longer, as the law
+ * GET /billing/orders — this Account's payments (paid or not) from the last
+ * PAYMENT_HISTORY_MONTHS, newest first. (Records are kept longer, as the law
  * requires; this only limits what the app shows and loads.)
  */
 billingRouter.get('/billing/orders', async (req, res) => {
   const { db, accountId } = auth(req);
   const since = new Date();
-  since.setFullYear(since.getFullYear() - PAYMENT_HISTORY_YEARS);
-  const failedSince = Date.now() - FAILED_PAYMENT_HISTORY_DAYS * 86_400_000;
+  since.setMonth(since.getMonth() - PAYMENT_HISTORY_MONTHS);
   const rows = must<OrderRow[]>(
     await db
       .from('orders')
@@ -138,14 +135,7 @@ billingRouter.get('/billing/orders', async (req, res) => {
       .order('created_at', { ascending: false })
       .limit(100),
   );
-  ok(
-    res,
-    rows
-      .map(toOrder)
-      .filter(
-        (o) => o.display_status !== 'failed' || new Date(o.created_at).getTime() >= failedSince,
-      ),
-  );
+  ok(res, rows.map(toOrder));
 });
 
 /* GET /billing/orders/:id */

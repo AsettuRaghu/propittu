@@ -371,13 +371,17 @@ export function ListGroup({
   title,
   action,
   plain = false,
+  indent,
 }: {
   children: ReactNode;
   title?: string;
   /** Shown on the right of the title (e.g. a small "Raise a ticket" button). */
   action?: ReactNode;
   plain?: boolean;
+  /** Plain only: set the entries slightly in from the heading (default: when titled). */
+  indent?: boolean;
 }) {
+  const inset = indent ?? !!title;
   const items = (Array.isArray(children) ? children : [children]).filter(Boolean);
   return (
     <View>
@@ -387,7 +391,11 @@ export function ListGroup({
           {action}
         </View>
       ) : null}
-      <View style={plain ? styles.listPlain : [styles.listGroup, shadow]}>
+      <View
+        style={
+          plain ? (inset ? styles.listPlainInset : styles.listPlain) : [styles.listGroup, shadow]
+        }
+      >
         {items.map((child, i) => (
           <View key={i}>
             {i > 0 ? <View style={[styles.listDivider, plain && styles.listDividerPlain]} /> : null}
@@ -712,7 +720,11 @@ export function Segmented<T extends string>({
             }}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
-            style={flat ? styles.tab : [styles.segment, active && [styles.segmentActive, shadow]]}
+            style={
+              flat
+                ? [styles.tab, active && styles.tabActive]
+                : [styles.segment, active && [styles.segmentActive, shadow]]
+            }
           >
             <Text
               style={[
@@ -780,6 +792,8 @@ const styles = StyleSheet.create({
   // Rows have 14 pt inner padding; bleeding by the same amount lines their
   // content up with the page's own 16 pt edge (titles, headers, buttons).
   listPlain: { marginHorizontal: -14 },
+  // Entries 12 pt in from their heading; right edge still on the page edge.
+  listPlainInset: { marginLeft: -2, marginRight: -14 },
   listHead: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -879,8 +893,9 @@ const styles = StyleSheet.create({
   segmentActive: { backgroundColor: colors.surface },
   segmentText: { fontSize: 14, fontWeight: '600', color: colors.textMuted },
   segmentTextActive: { color: colors.text },
-  tabs: { flexDirection: 'row' },
-  tab: { flex: 1, alignItems: 'center', paddingVertical: 8 },
-  tabText: { fontSize: 15, fontWeight: '500', color: colors.textSubtle },
-  tabTextActive: { fontSize: 15, fontWeight: '500', color: colors.primary },
+  tabs: { flexDirection: 'row', gap: space.xs },
+  tab: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: radius.pill },
+  tabActive: { backgroundColor: colors.primarySoft },
+  tabText: { fontSize: 15, fontWeight: '500', color: colors.textMuted },
+  tabTextActive: { fontSize: 15, fontWeight: '600', color: colors.primary },
 });
