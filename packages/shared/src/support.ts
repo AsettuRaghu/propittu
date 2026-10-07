@@ -116,13 +116,23 @@ export interface BackofficeTicketDetail extends BackofficeTicket {
 }
 
 export const createTicketSchema = z.object({
-  subject: z.string().trim().min(3, 'Add a short subject').max(120),
+  /** Optional: the app asks only for category + the issue; see ticketSubject(). */
+  subject: z.string().trim().min(3).max(120).optional(),
   category: z.enum(TICKET_CATEGORIES, { message: 'Choose a category' }),
-  description: z.string().trim().min(5, 'Tell us a little more').max(4000),
+  description: z.string().trim().min(5, 'Explain the issue in a few words').max(4000),
   property_id: uuidSchema.nullable().optional(),
   service_request_id: uuidSchema.nullable().optional(),
 });
 export type CreateTicketInput = z.input<typeof createTicketSchema>;
+
+/** A ticket's title: the given subject, or the start of the issue (≤ 60 chars, whole words). */
+export function ticketSubject(input: { subject?: string; description: string }): string {
+  if (input.subject) return input.subject;
+  const text = input.description.replace(/\s+/g, ' ').trim();
+  if (text.length <= 60) return text;
+  const cut = text.slice(0, 60);
+  return `${cut.slice(0, cut.lastIndexOf(' ') > 30 ? cut.lastIndexOf(' ') : 60)}…`;
+}
 
 export const ticketMessageSchema = z.object({
   body: z.string().trim().min(1, 'Write a message').max(4000),

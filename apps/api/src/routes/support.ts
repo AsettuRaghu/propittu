@@ -8,6 +8,7 @@ import {
   type SupportAttachment,
   type UploadIntent,
   createTicketSchema,
+  ticketSubject,
   ticketMessageSchema,
   type SupportMessage,
   type SupportTicket,
@@ -232,7 +233,7 @@ supportRouter.post('/support/tickets', async (req, res) => {
       .insert({
         account_id: ctx.accountId,
         user_id: ctx.userId,
-        subject: input.subject,
+        subject: ticketSubject(input),
         category: input.category,
         property_id: input.property_id ?? null,
         service_request_id: input.service_request_id ?? null,

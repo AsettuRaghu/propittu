@@ -1234,7 +1234,7 @@ try {
     body: { subject: 'x', category: 'nope', description: '' },
   });
   check(
-    r.status === 400 && r.json.error.details?.subject && r.json.error.details?.category,
+    r.status === 400 && r.json.error.details?.description && r.json.error.details?.category,
     'invalid ticket → 400 with field errors',
     r.json,
   );

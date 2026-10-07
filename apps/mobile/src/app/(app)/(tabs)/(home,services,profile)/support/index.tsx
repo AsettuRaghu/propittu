@@ -20,7 +20,7 @@ import { useTickets } from '@/api/support';
 import { Icon } from '@/components/Icon';
 import { PullRefresh } from '@/components/PullRefresh';
 import { LoadingState } from '@/components/States';
-import { Badge, ListGroup, ListRow } from '@/components/ui';
+import { Badge, Button, ListGroup, ListRow } from '@/components/ui';
 import { formatDate } from '@/lib/format';
 import { TICKET_TONES } from '@/lib/icons';
 import { colors, space, typography } from '@/theme';
@@ -77,16 +77,25 @@ export default function SupportScreen() {
       refreshControl={<PullRefresh onRefresh={() => tickets.refetch()} />}
     >
       <View>
-        <ListGroup title="Your tickets" plain>
-          <ListRow
-            icon="add"
-            title="Raise a ticket"
-            subtitle="We reply in the app within 1–3 working days"
-            onPress={() => router.push('/support/new')}
-          />
-          {open.map((t) => (
-            <TicketRow key={t.id} ticket={t} />
-          ))}
+        <ListGroup
+          title="Your tickets"
+          plain
+          action={
+            <Button
+              title="Raise a ticket"
+              icon="add"
+              size="sm"
+              onPress={() => router.push('/support/new')}
+            />
+          }
+        >
+          {open.length === 0 ? (
+            <Text style={[typography.small, styles.none]}>
+              No open tickets. We reply in the app within 1–3 working days.
+            </Text>
+          ) : (
+            open.map((t) => <TicketRow key={t.id} ticket={t} />)
+          )}
         </ListGroup>
         {closed.length > 0 ? (
           <>
@@ -164,6 +173,7 @@ function TicketRow({ ticket: t }: { ticket: SupportTicket }) {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { padding: space.lg, paddingTop: space.md, gap: space.xl, paddingBottom: space.xxl },
+  none: { paddingHorizontal: 14, paddingVertical: space.md },
   closedToggle: {
     flexDirection: 'row',
     alignItems: 'center',

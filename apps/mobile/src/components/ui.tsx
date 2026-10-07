@@ -369,16 +369,24 @@ export function ListRow({
 export function ListGroup({
   children,
   title,
+  action,
   plain = false,
 }: {
   children: ReactNode;
   title?: string;
+  /** Shown on the right of the title (e.g. a small "Raise a ticket" button). */
+  action?: ReactNode;
   plain?: boolean;
 }) {
   const items = (Array.isArray(children) ? children : [children]).filter(Boolean);
   return (
     <View>
-      {title ? <Text style={[typography.heading, styles.listTitle]}>{title}</Text> : null}
+      {title ? (
+        <View style={[styles.listHead, action ? styles.listHeadAction : null]}>
+          <Text style={[typography.heading, styles.flex]}>{title}</Text>
+          {action}
+        </View>
+      ) : null}
       <View style={plain ? styles.listPlain : [styles.listGroup, shadow]}>
         {items.map((child, i) => (
           <View key={i}>
@@ -772,7 +780,13 @@ const styles = StyleSheet.create({
   // Rows have 14 pt inner padding; bleeding by the same amount lines their
   // content up with the page's own 16 pt edge (titles, headers, buttons).
   listPlain: { marginHorizontal: -14 },
-  listTitle: { marginBottom: space.xs },
+  listHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    marginBottom: space.xs,
+  },
+  listHeadAction: { minHeight: 38 },
   rowValue: { maxWidth: '45%' },
   rowRight: { justifyContent: 'center' },
   keyValue: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start' },

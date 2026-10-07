@@ -23,7 +23,7 @@ import { formatDate } from '@/lib/format';
 import { errorMessage, fieldErrors } from '@/lib/errors';
 import { colors, space, typography } from '@/theme';
 
-/** Raise a support ticket: subject, category, the issue, and optionally a property / request. */
+/** Raise a support ticket: category and the issue (both required), optionally a property / request. */
 export default function NewTicketScreen() {
   const params = useLocalSearchParams<{
     category?: string;
@@ -35,7 +35,8 @@ export default function NewTicketScreen() {
   const requests = useServiceRequests();
   const create = useCreateTicket();
 
-  const [subject, setSubject] = useState(params.subject ?? '');
+  // A subject only arrives from other screens (e.g. a request); the form itself doesn't ask.
+  const subject = params.subject;
   const [category, setCategory] = useState<TicketCategory | null>(
     (TICKET_CATEGORIES as readonly string[]).includes(params.category ?? '')
       ? (params.category as TicketCategory)
@@ -51,7 +52,7 @@ export default function NewTicketScreen() {
 
   const submit = () => {
     const parsed = createTicketSchema.safeParse({
-      subject,
+      subject: subject || undefined,
       category: category ?? undefined,
       description,
       property_id: propertyId,
@@ -96,15 +97,6 @@ export default function NewTicketScreen() {
         {create.error && !Object.keys(errors).length ? (
           <Banner message={errorMessage(create.error)} />
         ) : null}
-
-        <TextField
-          label="Subject"
-          value={subject}
-          onChangeText={setSubject}
-          placeholder="e.g. Area shown is wrong"
-          maxLength={120}
-          error={errors.subject}
-        />
 
         <Select
           label="Category"
