@@ -1,17 +1,17 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useState, type ReactNode } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { PROPERTY_TYPE_LABELS, type LocationIssue, type PropertyType } from '@propittu/shared';
 import { formatLocation } from '@/lib/format';
 import { signedImage } from '@/lib/image';
 import { PROPERTY_TYPE_GRADIENTS, PROPERTY_TYPE_ICONS } from '@/lib/icons';
 import { openDirections, shareLocation } from '@/lib/maps';
-import { accents, font, radius, space } from '@/theme';
+import { accents, colors, font, radius, space } from '@/theme';
 import { dialog } from './Dialog';
 import { Icon } from './Icon';
-import { WeatherChip } from './WeatherChip';
+import { WeatherChip, WeatherFlash, type WeatherFlashContent } from './WeatherChip';
 
 interface CoverProperty {
   id: string;
@@ -37,6 +37,7 @@ export function PropertyCover({
   photos,
   approximate = false,
   size = 'md',
+  onPress,
   children,
 }: {
   property: CoverProperty;
@@ -46,14 +47,34 @@ export function PropertyCover({
   /** The pin is only near the deed's area, not the exact spot. */
   approximate?: boolean;
   size?: 'md' | 'lg';
+  /** Tapping the photo (Home: open the property). */
+  onPress?: () => void;
   /** Rendered at the bottom-right, over the photo (e.g. an action). */
   children?: ReactNode;
 }) {
   const [width, setWidth] = useState(0);
   const [page, setPage] = useState(0);
+  const [flash, setFlash] = useState<(WeatherFlashContent & { n: number }) | null>(null);
+  const showFlash = (c: WeatherFlashContent) => setFlash((f) => ({ ...c, n: (f?.n ?? 0) + 1 }));
+  const endFlash = useCallback(() => setFlash(null), []);
   const location = formatLocation(p);
   const type = PROPERTY_TYPE_LABELS[p.property_type].split(' / ')[0];
   const lg = size === 'lg';
+
+  // Each photo is its own tap target inside the swiper, so a swipe is never
+  // mistaken for a tap (the card itself is not one big button).
+  const tap = (child: ReactNode, key?: string) => (
+    <Pressable
+      key={key}
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={onPress ? p.name : undefined}
+      style={width && photos.length > 1 ? { width, height } : StyleSheet.absoluteFill}
+    >
+      {child}
+    </Pressable>
+  );
 
   return (
     <View style={[styles.media, { height }]} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
@@ -62,44 +83,52 @@ export function PropertyCover({
           horizontal
           pagingEnabled
           showsHorizontalScrollIndicator={false}
+          directionalLockEnabled
           style={StyleSheet.absoluteFill}
-          onMomentumScrollEnd={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / width))}
+          scrollEventThrottle={32}
+          onScroll={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / width))}
         >
-          {photos.map((url, i) => (
-            <Image
-              key={`${i}`}
-              source={signedImage(url)}
-              style={{ width, height }}
-              contentFit="cover"
-              cachePolicy="memory-disk"
-              accessibilityLabel={`Photo ${i + 1} of ${photos.length}`}
-            />
-          ))}
+          {photos.map((url, i) =>
+            tap(
+              <Image
+                source={signedImage(url)}
+                style={StyleSheet.absoluteFill}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                accessibilityLabel={`Photo ${i + 1} of ${photos.length}`}
+              />,
+              `${i}`,
+            ),
+          )}
         </ScrollView>
       ) : photos[0] ? (
-        <Image
-          source={signedImage(photos[0])}
-          style={StyleSheet.absoluteFill}
-          contentFit="cover"
-          transition={200}
-          cachePolicy="memory-disk"
-          recyclingKey={p.id}
-          accessibilityIgnoresInvertColors
-        />
+        tap(
+          <Image
+            source={signedImage(photos[0])}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            transition={200}
+            cachePolicy="memory-disk"
+            recyclingKey={p.id}
+            accessibilityIgnoresInvertColors
+          />,
+        )
       ) : (
-        <LinearGradient
-          colors={PROPERTY_TYPE_GRADIENTS[p.property_type]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[StyleSheet.absoluteFill, styles.placeholder]}
-        >
-          <Icon
-            name={PROPERTY_TYPE_ICONS[p.property_type]}
-            size={Math.round(height / 2.6)}
-            color="rgba(255,255,255,0.22)"
-            strokeWidth={1.4}
-          />
-        </LinearGradient>
+        tap(
+          <LinearGradient
+            colors={PROPERTY_TYPE_GRADIENTS[p.property_type]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[StyleSheet.absoluteFill, styles.placeholder]}
+          >
+            <Icon
+              name={PROPERTY_TYPE_ICONS[p.property_type]}
+              size={Math.round(height / 2.6)}
+              color="rgba(255,255,255,0.22)"
+              strokeWidth={1.4}
+            />
+          </LinearGradient>,
+        )
       )}
       <LinearGradient
         colors={['rgba(0,0,0,0.28)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0.6)']}
@@ -110,7 +139,7 @@ export function PropertyCover({
 
       <View style={styles.overlay} pointerEvents="box-none">
         <View style={styles.topRow} pointerEvents="box-none">
-          <View style={[styles.chip, lg && styles.chipLg]}>
+          <View style={[styles.chip, lg && styles.chipLg]} pointerEvents="none">
             <Icon name={PROPERTY_TYPE_ICONS[p.property_type]} size={lg ? 18 : 16} color="#FFFFFF" />
             <Text style={[styles.chipText, lg && styles.chipTextLg]}>{type}</Text>
           </View>
@@ -118,38 +147,39 @@ export function PropertyCover({
             <WeatherChip
               lat={p.latitude}
               lon={p.longitude}
-              name={p.name}
               tone="light"
               size={size}
               showLabel={lg}
+              onPress={showFlash}
             />
             <LocationButton property={p} approximate={approximate} size={size} />
           </View>
         </View>
 
-        <View style={styles.bottom} pointerEvents="box-none">
+        <View style={styles.bottomRow} pointerEvents="box-none">
+          <View style={styles.flex} pointerEvents="none">
+            <Text style={[styles.name, lg && styles.nameLg]} numberOfLines={2}>
+              {p.name}
+            </Text>
+            {location ? (
+              <Text style={[styles.location, lg && styles.locationLg]} numberOfLines={1}>
+                {location}
+              </Text>
+            ) : null}
+          </View>
           {photos.length > 1 ? (
-            <View style={styles.dots} pointerEvents="none">
-              {photos.map((_, i) => (
-                <View key={i} style={[styles.dot, i === page && styles.dotOn]} />
-              ))}
+            <View style={styles.counter} pointerEvents="none">
+              <Icon name="images" size={13} color="#FFFFFF" />
+              <Text style={styles.counterText}>
+                {Math.min(page, photos.length - 1) + 1}/{photos.length}
+              </Text>
             </View>
           ) : null}
-          <View style={styles.bottomRow} pointerEvents="box-none">
-            <View style={styles.flex} pointerEvents="none">
-              <Text style={[styles.name, lg && styles.nameLg]} numberOfLines={2}>
-                {p.name}
-              </Text>
-              {location ? (
-                <Text style={[styles.location, lg && styles.locationLg]} numberOfLines={1}>
-                  {location}
-                </Text>
-              ) : null}
-            </View>
-            {children}
-          </View>
+          {children}
         </View>
       </View>
+
+      {flash ? <WeatherFlash key={flash.n} content={flash} onDone={endFlash} /> : null}
     </View>
   );
 }
@@ -157,7 +187,7 @@ export function PropertyCover({
 /**
  * The pin on the cover. Pinned: directions, share, or set the exact spot.
  * Not pinned: an invitation to pin it. If the pin and the PIN code disagree,
- * it turns amber and says so.
+ * it turns red and says so.
  */
 function LocationButton({
   property: p,
@@ -178,7 +208,7 @@ function LocationButton({
         title: 'The pin and the PIN code disagree',
         message: `The pin is in ${issue.pin_place}, but PIN code ${issue.pincode} is in ${issue.pincode_place} — about ${issue.distance_km} km apart. One of them needs fixing.`,
         confirmLabel: 'Fix it',
-        tone: 'warning',
+        tone: 'danger',
       });
       if (fix) router.push(`/properties/${p.id}`);
       return;
@@ -267,18 +297,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   roundPending: { backgroundColor: accents.teal.fg },
-  roundIssue: { backgroundColor: accents.amber.fg },
+  roundIssue: { backgroundColor: colors.danger },
   pressed: { opacity: 0.75 },
-  bottom: { gap: space.xs },
-  dots: { flexDirection: 'row', justifyContent: 'center', gap: 5 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.5)' },
-  dotOn: { backgroundColor: '#FFFFFF' },
+  counter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderRadius: radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  counterText: { fontSize: font(12), fontWeight: '700', color: '#FFFFFF' },
   bottomRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: space.md,
     padding: space.md,
-    paddingTop: 0,
   },
   name: { fontSize: font(21), fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.3 },
   nameLg: { fontSize: font(25) },

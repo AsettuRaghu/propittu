@@ -27,7 +27,7 @@ function greetingIcon(now = new Date()): IconName {
 const addProperty = () => router.push('/properties/new');
 
 /**
- * Home — the property locker. A clear greeting, the locker at a glance,
+ * Home — the property locker. A clear greeting (wrapping for long names),
  * anything waiting for you, your properties (photo, place, live weather,
  * what needs attention) and quick ways onward. With no properties yet, a
  * bold welcome that says what Propittu does and starts the first one.
@@ -47,8 +47,10 @@ export default function HomeScreen() {
     <View style={styles.header}>
       <View style={styles.titleRow}>
         <View style={[styles.flex, styles.greetRow]}>
-          <Icon name={greetingIcon()} size={24} color={accents.amber.fg} />
-          <Text style={styles.greet} numberOfLines={1} adjustsFontSizeToFit>
+          <View style={styles.greetIcon}>
+            <Icon name={greetingIcon()} size={24} color={accents.amber.fg} />
+          </View>
+          <Text style={styles.greet} numberOfLines={2}>
             {firstName ? `${greeting()}, ${firstName}` : greeting()}
           </Text>
         </View>
@@ -244,13 +246,16 @@ const styles = StyleSheet.create({
   pad: { paddingHorizontal: space.lg },
   header: { paddingTop: space.md, paddingBottom: space.md, gap: space.lg },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  greetRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  // A long name wraps to a second line at full size (never shrunk).
+  greetRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
+  greetIcon: { height: font(32), justifyContent: 'center' },
   greet: {
     flex: 1,
     fontSize: font(26),
     fontWeight: '800',
     color: colors.text,
     letterSpacing: -0.5,
+    lineHeight: font(32),
   },
   count: { color: colors.textSubtle, fontWeight: '700' },
   list: { paddingHorizontal: space.lg, paddingBottom: space.xxl, flexGrow: 1 },

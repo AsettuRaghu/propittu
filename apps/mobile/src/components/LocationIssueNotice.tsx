@@ -37,7 +37,7 @@ export function LocationIssueNotice({ property: p }: { property: PropertyDetail 
   return (
     <View style={styles.box}>
       <View style={styles.head}>
-        <Icon name="warning" size={18} color={colors.warning} />
+        <Icon name="warning" size={18} color={colors.danger} />
         <Text style={styles.title}>The pin and the PIN code disagree</Text>
       </View>
       <Text style={typography.small}>
@@ -56,7 +56,12 @@ export function LocationIssueNotice({ property: p }: { property: PropertyDetail 
           size="sm"
           variant="secondary"
           icon="pin"
-          onPress={() => router.push(`/properties/${p.id}/location`)}
+          onPress={() =>
+            router.push({
+              pathname: '/properties/[id]/location',
+              params: { id: p.id, near: issue.pincode },
+            })
+          }
         />
       </View>
     </View>
@@ -65,12 +70,12 @@ export function LocationIssueNotice({ property: p }: { property: PropertyDetail 
 
 const styles = StyleSheet.create({
   box: {
-    backgroundColor: colors.warningSoft,
+    backgroundColor: colors.dangerSoft,
     borderRadius: radius.md,
     padding: space.md,
     gap: space.sm,
   },
   head: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  title: { fontSize: font(15), fontWeight: '800', color: colors.warning, flex: 1 },
+  title: { fontSize: font(15), fontWeight: '800', color: colors.danger, flex: 1 },
   actions: { flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' },
 });

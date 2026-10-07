@@ -1,8 +1,8 @@
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { WEATHER_LABELS, type SiteWeather } from '@propittu/shared';
 import { useSiteWeather } from '@/api/weather';
-import { colors, font, radius } from '@/theme';
-import { dialog } from './Dialog';
+import { colors, font, radius, space } from '@/theme';
 import { Icon, type IconName } from './Icon';
 
 /** Our weather condition → icon (day and night where it matters). */
@@ -27,29 +27,34 @@ function weatherIcon(w: SiteWeather): IconName {
   }
 }
 
-/** What the weather means for the site, in a friendly sentence. */
-function weatherNote(w: SiteWeather): string {
+export interface WeatherFlashContent {
+  emoji: string;
+  text: string;
+}
+
+/** What the weather means for the site — a light, friendly line. */
+function weatherFlash(w: SiteWeather): WeatherFlashContent {
   const t = `${w.temp_c}°`;
-  const hot = w.temp_c >= 38 ? ' It’s a hot one — go early if you’re visiting.' : '';
+  if (w.temp_c >= 38) return { emoji: '🥵', text: `${t} — your site is sunbathing. Visit early!` };
   switch (w.condition) {
     case 'clear':
       return w.is_day
-        ? `Clear skies and ${t} — a lovely day at your site.${hot}`
-        : `A clear, calm night at your site — ${t}.`;
+        ? { emoji: '☀️', text: `Sunny and ${t} — your site is soaking it up` }
+        : { emoji: '🌙', text: `A clear, calm night at your site — ${t}` };
     case 'partly_cloudy':
-      return `${t} with a few clouds — pleasant at your site, and it’s breathing well.${hot}`;
+      return { emoji: '⛅', text: `${t} and pleasant — your site is breathing easy` };
     case 'cloudy':
-      return `Overcast and ${t} — calm and comfortable at your site.`;
+      return { emoji: '☁️', text: `Overcast and ${t} — cool and comfy at your site` };
     case 'fog':
-      return `Misty at your site right now (${t}). Visibility is low if you’re heading there.`;
+      return { emoji: '🌫️', text: `Misty at your site (${t}) — mysterious!` };
     case 'drizzle':
-      return `A light drizzle at your site, ${t} — the land is getting a drink.`;
+      return { emoji: '🌦️', text: `A light drizzle, ${t} — your land is having a drink` };
     case 'rain':
-      return `It’s raining at your site (${t}). Worth checking for standing water once it clears.`;
+      return { emoji: '🌧️', text: `Raining at your site (${t}) — nature’s watering the plot` };
     case 'storm':
-      return `Thunderstorms around your site (${t}). Best to hold off visiting until it passes.`;
+      return { emoji: '⛈️', text: `Stormy at your site (${t}) — best to visit another day` };
     case 'snow':
-      return `Snow at your site, ${t}.`;
+      return { emoji: '❄️', text: `Snow at your site, ${t}!` };
   }
 }
 
@@ -57,23 +62,23 @@ function weatherNote(w: SiteWeather): string {
  * "28° · Partly cloudy" at the property's site. Renders nothing without a
  * pin, while loading, or if weather is unavailable — it never takes space
  * it can't fill. `tone="light"` for use over photos; `size="lg"` on the
- * property page. Tapping it says what the weather means for the site.
+ * property page. Tapping it hands a friendly line to `onPress` (the cover
+ * shows it as a flash that fades away).
  */
 export function WeatherChip({
   lat,
   lon,
-  name,
   tone = 'default',
   size = 'md',
   showLabel = false,
+  onPress,
 }: {
   lat: number | null;
   lon: number | null;
-  /** The property, for the tap's message. */
-  name: string;
   tone?: 'default' | 'light';
   size?: 'md' | 'lg';
   showLabel?: boolean;
+  onPress?: (flash: WeatherFlashContent) => void;
 }) {
   const { data } = useSiteWeather(lat, lon);
   if (!data) return null;
@@ -81,14 +86,10 @@ export function WeatherChip({
   const lg = size === 'lg';
   return (
     <Pressable
-      onPress={() =>
-        void dialog.alert({
-          title: `Weather at ${name}`,
-          message: weatherNote(data),
-        })
-      }
+      onPress={onPress ? () => onPress(weatherFlash(data)) : undefined}
+      disabled={!onPress}
       hitSlop={6}
-      accessibilityRole="button"
+      accessibilityRole={onPress ? 'button' : undefined}
       style={({ pressed }) => [
         styles.chip,
         light && styles.chipLight,
@@ -109,6 +110,42 @@ export function WeatherChip({
   );
 }
 
+/** A friendly bubble that pops up over the photo, lingers, and fades away by itself. */
+export function WeatherFlash({
+  content,
+  onDone,
+}: {
+  content: WeatherFlashContent;
+  onDone: () => void;
+}) {
+  const [show] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    const run = Animated.sequence([
+      Animated.spring(show, { toValue: 1, friction: 5, tension: 120, useNativeDriver: true }),
+      Animated.delay(2400),
+      Animated.timing(show, { toValue: 0, duration: 450, useNativeDriver: true }),
+    ]);
+    run.start(({ finished }) => finished && onDone());
+    return () => run.stop();
+  }, [show, onDone]);
+  return (
+    <View style={styles.flashWrap} pointerEvents="none">
+      <Animated.View
+        style={[
+          styles.flash,
+          {
+            opacity: show,
+            transform: [{ scale: show.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }],
+          },
+        ]}
+      >
+        <Text style={styles.emoji}>{content.emoji}</Text>
+        <Text style={styles.flashText}>{content.text}</Text>
+      </Animated.View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   chip: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   chipLight: {
@@ -122,4 +159,27 @@ const styles = StyleSheet.create({
   text: { fontSize: font(15), fontWeight: '700', color: colors.textMuted },
   textLg: { fontSize: font(16) },
   textLight: { color: '#FFFFFF' },
+  flashWrap: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: space.lg,
+  },
+  flash: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    maxWidth: 300,
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderRadius: radius.lg,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+  },
+  emoji: { fontSize: font(30) },
+  flashText: { flexShrink: 1, fontSize: font(14.5), fontWeight: '700', color: colors.text },
 });

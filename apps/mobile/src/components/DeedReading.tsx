@@ -54,13 +54,14 @@ export function DeedReading({
   const [shown, setShown] = useState(0);
   useEffect(() => {
     if (!done || shown >= findings.length) return;
-    const t = setTimeout(() => setShown((n) => n + 1), shown === 0 ? 400 : 480);
+    const t = setTimeout(() => setShown((n) => n + 1), shown === 0 ? 300 : 340);
     return () => clearTimeout(t);
   }, [done, shown, findings.length]);
 
   const said = SCRIPT.filter((s) => s.at <= elapsed);
   const found = findings.slice(0, shown).filter((f) => f.kind === 'found').length;
   const finished = done && shown >= findings.length;
+  const toFill = findings.filter((f) => f.kind === 'missing').length;
 
   return (
     <View style={styles.flex}>
@@ -80,21 +81,28 @@ export function DeedReading({
                 : `${finished ? 'Done — I found' : 'Found'} ${found} detail${found === 1 ? '' : 's'}`}
           </Text>
           <Text style={styles.text}>
-            {done
-              ? 'Next, check them and fill in anything I missed.'
-              : 'Usually under a minute. You can leave — it’ll be waiting on Home.'}
+            {!done
+              ? 'Usually under a minute. You can leave — it’ll be waiting on Home.'
+              : !finished
+                ? 'Reading done — here’s what I found…'
+                : toFill > 0
+                  ? `All done. ${toFill} thing${toFill === 1 ? '' : 's'} for you to fill in.`
+                  : 'All done. Check them, then save.'}
           </Text>
         </LinearGradient>
 
         <View style={styles.feed}>
-          {said.map((l, i) => (
-            <Line
-              key={l.at}
-              kind={i === said.length - 1 && !done ? 'current' : 'said'}
-              icon="check"
-              label={l.text}
-            />
-          ))}
+          {/* The commentary gives way to the findings once reading is done. */}
+          {done
+            ? null
+            : said.map((l, i) => (
+                <Line
+                  key={l.at}
+                  kind={i === said.length - 1 ? 'current' : 'said'}
+                  icon="check"
+                  label={l.text}
+                />
+              ))}
           {findings.slice(0, shown).map((f) => (
             <Line key={f.label} kind={f.kind} icon={f.icon} label={f.label} value={f.value} />
           ))}
@@ -156,7 +164,8 @@ function findings(p: PropertyPrefill, facts: PropertyFact[]): Finding[] {
   add('users', 'Bought by', str(fact('buyers')));
   add('sparkles', 'A name for it', str(p.name));
   if (!p.pincode) out.push({ kind: 'missing', icon: 'warning', label: 'No PIN code in the deed' });
-  return out;
+  // What needs the customer comes first, so it is never lost below the fold.
+  return [...out.filter((f) => f.kind === 'missing'), ...out.filter((f) => f.kind === 'found')];
 }
 
 /** One line of the feed; it fades in where it lands (no sliding). */

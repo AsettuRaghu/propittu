@@ -26,17 +26,13 @@ export function PropertyCard({
   const photos = p.photo_urls?.length ? p.photo_urls : p.cover_photo_url ? [p.cover_photo_url] : [];
 
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={p.name}
-      style={({ pressed }) => [styles.card, shadow, pressed && styles.pressed]}
-    >
+    <View style={[styles.card, shadow]}>
       <PropertyCover
         property={p}
         height={186}
         photos={photos}
         approximate={p.location_approximate}
+        onPress={onPress}
       />
 
       <View style={styles.icons}>
@@ -73,7 +69,7 @@ export function PropertyCard({
           </View>
         )}
       </View>
-    </Pressable>
+    </View>
   );
 }
 
@@ -152,7 +148,6 @@ export function PropertyCardSkeleton() {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   card: { backgroundColor: colors.surface, borderRadius: radius.lg, overflow: 'hidden' },
-  pressed: { opacity: 0.94, transform: [{ scale: 0.995 }] },
   media: { height: 186, backgroundColor: colors.surfaceMuted },
   body: { paddingHorizontal: space.md, paddingVertical: space.md, gap: space.md },
   icons: {

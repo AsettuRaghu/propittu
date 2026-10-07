@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker, type LatLng, type Region } from 'react-native-maps';
+import { api } from '@/api/client';
 import { useProperty, useUpdateProperty } from '@/api/queries';
 import { dialog, toast } from '@/components/Dialog';
 import { Icon } from '@/components/Icon';
@@ -21,7 +22,7 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
 const INDIA: Region = { latitude: 21.0, longitude: 78.9, latitudeDelta: 22, longitudeDelta: 22 };
 const CLOSE = { latitudeDelta: 0.01, longitudeDelta: 0.01 };
 
-type Origin = 'saved' | 'address' | 'none';
+type Origin = 'saved' | 'address' | 'pincode' | 'none';
 
 /**
  * Location (M2): address → approximate map position → the owner confirms
@@ -29,7 +30,8 @@ type Origin = 'saved' | 'address' | 'none';
  * Geocoding runs on the phone's own geocoder (no API key, no cost).
  */
 export default function PropertyLocationScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // near=pincode: start at the PIN code's area (the saved pin is far from it).
+  const { id, near } = useLocalSearchParams<{ id: string; near?: string }>();
   const { data: property, isPending, error, refetch } = useProperty(id);
   const update = useUpdateProperty(id);
   const mapRef = useRef<MapView>(null);
@@ -46,6 +48,20 @@ export default function PropertyLocationScreen() {
     if (!property || initial) return;
     let cancelled = false;
     (async () => {
+      if (near) {
+        const area = await api<{ latitude: number; longitude: number } | null>(
+          `/geo/pincode/${near}`,
+        ).catch(() => null);
+        if (area && !cancelled) {
+          const at = { latitude: area.latitude, longitude: area.longitude };
+          setPin(at);
+          setInitial({
+            region: { ...at, latitudeDelta: 0.05, longitudeDelta: 0.05 },
+            origin: 'pincode',
+          });
+          return;
+        }
+      }
       if (property.latitude !== null && property.longitude !== null) {
         const saved = { latitude: property.latitude, longitude: property.longitude };
         if (!cancelled) {
@@ -83,7 +99,7 @@ export default function PropertyLocationScreen() {
     return () => {
       cancelled = true;
     };
-  }, [property, initial]);
+  }, [property, initial, near]);
 
   const useMyLocation = async () => {
     setMessage(null);
@@ -143,11 +159,13 @@ export default function PropertyLocationScreen() {
   if (!initial) return <LoadingState label="Finding your property on the map…" />;
 
   const hint =
-    initial.origin === 'address' && pin
-      ? 'Approximate position from the address. Drag the pin or tap the map to mark the exact spot.'
-      : initial.origin === 'saved'
-        ? 'Drag the pin or tap the map to adjust the location.'
-        : 'Tap the map to place a pin on your property.';
+    initial.origin === 'pincode'
+      ? `Moved to PIN code ${near}'s area. Drag the pin or tap the map to mark the exact spot.`
+      : initial.origin === 'address' && pin
+        ? 'Approximate position from the address. Drag the pin or tap the map to mark the exact spot.'
+        : initial.origin === 'saved'
+          ? 'Drag the pin or tap the map to adjust the location.'
+          : 'Tap the map to place a pin on your property.';
 
   return (
     <View style={styles.flex}>

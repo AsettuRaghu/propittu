@@ -100,7 +100,10 @@ export default function PropertySetupScreen() {
   }, []);
 
   const a = analysis.data;
-  const reading = !doc ? false : !a || a.status === 'queued' || a.status === 'reading';
+  // Still loading what we know: not the same as reading (don't replay the commentary).
+  const notStarted = analysis.error instanceof ApiError && analysis.error.status === 404;
+  if (doc && !a && !notStarted && !analysis.error) return <LoadingState />;
+  const reading = !!doc && (notStarted || a?.status === 'queued' || a?.status === 'reading');
 
   // Seen reading in this visit? Then the findings are revealed before the form.
   if (reading && !sawReading) setSawReading(true);
