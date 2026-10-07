@@ -2,12 +2,13 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, space, typography } from '@/theme';
 import { dialog } from './Dialog';
 import { Icon, type IconName } from './Icon';
-import { ListRow } from './ui';
 
 export interface SelectOption<T extends string> {
   value: T;
   label: string;
   description?: string;
+  /** Shown next to the option in the picker sheet. */
+  icon?: IconName;
 }
 
 /**
@@ -25,11 +26,13 @@ export function Select<T extends string>({
   optional = false,
   error,
   variant = 'field',
-  icon,
 }: {
-  /** `row`: a flat list row (icon, label, the chosen value) — for plain sections. */
-  variant?: 'field' | 'row';
-  icon?: IconName;
+  /**
+   * `flat`: no box — a small label, the choice, a chevron and a hairline
+   * underneath (brand colour while open, red on error). Matches the flat
+   * TextField.
+   */
+  variant?: 'field' | 'flat';
   label: string;
   value: T | null;
   options: SelectOption<T>[];
@@ -54,14 +57,32 @@ export function Select<T extends string>({
     onChange(picked === NONE ? null : (picked as T));
   };
 
-  if (variant === 'row') {
+  if (variant === 'flat') {
     return (
-      <ListRow
-        icon={icon}
-        title={label}
-        subtitle={chosen?.label ?? noneLabel ?? placeholder}
-        onPress={() => void open()}
-      />
+      <View>
+        <Pressable
+          onPress={() => void open()}
+          accessibilityRole="button"
+          accessibilityLabel={`${label}: ${chosen?.label ?? noneLabel ?? placeholder}`}
+          style={({ pressed }) => [
+            styles.flatField,
+            error ? { borderBottomColor: colors.danger } : null,
+            pressed && { borderBottomColor: colors.primary },
+          ]}
+        >
+          <View style={styles.flex}>
+            <Text style={typography.caption}>{label}</Text>
+            <Text
+              style={[styles.flatValue, !chosen && { color: colors.textSubtle }]}
+              numberOfLines={1}
+            >
+              {chosen?.label ?? noneLabel ?? placeholder}
+            </Text>
+          </View>
+          <Icon name="chevron-down" size={18} color={colors.textMuted} />
+        </Pressable>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+      </View>
     );
   }
 
@@ -106,5 +127,14 @@ const styles = StyleSheet.create({
     borderColor: colors.borderStrong,
     backgroundColor: colors.surface,
   },
-  error: { fontSize: 13, color: colors.danger, fontWeight: '600' },
+  error: { fontSize: 13, color: colors.danger, fontWeight: '600', marginTop: 4 },
+  flatField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    paddingVertical: space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderStrong,
+  },
+  flatValue: { fontSize: 17, color: colors.text, marginTop: 2 },
 });

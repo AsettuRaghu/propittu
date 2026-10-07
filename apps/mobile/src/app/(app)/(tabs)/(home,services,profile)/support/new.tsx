@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import {
   createTicketSchema,
   OPEN_REQUEST_STATUSES,
@@ -18,11 +18,11 @@ import { toast } from '@/components/Dialog';
 import { TextField } from '@/components/Field';
 import { Footer } from '@/components/Footer';
 import { Select } from '@/components/Select';
-import { Banner, Button, Chips, ListGroup, ListRow } from '@/components/ui';
+import { Banner, Button, ListGroup, ListRow } from '@/components/ui';
 import { formatDate } from '@/lib/format';
 import { errorMessage, fieldErrors } from '@/lib/errors';
 import { TICKET_CATEGORY_ICONS } from '@/lib/icons';
-import { colors, space } from '@/theme';
+import { space } from '@/theme';
 
 /**
  * Raise a support ticket, flat like Profile: headed sections with their
@@ -109,17 +109,19 @@ export default function NewTicketScreen() {
 
         <ListGroup title="What is it about?" plain>
           <View style={styles.inner}>
-            <Chips
-              variant="soft"
+            <Select
+              variant="flat"
+              label="Category"
+              placeholder="Choose a category"
+              value={category}
               options={TICKET_CATEGORIES.map((c) => ({
                 value: c,
                 label: TICKET_CATEGORY_LABELS[c],
                 icon: TICKET_CATEGORY_ICONS[c],
               }))}
-              value={category}
               onChange={setCategory}
+              error={errors.category}
             />
-            {errors.category ? <Text style={styles.error}>{errors.category}</Text> : null}
           </View>
         </ListGroup>
 
@@ -140,38 +142,38 @@ export default function NewTicketScreen() {
 
         {props.length > 0 || relevantRequests.length > 0 ? (
           <ListGroup title="Related to (optional)" plain>
-            {props.length > 0 ? (
-              <Select
-                variant="row"
-                icon="home"
-                label="Property"
-                value={propertyId}
-                noneLabel="Not about a specific property"
-                options={props.map((p) => ({ value: p.id, label: p.name }))}
-                onChange={setPropertyId}
-              />
-            ) : null}
-            {relevantRequests.length > 0 ? (
-              <Select
-                variant="row"
-                icon="requests"
-                label="Service request"
-                value={requestId}
-                noneLabel="Not about a service request"
-                options={relevantRequests.map((r) => ({
-                  value: r.id,
-                  label: r.service.name,
-                  description: [
-                    r.property?.name,
-                    requestStatusLabel(r.status, r.fulfilment),
-                    formatDate(r.created_at),
-                  ]
-                    .filter(Boolean)
-                    .join(' · '),
-                }))}
-                onChange={setRequestId}
-              />
-            ) : null}
+            <View style={styles.inner}>
+              {props.length > 0 ? (
+                <Select
+                  variant="flat"
+                  label="Property"
+                  value={propertyId}
+                  noneLabel="Not about a specific property"
+                  options={props.map((p) => ({ value: p.id, label: p.name }))}
+                  onChange={setPropertyId}
+                />
+              ) : null}
+              {relevantRequests.length > 0 ? (
+                <Select
+                  variant="flat"
+                  label="Service request"
+                  value={requestId}
+                  noneLabel="Not about a service request"
+                  options={relevantRequests.map((r) => ({
+                    value: r.id,
+                    label: r.service.name,
+                    description: [
+                      r.property?.name,
+                      requestStatusLabel(r.status, r.fulfilment),
+                      formatDate(r.created_at),
+                    ]
+                      .filter(Boolean)
+                      .join(' · '),
+                  }))}
+                  onChange={setRequestId}
+                />
+              ) : null}
+            </View>
           </ListGroup>
         ) : null}
 
@@ -202,6 +204,5 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { padding: space.lg, paddingTop: space.md, gap: space.xl, paddingBottom: space.xxl },
   // Same 14 pt inset as list rows, so content lines up under each heading.
-  inner: { paddingHorizontal: 14, paddingVertical: space.xs, gap: space.sm },
-  error: { fontSize: 13, color: colors.danger, fontWeight: '600' },
+  inner: { paddingHorizontal: 14, paddingVertical: space.xs, gap: space.lg },
 });
