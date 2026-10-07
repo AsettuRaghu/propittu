@@ -417,10 +417,10 @@ function PlanRow({
   let subtitle = holdsText;
   let right: ReactNode = null;
   if (state === 'current') {
-    subtitle = `Your plan · ${holdsText}`;
+    subtitle = `Current plan · ${holdsText}`;
     right = action(`Renew · ${price}`);
   } else if (state === 'renew_later') {
-    right = <Badge label="Your plan" tone="success" />;
+    right = <Badge label="Current plan" tone="success" />;
   } else if (state === 'upgrade') {
     right = action(`Upgrade · ${price}`);
   } else if (state === 'choose') {

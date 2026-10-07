@@ -1,8 +1,9 @@
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import type { ReactNode } from 'react';
+import { Children, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
+  LayoutAnimation,
   Pressable,
   StyleSheet,
   Text,
@@ -372,6 +373,7 @@ export function ListGroup({
   action,
   plain = false,
   indent,
+  collapsible = false,
 }: {
   children: ReactNode;
   title?: string;
@@ -380,29 +382,59 @@ export function ListGroup({
   plain?: boolean;
   /** Plain only: set the entries slightly in from the heading (default: when titled). */
   indent?: boolean;
+  /** Tapping the title folds the entries away (a chevron shows which way). */
+  collapsible?: boolean;
 }) {
+  const [open, setOpen] = useState(true);
   const inset = indent ?? !!title;
-  const items = (Array.isArray(children) ? children : [children]).filter(Boolean);
+  const items = Children.toArray(children);
+  const heading = title ? (
+    <View style={styles.listTitleRow}>
+      <Text style={typography.heading}>{title}</Text>
+      {collapsible ? (
+        <Icon name={open ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
+      ) : null}
+    </View>
+  ) : null;
   return (
     <View>
       {title ? (
         <View style={[styles.listHead, action ? styles.listHeadAction : null]}>
-          <Text style={[typography.heading, styles.flex]}>{title}</Text>
+          {collapsible ? (
+            <Pressable
+              onPress={() => {
+                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                setOpen((v) => !v);
+              }}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: open }}
+              hitSlop={8}
+              style={styles.flex}
+            >
+              {heading}
+            </Pressable>
+          ) : (
+            <View style={styles.flex}>{heading}</View>
+          )}
           {action}
         </View>
       ) : null}
-      <View
-        style={
-          plain ? (inset ? styles.listPlainInset : styles.listPlain) : [styles.listGroup, shadow]
-        }
-      >
-        {items.map((child, i) => (
-          <View key={i}>
-            {i > 0 ? <View style={[styles.listDivider, plain && styles.listDividerPlain]} /> : null}
-            {child}
-          </View>
-        ))}
-      </View>
+      {open ? (
+        <View
+          style={
+            plain ? (inset ? styles.listPlainInset : styles.listPlain) : [styles.listGroup, shadow]
+          }
+        >
+          {items.map((child, i) => (
+            <View key={i}>
+              {i > 0 ? (
+                <View style={[styles.listDivider, plain && styles.listDividerPlain]} />
+              ) : null}
+              {child}
+            </View>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -801,6 +833,7 @@ const styles = StyleSheet.create({
     marginBottom: space.xs,
   },
   listHeadAction: { minHeight: 38 },
+  listTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   rowValue: { maxWidth: '45%' },
   rowRight: { justifyContent: 'center' },
   keyValue: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start' },

@@ -19,7 +19,6 @@ import {
 import { useTickets } from '@/api/support';
 import { Icon } from '@/components/Icon';
 import { PullRefresh } from '@/components/PullRefresh';
-import { PageHeader, Strong } from '@/components/PageHeader';
 import { LoadingState } from '@/components/States';
 import { Badge, Button, ListGroup, ListRow } from '@/components/ui';
 import { formatDate } from '@/lib/format';
@@ -56,15 +55,14 @@ const FAQS: { q: string; a: string }[] = [
 const RECENT_DAYS = 30;
 
 /**
- * Help & Support, laid out like Plan & Usage: a "Tickets" header with the
- * Raise a ticket button, the open and recently closed tickets (collapsible),
- * then Contact us and FAQs as headed, indented sections. Shown once tickets
- * have loaded, so nothing jumps.
+ * Help & Support: three headed sections with their entries indented —
+ * Tickets (open + closed in the last 30 days, collapsible, with Raise a
+ * ticket beside the heading), Contact us, FAQs. Shown once tickets have
+ * loaded, so nothing jumps.
  */
 export default function SupportScreen() {
   const tickets = useTickets();
   const [openFaq, setOpenFaq] = useState<number | null>(null);
-  const [showTickets, setShowTickets] = useState(true);
   const [since] = useState(() => Date.now() - RECENT_DAYS * 86_400_000);
   const toggle = (fn: () => void) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -87,56 +85,25 @@ export default function SupportScreen() {
       showsVerticalScrollIndicator={false}
       refreshControl={<PullRefresh onRefresh={() => tickets.refetch()} />}
     >
-      <View>
-        <PageHeader
-          title="Tickets"
-          subtitle={
-            open.length ? (
-              <>
-                <Strong>{open.length} open</Strong> · we reply within 1–3 working days
-              </>
-            ) : (
-              'We reply within 1–3 working days'
-            )
-          }
-          action={
-            <Button
-              title="Raise a ticket"
-              icon="add"
-              size="sm"
-              onPress={() => router.push('/support/new')}
-            />
-          }
-        />
+      <ListGroup
+        title="Tickets"
+        plain
+        collapsible
+        action={
+          <Button
+            title="Raise a ticket"
+            icon="add"
+            size="sm"
+            onPress={() => router.push('/support/new')}
+          />
+        }
+      >
         {listed.length > 0 ? (
-          <>
-            <Pressable
-              onPress={() => toggle(() => setShowTickets((v) => !v))}
-              accessibilityRole="button"
-              accessibilityState={{ expanded: showTickets }}
-              style={styles.toggle}
-            >
-              <Text style={styles.toggleText}>
-                {showTickets ? 'Hide' : 'Show'} tickets ({listed.length})
-              </Text>
-              <Icon
-                name={showTickets ? 'chevron-up' : 'chevron-down'}
-                size={15}
-                color={colors.textMuted}
-              />
-            </Pressable>
-            {showTickets ? (
-              <ListGroup plain>
-                {listed.map((t) => (
-                  <TicketRow key={t.id} ticket={t} />
-                ))}
-              </ListGroup>
-            ) : null}
-          </>
+          listed.map((t) => <TicketRow key={t.id} ticket={t} />)
         ) : (
           <Text style={[typography.small, styles.none]}>No tickets in the last 30 days.</Text>
         )}
-      </View>
+      </ListGroup>
 
       <ListGroup title="Contact us" plain>
         <ListRow icon="mail" accent="sky" title={SUPPORT_EMAIL} subtitle="Write to us any time" />
@@ -189,15 +156,7 @@ function TicketRow({ ticket: t }: { ticket: SupportTicket }) {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { padding: space.lg, paddingTop: space.md, gap: space.xl, paddingBottom: space.xxl },
-  none: { paddingVertical: space.md },
-  toggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingTop: space.md,
-    paddingBottom: space.xs,
-  },
-  toggleText: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
+  none: { paddingHorizontal: 14, paddingVertical: space.md },
   faq: { paddingHorizontal: 14, paddingVertical: 14, gap: 6 },
   faqRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
 });
