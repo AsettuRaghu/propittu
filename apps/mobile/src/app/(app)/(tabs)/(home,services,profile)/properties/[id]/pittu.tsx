@@ -1,28 +1,22 @@
 import * as DocumentPicker from 'expo-document-picker';
-import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
-  reachProblem,
   ALLOWED_DOCUMENT_MIME_TYPES,
-  carePlan,
-  documentChecklist,
   pittuQuestions,
-  type CareItem,
   type PittuQuestion,
   type PittuState,
 } from '@propittu/shared';
 import { pittuKey, useAnswerPittu, usePittu } from '@/api/ai';
-import { api } from '@/api/client';
-import { useProperty, useServices } from '@/api/queries';
 import { prepareDocument, uploadDocument } from '@/api/uploads';
 import { useQueryClient } from '@tanstack/react-query';
-import { toast } from '@/components/Dialog';
 import { Icon } from '@/components/Icon';
+import { PittuCarePlan } from '@/components/PittuCarePlan';
 import { ErrorState, LoadingState } from '@/components/States';
 import { Banner, Button } from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
-import { accents, colors, font, radius, shadow, space, typography } from '@/theme';
+import { colors, font, radius, shadow, space, typography } from '@/theme';
 
 /**
  * Pittu's quick questions after a property is added from its deed, then the
@@ -189,175 +183,7 @@ function Flow({ propertyId, state }: { propertyId: string; state: PittuState }) 
     );
   }
 
-  return <Summary propertyId={propertyId} state={state} reply={reply} />;
-}
-
-function Summary({
-  propertyId,
-  state,
-  reply,
-}: {
-  propertyId: string;
-  state: PittuState;
-  reply: string | null;
-}) {
-  const property = useProperty(propertyId);
-  const services = useServices();
-  // Reopened from the property page: back to it. Straight after adding: the property, welcomed.
-  const { from } = useLocalSearchParams<{ from?: string }>();
-  const finish = () =>
-    from === 'property'
-      ? router.back()
-      : router.replace({ pathname: '/properties/[id]', params: { id: propertyId, welcome: '1' } });
-  // Only services that can reach this property (PIN code / state).
-  const plan = carePlan(state.context, state.answers).filter((item) => {
-    const service = (services.data ?? []).find((s) => s.code === item.service_code);
-    return !service || !reachProblem(service, property.data?.reach);
-  });
-  const checklist = documentChecklist(state.context);
-  const [off, setOff] = useState<Record<string, boolean>>({});
-  const [sending, setSending] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-  const chosen = plan.filter((p) => !off[p.service_code]);
-
-  const send = async () => {
-    setSending(true);
-    setProblem(null);
-    let sent = 0;
-    for (const item of chosen) {
-      const service = (services.data ?? []).find((s) => s.code === item.service_code);
-      if (!service || service.coverage === 'unavailable') continue;
-      try {
-        await api('/service-requests', {
-          method: 'POST',
-          body: {
-            property_id: propertyId,
-            service_id: service.id,
-            description: `${item.title} — suggested by Pittu. ${item.because}.`,
-            preferred_date: null,
-          },
-        });
-        sent++;
-      } catch (err) {
-        setProblem(errorMessage(err, `Couldn't request ${item.title}.`));
-      }
-    }
-    setSending(false);
-    toast(sent ? `${sent} service${sent === 1 ? '' : 's'} requested` : 'Property saved');
-    finish();
-  };
-
-  return (
-    <ScrollView contentContainerStyle={styles.content}>
-      <Stack.Screen options={{ title: 'All set' }} />
-      <Bubble text={reply ?? 'All done! Here’s what we know, and how we can help.'} />
-
-      <View style={[styles.card, shadow, styles.row]}>
-        <View style={[styles.ring, { borderColor: accents.teal.fg }]}>
-          <Text style={styles.ringText}>{property.data?.completion.percent ?? '—'}%</Text>
-        </View>
-        <View style={styles.flex}>
-          <Text style={typography.heading} numberOfLines={1}>
-            {property.data?.name ?? 'Your property'}
-          </Text>
-          <Text style={typography.small}>Property profile</Text>
-        </View>
-      </View>
-
-      <Text style={styles.overline}>DOCUMENTS</Text>
-      <View style={[styles.card, shadow, styles.tight]}>
-        {checklist.map((d, i) => (
-          <Pressable
-            key={d.document_type}
-            disabled={d.have}
-            onPress={() =>
-              router.push({
-                pathname: '/properties/[id]/add-document',
-                params: { id: propertyId, type: d.document_type },
-              })
-            }
-            style={[styles.docRow, i > 0 && styles.border]}
-          >
-            <View
-              style={[
-                styles.docIcon,
-                { backgroundColor: d.have ? accents.teal.bg : accents.amber.bg },
-              ]}
-            >
-              <Icon
-                name={d.have ? 'check' : 'add'}
-                size={14}
-                strokeWidth={3}
-                color={d.have ? accents.teal.fg : accents.amber.fg}
-              />
-            </View>
-            <View style={styles.flex}>
-              <Text style={typography.bodyStrong}>{d.label}</Text>
-              <Text style={typography.caption}>{d.hint}</Text>
-            </View>
-            {!d.have ? <Text style={styles.upload}>Upload</Text> : null}
-          </Pressable>
-        ))}
-      </View>
-
-      {plan.length ? (
-        <>
-          <Text style={styles.overline}>PITTU’S CARE PLAN</Text>
-          <Text style={typography.small}>
-            Based on your answers. Untick anything you don’t need.
-          </Text>
-          {plan.map((p) => (
-            <CareCard
-              key={p.service_code}
-              item={p}
-              on={!off[p.service_code]}
-              onToggle={() => setOff((o) => ({ ...o, [p.service_code]: !o[p.service_code] }))}
-            />
-          ))}
-          {problem ? <Banner message={problem} /> : null}
-          <Button
-            title={
-              chosen.length
-                ? `Request ${chosen.length} service${chosen.length === 1 ? '' : 's'}`
-                : 'Done'
-            }
-            onPress={() => (chosen.length ? void send() : finish())}
-            loading={sending}
-          />
-          <Button title="Decide later" variant="ghost" onPress={() => finish()} />
-          <Text style={[typography.caption, styles.center]}>
-            Included services use your plan; others are priced before you pay — nothing is charged
-            until we confirm.
-          </Text>
-        </>
-      ) : (
-        <Button title="Go to my property" onPress={() => finish()} />
-      )}
-    </ScrollView>
-  );
-}
-
-function CareCard({ item, on, onToggle }: { item: CareItem; on: boolean; onToggle: () => void }) {
-  return (
-    <Pressable
-      onPress={onToggle}
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked: on }}
-      style={[styles.care, shadow, on && styles.careOn]}
-    >
-      <View style={styles.flex}>
-        <Text style={typography.heading}>{item.title}</Text>
-        <Text style={typography.small}>{item.reason}</Text>
-        <Text style={typography.caption}>{item.because}</Text>
-        {item.legal ? (
-          <Text style={styles.legal}>Reviewed by our team, with a lawyer where needed.</Text>
-        ) : null}
-      </View>
-      <View style={[styles.check, on && styles.checkOn]}>
-        {on ? <Icon name="check" size={13} color="#FFFFFF" strokeWidth={3} /> : null}
-      </View>
-    </Pressable>
-  );
+  return <PittuCarePlan propertyId={propertyId} state={state} reply={reply} />;
 }
 
 function Bubble({ text }: { text: string }) {
@@ -374,6 +200,12 @@ function Bubble({ text }: { text: string }) {
 }
 
 const styles = StyleSheet.create({
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: space.lg,
+    gap: space.sm,
+  },
   flex: { flex: 1, minWidth: 0 },
   center: { textAlign: 'center' },
   content: { padding: space.lg, paddingTop: space.xs, gap: space.md, paddingBottom: space.xxl },
@@ -403,14 +235,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 4,
     padding: space.md,
   },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.xl,
-    padding: space.lg,
-    gap: space.sm,
-  },
-  tight: { paddingVertical: space.xs },
-  row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   title: {
     fontSize: font(20),
     fontWeight: '800',
@@ -440,51 +264,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     paddingVertical: 15,
   },
-  ring: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    borderWidth: 5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ringText: { fontSize: font(13), fontWeight: '800', color: colors.text },
-  overline: {
-    fontSize: font(11),
-    fontWeight: '700',
-    color: colors.textSubtle,
-    letterSpacing: 0.9,
-    marginTop: space.sm,
-  },
-  docRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 11 },
-  border: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
-  docIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  upload: { fontSize: font(13), fontWeight: '700', color: colors.primary },
-  care: {
-    flexDirection: 'row',
-    gap: space.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: space.md,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-  },
-  careOn: { borderColor: colors.primary },
-  legal: { fontSize: font(12), fontWeight: '600', color: colors.warning, marginTop: 2 },
-  check: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: colors.borderStrong,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkOn: { backgroundColor: colors.primary, borderColor: colors.primary },
 });
