@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
   },
-  notice: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  notice: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   reply: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   box: {
     flex: 1,

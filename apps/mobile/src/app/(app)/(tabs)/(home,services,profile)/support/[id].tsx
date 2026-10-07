@@ -35,7 +35,7 @@ export default function TicketScreen() {
             <Text style={[typography.title, styles.flex]} numberOfLines={2}>
               {withoutCodes(t.subject)}
             </Text>
-            <Badge label={TICKET_STATUS_LABELS[t.status]} tone={TICKET_TONES[t.status]} />
+            <Badge label={TICKET_STATUS_LABELS[t.status]} tone={TICKET_TONES[t.status]} size="lg" />
           </View>
           <Text style={typography.small}>
             {TICKET_CATEGORY_LABELS[t.category]} · raised {formatDate(t.created_at)}
@@ -99,6 +99,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  row: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },
+  row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   links: { flexDirection: 'row', gap: space.lg, flexWrap: 'wrap', marginTop: 2 },
 });

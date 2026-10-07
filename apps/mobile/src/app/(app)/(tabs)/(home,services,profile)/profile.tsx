@@ -9,7 +9,6 @@ import { useUpdateProfile } from '@/api/support';
 import { InlineEdit } from '@/components/InlineEdit';
 import { PullRefresh } from '@/components/PullRefresh';
 import { ErrorState, LoadingState } from '@/components/States';
-import { FadeIn } from '@/components/FadeIn';
 import { Badge, LinkButton, ListGroup, ListRow } from '@/components/ui';
 import { env } from '@/lib/env';
 import { planBadge } from '@/lib/planBadge';
@@ -44,72 +43,68 @@ export default function ProfileScreen() {
             <ErrorState error={error} onRetry={() => void refetch()} />
           </View>
         ) : (
-          <FadeIn>
-            <ListGroup title="My profile" plain>
-              <InlineEdit
-                icon="user"
-                label="Name"
-                value={me.full_name}
-                placeholder="Add your name"
-                validate={(v) => {
-                  const r = updateProfileSchema.safeParse({ full_name: v });
-                  return r.success ? null : (r.error.issues[0]?.message ?? 'Check the name');
-                }}
-                onSave={(full_name) => updateProfile.mutateAsync({ full_name })}
-                inputProps={{ autoCapitalize: 'words', autoComplete: 'name', maxLength: 120 }}
-                badge={
-                  me.full_name ? (
-                    <Badge label="Complete" tone="success" />
-                  ) : (
-                    <Badge label="Incomplete" tone="warning" />
-                  )
-                }
-              />
-              <ListRow
-                icon="phone"
-                title={formatIndianMobile(me.phone)}
-                subtitle="Used to log in"
-                right={<Badge label="Verified" tone="success" icon="verified" />}
-              />
-              <ListRow
-                icon="plan"
-                accent="violet"
-                title="Plan & Usage"
-                right={
-                  <Badge
-                    {...planBadge({
-                      status: me.plan.status,
-                      planName: me.plan.plan_name,
-                      accountActive: me.account.status === 'active',
-                    })}
-                  />
-                }
-                onPress={() => router.push('/plan')}
-              />
-              {me.staff_role ? (
-                <ListRow
-                  icon="staff"
-                  accent="slate"
-                  title="Backoffice"
-                  onPress={() => router.push('/backoffice')}
+          <ListGroup title="My profile" plain>
+            <InlineEdit
+              icon="user"
+              label="Name"
+              value={me.full_name}
+              placeholder="Add your name"
+              validate={(v) => {
+                const r = updateProfileSchema.safeParse({ full_name: v });
+                return r.success ? null : (r.error.issues[0]?.message ?? 'Check the name');
+              }}
+              onSave={(full_name) => updateProfile.mutateAsync({ full_name })}
+              inputProps={{ autoCapitalize: 'words', autoComplete: 'name', maxLength: 120 }}
+              badge={
+                me.full_name ? (
+                  <Badge label="Complete" tone="success" />
+                ) : (
+                  <Badge label="Incomplete" tone="warning" />
+                )
+              }
+            />
+            <ListRow
+              icon="phone"
+              title={formatIndianMobile(me.phone)}
+              subtitle="Used to log in"
+              right={<Badge label="Verified" tone="success" icon="verified" />}
+            />
+            <ListRow
+              icon="plan"
+              accent="violet"
+              title="Plan & Usage"
+              right={
+                <Badge
+                  {...planBadge({
+                    status: me.plan.status,
+                    planName: me.plan.plan_name,
+                    accountActive: me.account.status === 'active',
+                  })}
                 />
-              ) : null}
-            </ListGroup>
-          </FadeIn>
+              }
+              onPress={() => router.push('/plan')}
+            />
+            {me.staff_role ? (
+              <ListRow
+                icon="staff"
+                accent="slate"
+                title="Backoffice"
+                onPress={() => router.push('/backoffice')}
+              />
+            ) : null}
+          </ListGroup>
         )}
 
-        <FadeIn index={1}>
-          <ListGroup title="Company" plain>
-            <ListRow
-              icon="support"
-              accent="teal"
-              title="Help & Support"
-              onPress={() => router.push('/support')}
-            />
-            <ListRow icon="shield" title="Privacy policy" onPress={() => openLegal('privacy')} />
-            <ListRow icon="document" title="Terms of use" onPress={() => openLegal('terms')} />
-          </ListGroup>
-        </FadeIn>
+        <ListGroup title="Company" plain>
+          <ListRow
+            icon="support"
+            accent="teal"
+            title="Help & Support"
+            onPress={() => router.push('/support')}
+          />
+          <ListRow icon="shield" title="Privacy policy" onPress={() => openLegal('privacy')} />
+          <ListRow icon="document" title="Terms of use" onPress={() => openLegal('terms')} />
+        </ListGroup>
 
         <View style={styles.footer}>
           <View style={styles.logout}>

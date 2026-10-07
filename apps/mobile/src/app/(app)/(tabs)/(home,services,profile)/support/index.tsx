@@ -17,10 +17,10 @@ import {
   withoutCodes,
 } from '@propittu/shared';
 import { useTickets } from '@/api/support';
-import { FadeIn } from '@/components/FadeIn';
 import { Icon } from '@/components/Icon';
 import { PullRefresh } from '@/components/PullRefresh';
-import { Badge, Button, ListGroup, ListRow } from '@/components/ui';
+import { LoadingState } from '@/components/States';
+import { Badge, ListGroup, ListRow } from '@/components/ui';
 import { formatDate } from '@/lib/format';
 import { TICKET_TONES } from '@/lib/icons';
 import { colors, space, typography } from '@/theme';
@@ -51,7 +51,11 @@ const FAQS: { q: string; a: string }[] = [
   },
 ];
 
-/** Help & Support, flat like Profile: contact · raise a ticket · your tickets · FAQs. */
+/**
+ * Help & Support, flat like Profile: your tickets (with "Raise a ticket"
+ * as the first row) · contact · FAQs. Shown once tickets have loaded, so
+ * nothing below jumps when they arrive.
+ */
 export default function SupportScreen() {
   const tickets = useTickets();
   const [openFaq, setOpenFaq] = useState<number | null>(null);
@@ -61,6 +65,7 @@ export default function SupportScreen() {
     fn();
   };
 
+  if (tickets.isPending) return <LoadingState />;
   const all = tickets.data ?? [];
   const open = all.filter((t) => OPEN_TICKET_STATUSES.includes(t.status));
   const closed = all.filter((t) => !OPEN_TICKET_STATUSES.includes(t.status));
@@ -71,36 +76,17 @@ export default function SupportScreen() {
       showsVerticalScrollIndicator={false}
       refreshControl={<PullRefresh onRefresh={() => tickets.refetch()} />}
     >
-      <FadeIn>
-        <ListGroup title="Contact us" plain>
-          <ListRow icon="mail" accent="sky" title={SUPPORT_EMAIL} subtitle="Write to us any time" />
-          {SUPPORT_PHONE ? (
-            <ListRow
-              icon="phone"
-              accent="teal"
-              title={SUPPORT_PHONE}
-              subtitle="Mon–Sat, 9 am – 7 pm"
-              onPress={() => void Linking.openURL(`tel:${SUPPORT_PHONE.replace(/\s/g, '')}`)}
-            />
-          ) : null}
-        </ListGroup>
-        <View style={styles.raise}>
-          <Button title="Raise a ticket" icon="add" onPress={() => router.push('/support/new')} />
-          <Text style={[typography.caption, styles.center]}>
-            We reply in the app — usually within 1–3 working days.
-          </Text>
-        </View>
-      </FadeIn>
-
-      <FadeIn index={1}>
+      <View>
         <ListGroup title="Your tickets" plain>
-          {open.length === 0 ? (
-            <Text style={[typography.small, styles.none]}>
-              {tickets.isPending ? 'Loading…' : 'No open tickets.'}
-            </Text>
-          ) : (
-            open.map((t) => <TicketRow key={t.id} ticket={t} />)
-          )}
+          <ListRow
+            icon="add"
+            title="Raise a ticket"
+            subtitle="We reply in the app within 1–3 working days"
+            onPress={() => router.push('/support/new')}
+          />
+          {open.map((t) => (
+            <TicketRow key={t.id} ticket={t} />
+          ))}
         </ListGroup>
         {closed.length > 0 ? (
           <>
@@ -125,30 +111,41 @@ export default function SupportScreen() {
             ) : null}
           </>
         ) : null}
-      </FadeIn>
+      </View>
 
-      <FadeIn index={2}>
-        <ListGroup title="FAQs" plain>
-          {FAQS.map((f, i) => (
-            <Pressable
-              key={f.q}
-              onPress={() => toggle(() => setOpenFaq(openFaq === i ? null : i))}
-              accessibilityRole="button"
-              style={styles.faq}
-            >
-              <View style={styles.faqRow}>
-                <Text style={[typography.bodyStrong, styles.flex]}>{f.q}</Text>
-                <Icon
-                  name={openFaq === i ? 'chevron-up' : 'chevron-down'}
-                  size={16}
-                  color={colors.textSubtle}
-                />
-              </View>
-              {openFaq === i ? <Text style={typography.small}>{f.a}</Text> : null}
-            </Pressable>
-          ))}
-        </ListGroup>
-      </FadeIn>
+      <ListGroup title="Contact us" plain>
+        <ListRow icon="mail" accent="sky" title={SUPPORT_EMAIL} subtitle="Write to us any time" />
+        {SUPPORT_PHONE ? (
+          <ListRow
+            icon="phone"
+            accent="teal"
+            title={SUPPORT_PHONE}
+            subtitle="Mon–Sat, 9 am – 7 pm"
+            onPress={() => void Linking.openURL(`tel:${SUPPORT_PHONE.replace(/\s/g, '')}`)}
+          />
+        ) : null}
+      </ListGroup>
+
+      <ListGroup title="FAQs" plain>
+        {FAQS.map((f, i) => (
+          <Pressable
+            key={f.q}
+            onPress={() => toggle(() => setOpenFaq(openFaq === i ? null : i))}
+            accessibilityRole="button"
+            style={styles.faq}
+          >
+            <View style={styles.faqRow}>
+              <Text style={[typography.bodyStrong, styles.flex]}>{f.q}</Text>
+              <Icon
+                name={openFaq === i ? 'chevron-up' : 'chevron-down'}
+                size={16}
+                color={colors.textSubtle}
+              />
+            </View>
+            {openFaq === i ? <Text style={typography.small}>{f.a}</Text> : null}
+          </Pressable>
+        ))}
+      </ListGroup>
     </ScrollView>
   );
 }
@@ -167,8 +164,6 @@ function TicketRow({ ticket: t }: { ticket: SupportTicket }) {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { padding: space.lg, paddingTop: space.md, gap: space.xl, paddingBottom: space.xxl },
-  raise: { gap: space.sm, marginTop: space.lg },
-  center: { textAlign: 'center' },
   closedToggle: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -177,7 +172,6 @@ const styles = StyleSheet.create({
     paddingVertical: space.md,
   },
   closedText: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
-  none: { paddingHorizontal: 14, paddingVertical: space.md },
   faq: { paddingHorizontal: 14, paddingVertical: 14, gap: 6 },
   faqRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
 });

@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState, type ReactNode } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   BILLING_PERIOD_LABELS,
   formatPrice,
@@ -18,14 +18,13 @@ import { PullRefresh } from '@/components/PullRefresh';
 import { fetchPlanQuote, useOrders, usePlanCheckout } from '@/api/billing';
 import { useAccountPlan, usePlans, useProperties, useServices } from '@/api/queries';
 import { dialog } from '@/components/Dialog';
-import { FadeIn } from '@/components/FadeIn';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
 import { UsageMeter } from '@/components/UsageMeter';
-import { Badge, Banner, Button, IconTile, ListGroup, Segmented } from '@/components/ui';
+import { Badge, Banner, Button, ListGroup, ListRow, Segmented } from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
 import { planBadge } from '@/lib/planBadge';
-import { accents, colors, space, typography, type Accent } from '@/theme';
+import { colors, space, typography, type Accent } from '@/theme';
 
 type Tab = 'usage' | 'plans' | 'payments';
 
@@ -216,14 +215,12 @@ export default function PlanScreen() {
         />
       }
     >
-      <FadeIn>
-        <PlanHeader
-          state={s}
-          onTop={!!code && code === topCode}
-          canRenew={canRenew}
-          onAction={() => setTab('plans')}
-        />
-      </FadeIn>
+      <PlanHeader
+        state={s}
+        onTop={!!code && code === topCode}
+        canRenew={canRenew}
+        onAction={() => setTab('plans')}
+      />
 
       {s.over_limit.length > 0 ? (
         <Banner
@@ -245,37 +242,34 @@ export default function PlanScreen() {
         onChange={setTab}
       />
 
-      <FadeIn key={tab}>
-        {tab === 'usage' ? (
-          <UsageTab state={s} />
-        ) : tab === 'plans' ? (
-          plans.isPending ? (
-            <LoadingState />
-          ) : plans.error ? (
-            <ErrorState error={plans.error} onRetry={() => void plans.refetch()} />
-          ) : (
-            <ListGroup plain>
-              {plans.data.map((p) => (
-                <PlanRow
-                  key={p.code}
-                  plan={p}
-                  state={cardState(p)}
-                  laterDate={s.current ? formatDate(s.current.ends_at) : null}
-                  renewFrom={renewFrom}
-                  popular={!paidPlan && p.code === topCode}
-                  busy={checkout.isPending && checkout.variables === p.code}
-                  disabled={checkout.isPending}
-                  onChoose={() => void choose(p)}
-                />
-              ))}
-            </ListGroup>
-          )
-        ) : orders.isPending ? (
+      {tab === 'usage' ? (
+        <UsageTab state={s} />
+      ) : tab === 'plans' ? (
+        plans.isPending ? (
           <LoadingState />
+        ) : plans.error ? (
+          <ErrorState error={plans.error} onRetry={() => void plans.refetch()} />
         ) : (
-          <Payments orders={orders.data ?? []} />
-        )}
-      </FadeIn>
+          <ListGroup plain>
+            {plans.data.map((p) => (
+              <PlanRow
+                key={p.code}
+                plan={p}
+                state={cardState(p)}
+                laterDate={s.current ? formatDate(s.current.ends_at) : null}
+                renewFrom={renewFrom}
+                busy={checkout.isPending && checkout.variables === p.code}
+                disabled={checkout.isPending}
+                onChoose={() => void choose(p)}
+              />
+            ))}
+          </ListGroup>
+        )
+      ) : orders.isPending ? (
+        <LoadingState />
+      ) : (
+        <Payments orders={orders.data ?? []} />
+      )}
     </ScrollView>
   );
 }
@@ -389,14 +383,13 @@ function UsageTab({ state: s }: { state: AccountPlanState }) {
   );
 }
 
-/* ---- Plans: one row each — name, price, properties, the action ---- */
+/* ---- Plans: one row each, like Payments — what it holds, and the action ---- */
 
 function PlanRow({
   plan,
   state,
   laterDate,
   renewFrom,
-  popular,
   busy,
   disabled,
   onChoose,
@@ -405,55 +398,39 @@ function PlanRow({
   state: CardState;
   laterDate: string | null;
   renewFrom: string | null;
-  popular: boolean;
   busy: boolean;
   disabled: boolean;
   onChoose: () => void;
 }) {
-  const a = accents[PLAN_ACCENT[plan.code] ?? 'slate'];
-  const mine = state === 'current' || state === 'renew_later';
-  const locked = state === 'later' || state === 'too_small' || state === 'renew_later';
-  const label =
-    state === 'current'
-      ? 'Renew'
-      : state === 'renew_later'
-        ? `Renew from ${renewFrom ?? 'later'}`
-        : state === 'upgrade'
-          ? `Upgrade to ${plan.name}`
-          : state === 'too_small'
-            ? 'Holds fewer properties than you have'
-            : state === 'later'
-              ? `Available after ${laterDate ?? 'your plan ends'}`
-              : `Choose ${plan.name}`;
+  const price = formatPrice(plan.price_paise);
+  const holdsText = `Up to ${holds(plan.benefits) ?? '—'} properties`;
+  const action = (title: string) => (
+    <Button title={title} size="sm" loading={busy} disabled={disabled} onPress={onChoose} />
+  );
+  let subtitle = holdsText;
+  let right: ReactNode = null;
+  if (state === 'current') {
+    subtitle = `Your plan · ${holdsText}`;
+    right = action(`Renew · ${price}`);
+  } else if (state === 'renew_later') {
+    right = <Badge label="Your plan" tone="success" />;
+  } else if (state === 'upgrade') {
+    right = action(`Upgrade · ${price}`);
+  } else if (state === 'choose') {
+    right = action(`Choose · ${price}`);
+  } else if (state === 'too_small') {
+    subtitle = `${holdsText} — fewer than you have`;
+  } else {
+    subtitle = `${holdsText} · from ${laterDate ?? 'your renewal'}`;
+  }
   return (
-    <View style={styles.plan}>
-      <View style={styles.headRow}>
-        <View style={[styles.dot, { backgroundColor: a.fg }]} />
-        <Text style={typography.title}>{plan.name}</Text>
-        {mine ? <Badge label="Your plan" tone="success" /> : null}
-        {popular ? <Badge label="Most popular" tone="brand" /> : null}
-        <View style={styles.flex} />
-        <Text style={styles.price}>
-          {formatPrice(plan.price_paise)}
-          <Text style={styles.per}>/{plan.billing_period === 'month' ? 'mo' : 'yr'}</Text>
-        </Text>
-      </View>
-      <Text style={typography.body}>
-        Up to <Text style={typography.bodyStrong}>{holds(plan.benefits) ?? '—'} properties</Text>
-      </Text>
-      {state === 'upgrade' ? (
-        <Text style={typography.caption}>
-          You pay only the difference — unused days are credited.
-        </Text>
-      ) : null}
-      <Button
-        title={label}
-        variant={mine || locked ? 'secondary' : 'primary'}
-        disabled={disabled || locked}
-        loading={busy}
-        onPress={onChoose}
-      />
-    </View>
+    <ListRow
+      icon={plan.code === 'plus' ? 'gem' : 'home'}
+      accent={PLAN_ACCENT[plan.code] ?? 'slate'}
+      title={plan.name}
+      subtitle={subtitle}
+      right={right}
+    />
   );
 }
 
@@ -505,34 +482,27 @@ function PaymentRow({ order: o }: { order: Order }) {
   const st = o.display_status;
   const tone = st === 'paid' ? 'success' : st === 'processing' ? 'warning' : 'neutral';
   return (
-    <Pressable
+    <ListRow
+      icon="receipt"
+      accent={st === 'paid' ? 'teal' : st === 'processing' ? 'amber' : 'slate'}
+      title={o.description}
+      subtitle={
+        (o.period
+          ? `${formatDate(o.period.starts_at)} – ${formatDate(o.period.ends_at)}`
+          : formatDate(o.paid_at ?? o.created_at)) +
+        (o.credit_paise > 0 ? ` · ${formatPrice(o.credit_paise)} credit` : '')
+      }
+      right={
+        <View style={styles.amount}>
+          <Text style={[typography.bodyStrong, st === 'failed' && styles.struck]}>
+            {formatPrice(o.amount_paise)}
+          </Text>
+          <Badge label={ORDER_DISPLAY_LABELS[st]} tone={tone} />
+        </View>
+      }
+      showChevron={false}
       onPress={() => router.push(`/receipts/${o.id}`)}
-      accessibilityRole="button"
-      style={({ pressed }) => [styles.payment, pressed && { opacity: 0.7 }]}
-    >
-      <IconTile
-        icon="receipt"
-        accent={st === 'paid' ? 'teal' : st === 'processing' ? 'amber' : 'slate'}
-        size={30}
-      />
-      <View style={styles.flex}>
-        <Text style={typography.bodyStrong} numberOfLines={1}>
-          {o.description}
-        </Text>
-        <Text style={typography.caption} numberOfLines={1}>
-          {o.period
-            ? `${formatDate(o.period.starts_at)} – ${formatDate(o.period.ends_at)}`
-            : formatDate(o.paid_at ?? o.created_at)}
-          {o.credit_paise > 0 ? ` · ${formatPrice(o.credit_paise)} credit applied` : ''}
-        </Text>
-      </View>
-      <View style={styles.amount}>
-        <Text style={[typography.bodyStrong, st === 'failed' && styles.struck]}>
-          {formatPrice(o.amount_paise)}
-        </Text>
-        <Badge label={ORDER_DISPLAY_LABELS[st]} tone={tone} />
-      </View>
-    </Pressable>
+    />
   );
 }
 
@@ -543,17 +513,6 @@ const styles = StyleSheet.create({
   empty: { minHeight: 260 },
   header: { gap: space.sm },
   headRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  plan: { gap: space.sm, paddingHorizontal: 14, paddingVertical: space.lg },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  price: { fontSize: 18, fontWeight: '800', color: colors.text },
-  per: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
-  payment: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
   amount: { alignItems: 'flex-end', gap: 3 },
   muted: { opacity: 0.75 },
   note: { marginTop: space.sm },

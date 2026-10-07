@@ -48,13 +48,13 @@ export function UsageMeter({
   return (
     <View style={styles.wrap}>
       <View style={styles.top}>
-        <IconTile icon={icon} accent={accent} size={28} />
+        <IconTile icon={icon} accent={accent} size={30} />
         <View style={styles.flex}>
           <Text style={typography.bodyStrong} numberOfLines={1}>
             {label}
           </Text>
           {hint ? (
-            <Text style={typography.caption} numberOfLines={1}>
+            <Text style={typography.small} numberOfLines={1}>
               {hint}
             </Text>
           ) : null}

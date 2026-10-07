@@ -444,19 +444,26 @@ export function Badge({
   label,
   tone = 'neutral',
   icon,
+  size = 'sm',
 }: {
   label: string;
   tone?: Tone;
   icon?: IconName;
+  /** `lg` for a status that is the point of the screen (e.g. a ticket). */
+  size?: 'sm' | 'lg';
 }) {
+  const lg = size === 'lg';
   const c = toneColors[tone];
   // The outer view follows the parent's alignment (centred in a row); the
   // pill inside keeps its own size (never stretched in a column).
   return (
     <View>
-      <View style={[styles.badge, { backgroundColor: c.bg }]}>
-        {icon ? <Icon name={icon} size={12} color={c.fg} strokeWidth={2.5} /> : null}
-        <Text style={[styles.badgeText, { color: c.fg }]} numberOfLines={1}>
+      <View style={[styles.badge, lg && styles.badgeLg, { backgroundColor: c.bg }]}>
+        {icon ? <Icon name={icon} size={lg ? 14 : 12} color={c.fg} strokeWidth={2.5} /> : null}
+        <Text
+          style={[styles.badgeText, lg && styles.badgeTextLg, { color: c.fg }]}
+          numberOfLines={1}
+        >
           {label}
         </Text>
       </View>
@@ -785,6 +792,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   badgeText: { fontSize: 12, fontWeight: '700' },
+  badgeLg: { paddingHorizontal: space.md, paddingVertical: 6, gap: 6 },
+  badgeTextLg: { fontSize: 14, fontWeight: '800' },
 
   banner: {
     flexDirection: 'row',
@@ -858,6 +867,6 @@ const styles = StyleSheet.create({
   segmentTextActive: { color: colors.text },
   tabs: { flexDirection: 'row' },
   tab: { flex: 1, alignItems: 'center', paddingVertical: 8 },
-  tabText: { fontSize: 15, color: colors.textSubtle },
-  tabTextActive: { fontSize: 15, fontWeight: '800', color: colors.primary },
+  tabText: { fontSize: 15, fontWeight: '500', color: colors.textSubtle },
+  tabTextActive: { fontSize: 15, fontWeight: '500', color: colors.primary },
 });
