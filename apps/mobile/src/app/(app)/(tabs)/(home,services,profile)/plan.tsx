@@ -442,7 +442,8 @@ function PlanRow({
 
 function Payments({ orders }: { orders: Order[] }) {
   const done = orders.filter((o) => o.display_status !== 'failed');
-  const failed = orders.filter((o) => o.display_status === 'failed').slice(0, 10);
+  // Only the latest two attempts that didn't go through — enough to explain, not clutter.
+  const failed = orders.filter((o) => o.display_status === 'failed').slice(0, 2);
   if (orders.length === 0) {
     return (
       <View style={styles.empty}>
