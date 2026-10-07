@@ -58,6 +58,8 @@ of each section.
 | **PIN code is required for new properties.** Existing ones without it get an "Add the PIN code" prompt. | It decides which services reach the property. |
 | **Plan purchase warns, never blocks, when none of the customer's properties can get visits.** | The customer decides. Documents, Pittu and reminders still work everywhere. |
 | **"Tell me when you arrive" is recorded per property** (`reach_interest`). Staff see properties outside our areas grouped by PIN code, with how many customers asked. | Shows where to expand next. |
+| **A sale deed already in the locker (7 Oct 2026).** Same file (fingerprint, no AI cost) or same registration number → "Pittu knows this deed" with the property's name; **Open it** (the attempt is cleared) or the quiet link **"It's a different property — add it as new"** (form pre-filled from it). | The usual case is a forgotten upload; the link covers one deed for two sites. |
+| **The sale deed comes first (7 Oct 2026).** Pittu fills in from the deed; going against it asks first; if the customer goes ahead, it stays listed under "Differs from your deed" (with "Use deed's") until closed, and changes at setup go on the Backoffice Review list. | The deed is the most reliable source; the app warns and records, the customer decides. |
 
 ## Known debt before public launch
 
