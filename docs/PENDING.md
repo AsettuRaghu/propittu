@@ -58,11 +58,8 @@ Next planned: Home round 3 — "Around your property" news posted from Backoffic
   Today: services are rows with category, delivery (visit / paperwork), reach, price, includes
   and turnaround; two fixed status flows; outcomes per delivery type. See the brief from 7 Oct.
 
-- Account deletion: consider a 7-day grace period (deletion scheduled, cancelled by logging in) — needs the delete function to run from the server, and the delete page wording updated.
 
-- Where we serve: tell interested customers when their PIN code is added (needs notifications); use the map pin as a cross-check on wrong PIN codes; per-area service lists, if one area ever offers fewer services.
+- Where we serve: per-area service lists, if one area ever offers fewer services.
 - Market value estimate (discussed 6 Oct): design doc pending the owner's answers on area, rate setting, pricing and a valuer partner.
 
-- Document access logging (who opened / downloaded which document) — not recorded today.
 - Service-specific fields (e.g. tax assessment year) on paperwork-help outcomes.
-- Deleting a saved result file from Documents breaks its link on the request (same file).
