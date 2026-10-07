@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback } from 'react';
 import { dialog, toast } from '@/components/Dialog';
 import { errorMessage } from '@/lib/errors';
 import type {
@@ -52,6 +53,12 @@ export const useDraftProperties = (enabled = true) =>
     refetchInterval: (q) =>
       q.state.data?.some((d) => d.status === 'queued' || d.status === 'reading') ? 5000 : false,
   });
+
+/** Refreshes "Waiting for you" (a deed was added, or its reading moved on). */
+export function useRefreshDrafts() {
+  const qc = useQueryClient();
+  return useCallback(() => void qc.invalidateQueries({ queryKey: aiKeys.drafts }), [qc]);
+}
 
 /**
  * Removes an unfinished deed set-up (the draft and its uploaded deed), and

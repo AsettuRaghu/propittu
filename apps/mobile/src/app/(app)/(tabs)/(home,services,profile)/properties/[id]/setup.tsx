@@ -18,6 +18,7 @@ import {
   useAnalysis,
   useFinishSetup,
   usePlaceSuggestion,
+  useRefreshDrafts,
   useRemoveDraft,
 } from '@/api/ai';
 import { useProperty } from '@/api/queries';
@@ -100,6 +101,13 @@ export default function PropertySetupScreen() {
   }, []);
 
   const a = analysis.data;
+
+  // Home's "Waiting for you" follows the reading (reading → ready, with its name).
+  const refreshDrafts = useRefreshDrafts();
+  const status = a?.status;
+  useEffect(() => {
+    if (status) refreshDrafts();
+  }, [status, refreshDrafts]);
   // Still loading what we know: not the same as reading (don't replay the commentary).
   const notStarted = analysis.error instanceof ApiError && analysis.error.status === 404;
   if (doc && !a && !notStarted && !analysis.error) return <LoadingState />;

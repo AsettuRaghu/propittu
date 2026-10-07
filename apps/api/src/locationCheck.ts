@@ -1,52 +1,123 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type { LocationIssue } from '@propittu/shared';
 import { describe, findPlace, pinMismatch, pincodeArea, placeAt, type Place } from './geo.js';
 import { logger } from './logger.js';
-import type { Located } from './locationRecord.js';
+import {
+  checkRecord,
+  deedKey,
+  distanceKm,
+  type DeedPlace,
+  type Located,
+} from './locationRecord.js';
 import { serviceClient } from './supabase.js';
 
 /**
- * Keeping the map pin and the PIN code honest. The last check is stored on
- * the property (location_check) so pages never wait on the place lookup;
- * it is redone whenever the pin or the PIN code has changed since.
+ * Keeping the map pin honest: it must agree with the PIN code typed in and
+ * with the place the sale deed names. The last check is stored on the
+ * property (location_check) so pages never wait on the place lookup; it is
+ * redone whenever the pin, the PIN code or the deed's reading has changed.
+ * An issue stays until the customer resolves it — moving the pin, fixing
+ * the PIN code, or saying "the pin is right".
  */
 
-/** Pin vs PIN code, in words; null when they agree or we can't tell. */
-export async function findIssue(p: Located): Promise<LocationIssue | null> {
-  if (p.latitude === null || p.longitude === null || !p.pincode) return null;
-  const m = await pinMismatch(p.latitude, p.longitude, p.pincode);
-  return m
-    ? {
+/** How far a pin may be from the deed's village (or, failing that, its taluk). */
+const DEED_RADIUS_KM = [20, 35];
+
+/** The pin vs the PIN code, then vs the deed's place; null when they agree or we can't tell. */
+export async function findIssue(
+  p: Located,
+  deed: DeedPlace | null = null,
+  pinConfirmed = false,
+): Promise<LocationIssue | null> {
+  if (p.latitude === null || p.longitude === null) return null;
+  if (p.pincode) {
+    const m = await pinMismatch(p.latitude, p.longitude, p.pincode);
+    if (m) {
+      return {
+        kind: 'pincode',
         pin_place: describe(m.pin),
-        pincode_place: m.area.label,
+        other_place: m.area.label,
         pincode: p.pincode,
         distance_km: m.distance_km,
-      }
-    : null;
+        near: { latitude: m.area.latitude, longitude: m.area.longitude },
+      };
+    }
+  }
+  if (!deed || pinConfirmed) return null;
+  const named = await findPlace([deed.village, deed.hobli, deed.taluk, deed.district, deed.state]);
+  // Only a village- or taluk-level match is precise enough to judge a pin by.
+  const radius = named ? DEED_RADIUS_KM[named.dropped] : undefined;
+  if (!named || radius === undefined) return null;
+  const km = distanceKm([p.latitude, p.longitude], [named.latitude, named.longitude]);
+  if (km <= radius) return null;
+  const pin = await placeAt(p.latitude, p.longitude);
+  return {
+    kind: 'deed',
+    pin_place: describe(pin),
+    other_place: [deed.village, deed.taluk].filter(Boolean).join(', ') || named.label,
+    pincode: null,
+    distance_km: Math.round(km),
+    near: { latitude: named.latitude, longitude: named.longitude },
+  };
+}
+
+const DEED_KEYS = ['village', 'hobli', 'taluk_or_mandal', 'district', 'state'] as const;
+
+/** The deed's place for each property (from Pittu's facts; the customer's edits win). */
+export async function loadDeedPlaces(
+  db: SupabaseClient,
+  propertyIds: string[],
+): Promise<Map<string, DeedPlace>> {
+  const out = new Map<string, DeedPlace>();
+  if (propertyIds.length === 0) return out;
+  const { data } = await db
+    .from('property_facts')
+    .select('property_id, key, value, final_value, status, created_at')
+    .in('property_id', propertyIds)
+    .in('key', DEED_KEYS)
+    .not('status', 'in', '(rejected,superseded)')
+    .order('created_at', { ascending: true });
+  for (const f of (data ?? []) as {
+    property_id: string;
+    key: (typeof DEED_KEYS)[number];
+    value: unknown;
+    final_value: unknown;
+    status: string;
+  }[]) {
+    const v = f.status === 'edited' ? f.final_value : f.value;
+    if (typeof v !== 'string' || !v.trim()) continue;
+    const d = out.get(f.property_id) ?? {
+      village: null,
+      hobli: null,
+      taluk: null,
+      district: null,
+      state: null,
+    };
+    const field = f.key === 'taluk_or_mandal' ? 'taluk' : f.key;
+    d[field] = v.trim();
+    out.set(f.property_id, d);
+  }
+  return out;
 }
 
 /** Recheck and store (server key: location_check is the server's record). */
-export async function refreshLocationCheck(id: string, p: Located): Promise<void> {
-  if (!serviceClient || p.latitude === null || p.longitude === null || !p.pincode) return;
+export async function refreshLocationCheck(
+  id: string,
+  p: Located,
+  deed: DeedPlace | null,
+  confirmed: boolean,
+): Promise<void> {
+  if (!serviceClient || p.latitude === null || p.longitude === null) return;
   try {
-    const issue = await findIssue(p);
+    const issue = await findIssue(p, deed, confirmed);
     await serviceClient
       .from('properties')
-      .update({
-        location_check: {
-          pincode: p.pincode,
-          latitude: p.latitude,
-          longitude: p.longitude,
-          issue,
-        },
-      })
+      .update({ location_check: checkRecord(p, issue, deedKey(deed), confirmed) })
       .eq('id', id);
   } catch (err) {
     logger.warn({ err: String(err) }, 'location check failed');
   }
 }
-
-export const issueMessage = (i: LocationIssue) =>
-  `The pin is in ${i.pin_place}, about ${i.distance_km} km from PIN code ${i.pincode} (${i.pincode_place}).`;
 
 /** The address at a pin — used when the customer says "the pin is right". */
 export const addressAt = (lat: number, lon: number): Promise<Place | null> => placeAt(lat, lon);

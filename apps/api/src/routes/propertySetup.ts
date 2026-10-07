@@ -19,7 +19,7 @@ import { auth } from '../auth.js';
 import { HttpError, must, notFound, ok, uuidParam } from '../errors.js';
 import { pincodeArea } from '../geo.js';
 import { findIssue, placeFromDeed, within } from '../locationCheck.js';
-import { checkRecord } from '../locationRecord.js';
+import { checkRecord, deedKey } from '../locationRecord.js';
 import { assertOwnsProperty } from '../ownership.js';
 import { enforceLimit, planOf, requireFeature } from '../plan.js';
 import { removeProperty } from '../propertyRemoval.js';
@@ -409,7 +409,17 @@ async function placeNearDeed(
       longitude,
       location_source: 'sale_deed',
       location_confirmed_at: null,
-      location_check: checkRecord({ pincode: pincode ?? null, latitude, longitude }, null),
+      location_check: checkRecord(
+        { pincode: pincode ?? null, latitude, longitude },
+        null,
+        deedKey({
+          village: named.village,
+          hobli: named.hobli,
+          taluk: named.taluk,
+          district: named.district,
+          state: named.state,
+        }),
+      ),
     })
     .eq('id', id)
     .is('latitude', null);

@@ -1,7 +1,7 @@
 import type { LocationIssue } from '@propittu/shared';
 
 /**
- * The stored pin-vs-PIN-code check (properties.location_check), and the
+ * The stored location check (pin vs PIN code and deed; properties.location_check), and the
  * distance maths — pure, so they are unit-tested without the network.
  */
 
@@ -10,32 +10,71 @@ export interface Located {
   latitude: number | null;
   longitude: number | null;
 }
+
+/** Where the sale deed says the property is, as Pittu read it. */
+export interface DeedPlace {
+  village: string | null;
+  hobli: string | null;
+  taluk: string | null;
+  district: string | null;
+  state: string | null;
+}
+
+/** A short fingerprint of the deed's place, so a changed reading triggers a recheck. */
+export const deedKey = (d: DeedPlace | null) =>
+  d ? [d.village, d.hobli, d.taluk, d.district, d.state].map((x) => x ?? '').join('|') : '';
+
 interface StoredCheck {
-  pincode: string;
+  pincode: string | null;
   latitude: number;
   longitude: number;
+  deed: string;
+  /** The customer said "the pin is right" for this pin, despite the deed. */
+  confirmed: boolean;
   issue: LocationIssue | null;
 }
 
-const same = (c: StoredCheck, p: Located) =>
-  c.pincode === p.pincode && c.latitude === p.latitude && c.longitude === p.longitude;
+const same = (c: StoredCheck, p: Located, deed: string) =>
+  (c.pincode ?? null) === p.pincode &&
+  c.latitude === p.latitude &&
+  c.longitude === p.longitude &&
+  (c.deed ?? '') === deed;
 
-/** The stored issue, if still about the current pin and PIN code; `stale` when it needs redoing. */
+/**
+ * The stored issue, if the check is still about the current pin, PIN code
+ * and deed; `stale` when it needs redoing. `confirmed` carries over while
+ * the pin and the deed stay the same.
+ */
 export function storedIssue(
   check: unknown,
   p: Located,
-): { issue: LocationIssue | null; stale: boolean } {
-  if (p.latitude === null || p.longitude === null || !p.pincode)
-    return { issue: null, stale: false };
+  deed = '',
+): { issue: LocationIssue | null; stale: boolean; confirmed: boolean } {
   const c = check as StoredCheck | null;
-  if (!c || !same(c, p)) return { issue: null, stale: true };
-  return { issue: c.issue, stale: false };
+  const confirmed =
+    !!c?.confirmed && c.latitude === p.latitude && c.longitude === p.longitude && c.deed === deed;
+  if (p.latitude === null || p.longitude === null || (!p.pincode && !deed))
+    return { issue: null, stale: false, confirmed };
+  if (!c || !same(c, p, deed)) return { issue: null, stale: true, confirmed };
+  return { issue: c.issue, stale: false, confirmed };
 }
 
 /** What to store with a just-checked pin, so the next page load needn't check again. */
-export const checkRecord = (p: Located, issue: LocationIssue | null) =>
-  p.latitude !== null && p.longitude !== null && p.pincode
-    ? { pincode: p.pincode, latitude: p.latitude, longitude: p.longitude, issue }
+export const checkRecord = (
+  p: Located,
+  issue: LocationIssue | null,
+  deed = '',
+  confirmed = false,
+) =>
+  p.latitude !== null && p.longitude !== null
+    ? {
+        pincode: p.pincode,
+        latitude: p.latitude,
+        longitude: p.longitude,
+        deed,
+        confirmed,
+        issue,
+      }
     : null;
 
 /** Straight-line distance in km. */

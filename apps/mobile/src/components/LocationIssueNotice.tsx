@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
-import type { PropertyDetail } from '@propittu/shared';
+import { locationIssueText, type PropertyDetail } from '@propittu/shared';
 import { useUpdateProperty } from '@/api/queries';
 import { errorMessage } from '@/lib/errors';
 import { colors, font, radius, space, typography } from '@/theme';
@@ -9,9 +9,10 @@ import { Icon } from './Icon';
 import { Button } from './ui';
 
 /**
- * The map pin and the PIN code point to different places — one of them is
- * wrong, and the customer is the one who knows which. Two ways out: the pin
- * is right (take the PIN code, city and state from it), or move the pin.
+ * The map pin disagrees with the PIN code, or with the place the sale deed
+ * names — one of them is wrong, and the customer is the one who knows
+ * which. It stays until they choose: the pin is right, or move the pin
+ * (the map then starts at the PIN code's area / the deed's village).
  */
 export function LocationIssueNotice({ property: p }: { property: PropertyDetail }) {
   const update = useUpdateProperty(p.id);
@@ -20,14 +21,19 @@ export function LocationIssueNotice({ property: p }: { property: PropertyDetail 
   const lat = p.latitude;
   const lng = p.longitude;
 
+  // "The pin is right": against the PIN code, take the PIN code from the pin;
+  // against the deed, remember the customer's word for this pin.
   const pinIsRight = () =>
     update.mutate(
-      { latitude: lat, longitude: lng, address_from_pin: true },
+      issue.kind === 'pincode'
+        ? { latitude: lat, longitude: lng, address_from_pin: true }
+        : { latitude: lat, longitude: lng, pin_confirmed: true },
       {
-        onSuccess: () => toast('Address updated from the pin'),
+        onSuccess: () =>
+          toast(issue.kind === 'pincode' ? 'Address updated from the pin' : 'Pin confirmed'),
         onError: (err) =>
           void dialog.alert({
-            title: 'Couldn’t update the address',
+            title: 'Couldn’t save that',
             message: errorMessage(err),
             tone: 'danger',
           }),
@@ -38,12 +44,13 @@ export function LocationIssueNotice({ property: p }: { property: PropertyDetail 
     <View style={styles.box}>
       <View style={styles.head}>
         <Icon name="warning" size={18} color={colors.danger} />
-        <Text style={styles.title}>The pin and the PIN code disagree</Text>
+        <Text style={styles.title}>
+          {issue.kind === 'pincode'
+            ? 'The pin and the PIN code disagree'
+            : 'The pin is far from where your deed says'}
+        </Text>
       </View>
-      <Text style={typography.small}>
-        The pin is in {issue.pin_place}, but PIN code {issue.pincode} is in {issue.pincode_place} —
-        about {issue.distance_km} km apart. Which is right?
-      </Text>
+      <Text style={typography.small}>{locationIssueText(issue)} Which is right?</Text>
       <View style={styles.actions}>
         <Button
           title="The pin is right"
@@ -59,7 +66,15 @@ export function LocationIssueNotice({ property: p }: { property: PropertyDetail 
           onPress={() =>
             router.push({
               pathname: '/properties/[id]/location',
-              params: { id: p.id, near: issue.pincode },
+              params: {
+                id: p.id,
+                ...(issue.near
+                  ? {
+                      at: `${issue.near.latitude},${issue.near.longitude}`,
+                      atLabel: issue.other_place,
+                    }
+                  : {}),
+              },
             })
           }
         />

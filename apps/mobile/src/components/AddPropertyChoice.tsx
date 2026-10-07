@@ -4,7 +4,7 @@ import { Stack, router } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { formatFileSize, MAX_LONG_DOCUMENT_BYTES } from '@propittu/shared';
-import { createDraftProperty, startAnalysis, useDraftProperties } from '@/api/ai';
+import { createDraftProperty, startAnalysis, useDraftProperties, useRefreshDrafts } from '@/api/ai';
 import { api } from '@/api/client';
 import { prepareDocument, uploadDocument } from '@/api/uploads';
 import { errorMessage } from '@/lib/errors';
@@ -30,6 +30,7 @@ export function AddPropertyChoice({ onManual }: { onManual: () => void }) {
   const [problem, setProblem] = useState<string | null>(null);
   const busy = phase.kind !== 'idle';
   const drafts = useDraftProperties();
+  const refreshDrafts = useRefreshDrafts();
 
   const uploadDeed = async () => {
     if (busy) return;
@@ -58,6 +59,7 @@ export function AddPropertyChoice({ onManual }: { onManual: () => void }) {
       );
       setPhase({ kind: 'handing' });
       await startAnalysis(doc.id).catch(() => undefined); // the next screen retries
+      refreshDrafts(); // it now waits on Home too
       router.replace({
         pathname: '/properties/[id]/setup',
         params: { id: propertyId, doc: doc.id },

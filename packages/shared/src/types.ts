@@ -136,16 +136,29 @@ export interface PropertySummary {
 }
 
 /**
- * The map pin and the PIN code point to different places — one of them is
- * wrong. Both places are given in words so the customer can tell which.
+ * The map pin disagrees with what else we know about where the property is
+ * — the PIN code typed in, or the place its sale deed names (as Pittu read
+ * it). Both places are given in words, so the customer can tell which is
+ * right. It stays until the customer resolves it.
  */
 export interface LocationIssue {
+  kind: 'pincode' | 'deed';
   /** "Manikonda, Ranga Reddy (500089)" */
   pin_place: string;
-  /** "Yelahanka, Bengaluru Urban" */
-  pincode_place: string;
-  pincode: string;
+  /** The other side: the PIN code's area, or the deed's village / taluk. */
+  other_place: string;
+  /** kind 'pincode': the PIN code that disagrees. */
+  pincode: string | null;
   distance_km: number;
+  /** Where "Move the pin" should start (the PIN code's area / the deed's village). */
+  near: { latitude: number; longitude: number } | null;
+}
+
+/** The issue in one plain sentence. */
+export function locationIssueText(i: LocationIssue): string {
+  return i.kind === 'pincode'
+    ? `The pin is in ${i.pin_place}, but PIN code ${i.pincode} is in ${i.other_place} — about ${i.distance_km} km apart.`
+    : `The pin is in ${i.pin_place}, but your sale deed places the property in ${i.other_place} — about ${i.distance_km} km away.`;
 }
 
 /** Property details screen (§18). */

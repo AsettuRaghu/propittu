@@ -109,8 +109,14 @@ export async function placeAt(latitude: number, longitude: number): Promise<Plac
   return hit && !hit.error ? toPlace(hit) : null;
 }
 
-/** The best match for a list of place names, most specific first ("Bommasandra, Anekal, …"). */
-export async function findPlace(parts: (string | null | undefined)[]): Promise<Place | null> {
+/**
+ * The best match for a list of place names, most specific first
+ * ("Bommasandra, Anekal, …"). `dropped` says how many of the most specific
+ * names had to be left out to find it (0: the village itself was found).
+ */
+export async function findPlace(
+  parts: (string | null | undefined)[],
+): Promise<(Place & { dropped: number }) | null> {
   const names = parts.filter((p): p is string => !!p?.trim());
   // Drop the most specific name until something matches (villages are often missing).
   for (let i = 0; i < Math.min(names.length, 3); i++) {
@@ -123,9 +129,27 @@ export async function findPlace(parts: (string | null | undefined)[]): Promise<P
       limit: '1',
     });
     if (hits === null) return null;
-    if (hits[0]) return toPlace(hits[0]);
+    if (hits[0]) return { ...toPlace(hits[0]), dropped: i };
   }
   return null;
+}
+
+/** Places matching what the customer typed on the map (on submit — never per keystroke). */
+export async function searchPlaces(q: string): Promise<Place[]> {
+  const hits = await nominatim<Hit[]>('/search', {
+    q,
+    countrycodes: 'in',
+    addressdetails: '1',
+    limit: '6',
+  });
+  // The same place often comes back twice (a town and its boundary): keep one.
+  const seen = new Set<string>();
+  return (hits ?? []).map(toPlace).filter((p) => {
+    const key = `${p.label}|${p.latitude.toFixed(2)}|${p.longitude.toFixed(2)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 /** PIN areas are irregular; allow this much beyond the area's outline. */

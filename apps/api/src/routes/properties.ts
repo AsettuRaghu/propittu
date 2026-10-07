@@ -9,6 +9,7 @@ import {
   type Property,
   type PropertyDetail,
   type PropertySummary,
+  locationIssueText,
   type ServiceFulfilment,
   type ServiceRequestStatus,
   type ValueSource,
@@ -25,11 +26,11 @@ import { loadReach } from '../reach.js';
 import {
   addressAt,
   findIssue,
-  issueMessage,
+  loadDeedPlaces,
   refreshLocationCheck,
   within,
 } from '../locationCheck.js';
-import { checkRecord, storedIssue } from '../locationRecord.js';
+import { checkRecord, deedKey, storedIssue } from '../locationRecord.js';
 import { listReadyPhotos } from './photos.js';
 import { listReadyVideos } from './videos.js';
 
@@ -171,6 +172,10 @@ propertiesRouter.get('/properties', async (req, res) => {
     });
   }
 
+  const deeds = await loadDeedPlaces(
+    db,
+    rows.map((r) => r.id),
+  );
   const coverPaths = [
     ...rows.flatMap((r) => (r.cover_photo_path ? [r.cover_photo_path] : [])),
     ...[...photoPaths.values()].flat(),
@@ -201,7 +206,9 @@ propertiesRouter.get('/properties', async (req, res) => {
       location_approximate:
         !!property && property.latitude !== null && property.location_source !== 'user',
       photo_urls: (photoPaths.get(r.id) ?? []).flatMap((path) => urls.get(path) ?? []),
-      location_issue: property ? storedIssue(checks.get(r.id), property).issue : null,
+      location_issue: property
+        ? storedIssue(checks.get(r.id), property, deedKey(deeds.get(r.id) ?? null)).issue
+        : null,
     };
   });
 
@@ -280,8 +287,9 @@ propertiesRouter.get('/properties/:id', async (req, res) => {
 
   const property = toProperty(row);
   // Pin vs PIN code: the stored check, redone after the response when out of date.
-  const check = storedIssue(row.location_check, property);
-  if (check.stale) waitUntil(refreshLocationCheck(id, property));
+  const deed = (await loadDeedPlaces(db, [id])).get(id) ?? null;
+  const check = storedIssue(row.location_check, property, deedKey(deed));
+  if (check.stale) waitUntil(refreshLocationCheck(id, property, deed, check.confirmed));
   const [photos, videos, reach] = await Promise.all([
     listReadyPhotos(db, accountId, id),
     listReadyVideos(db, accountId, id),
@@ -329,8 +337,14 @@ propertiesRouter.post('/properties/:id/reach-interest', async (req, res) => {
 propertiesRouter.patch('/properties/:id', async (req, res) => {
   const { db, accountId } = auth(req);
   const id = uuidParam(req.params.id, 'Property');
-  // "The pin is right" (address_from_pin): take the PIN code, city and state from the pin.
-  const { address_from_pin: addressFromPin, ...input } = updatePropertySchema.parse(req.body);
+  //   address_from_pin  "the pin is right": take the PIN code, city and state from it
+  //   pin_confirmed     "the pin is right" although the deed names a place far from it
+  const {
+    address_from_pin: addressFromPin,
+    pin_confirmed: pinConfirmedFlag,
+    ...input
+  } = updatePropertySchema.parse(req.body);
+  const pinConfirmed = !!(pinConfirmedFlag || addressFromPin);
 
   const existing = must<
     | (Pick<Property, 'pincode' | 'latitude' | 'longitude'> & {
@@ -347,7 +361,7 @@ propertiesRouter.patch('/properties/:id', async (req, res) => {
   );
   if (!existing) throw notFound('Property');
 
-  // The pin and the PIN code must describe the same place.
+  // The pin must agree with the PIN code and with the deed's place.
   const after = {
     pincode: input.pincode !== undefined ? input.pincode : existing.pincode,
     latitude: input.latitude !== undefined ? input.latitude : toNum(existing.latitude),
@@ -355,31 +369,42 @@ propertiesRouter.patch('/properties/:id', async (req, res) => {
   };
   const pinMoved = 'latitude' in input;
   const pincodeChanged = input.pincode !== undefined && input.pincode !== existing.pincode;
+  const hasPin = after.latitude !== null && after.longitude !== null;
   let check: ReturnType<typeof checkRecord> | undefined;
-  if (addressFromPin && after.latitude !== null && after.longitude !== null) {
-    const here = await within(addressAt(after.latitude, after.longitude), 8000);
-    if (here?.pincode) {
-      Object.assign(input, {
-        pincode: here.pincode,
-        ...(here.city ? { city: here.city } : {}),
-        ...(here.state ? { state: here.state } : {}),
+
+  if (hasPin && (pinMoved || addressFromPin || pinConfirmed || pincodeChanged)) {
+    // "The pin is right", or a pin for a property with no PIN code yet: the pin's address wins.
+    if (addressFromPin || (pinMoved && !after.pincode)) {
+      const here = await within(addressAt(after.latitude!, after.longitude!), 8000);
+      if (here?.pincode) {
+        Object.assign(input, {
+          pincode: here.pincode,
+          ...(here.city && (addressFromPin || !existing.pincode) ? { city: here.city } : {}),
+          ...(here.state && (addressFromPin || !existing.pincode) ? { state: here.state } : {}),
+        });
+        after.pincode = here.pincode;
+      }
+    }
+    const deed = (await loadDeedPlaces(db, [id])).get(id) ?? null;
+    const issue = await within(findIssue(after, deed, pinConfirmed), 9000);
+    if (issue && pinMoved && !pinConfirmed) {
+      const message = locationIssueText(issue);
+      throw invalid(message, {
+        latitude: message,
+        kind: issue.kind,
+        pin_place: issue.pin_place,
+        other_place: issue.other_place,
       });
-      check = checkRecord({ ...after, pincode: here.pincode }, null);
     }
-  } else if (pinMoved || pincodeChanged) {
-    const issue = await within(findIssue(after), 8000);
-    if (issue) {
-      const message = issueMessage(issue);
-      throw invalid(
-        message,
-        pinMoved
-          ? { latitude: message, pin_place: issue.pin_place, pincode_place: issue.pincode_place }
-          : {
-              pincode: `PIN code ${issue.pincode} is in ${issue.pincode_place}, about ${issue.distance_km} km from the pin on the map. Check the PIN code, or move the pin.`,
-            },
-      );
+    if (issue?.kind === 'pincode' && pincodeChanged && !pinMoved) {
+      throw invalid(locationIssueText(issue), {
+        pincode: `PIN code ${issue.pincode} is in ${issue.other_place}, about ${issue.distance_km} km from the pin on the map. Check the PIN code, or move the pin.`,
+      });
     }
-    if (issue === null) check = checkRecord(after, null);
+    // Stored either way: an issue stays on the property until it is resolved.
+    if (issue !== null || pinConfirmed || pinMoved || pincodeChanged) {
+      check = checkRecord(after, issue, deedKey(deed), pinConfirmed);
+    }
   }
 
   const row = must<PropertyRow | null>(

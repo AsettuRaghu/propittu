@@ -3,7 +3,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useCallback, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { PROPERTY_TYPE_LABELS, type LocationIssue, type PropertyType } from '@propittu/shared';
+import {
+  locationIssueText,
+  PROPERTY_TYPE_LABELS,
+  type LocationIssue,
+  type PropertyType,
+} from '@propittu/shared';
 import { formatLocation } from '@/lib/format';
 import { signedImage } from '@/lib/image';
 import { PROPERTY_TYPE_GRADIENTS, PROPERTY_TYPE_ICONS } from '@/lib/icons';
@@ -205,8 +210,8 @@ function LocationButton({
   const onPress = async () => {
     if (issue) {
       const fix = await dialog.confirm({
-        title: 'The pin and the PIN code disagree',
-        message: `The pin is in ${issue.pin_place}, but PIN code ${issue.pincode} is in ${issue.pincode_place} — about ${issue.distance_km} km apart. One of them needs fixing.`,
+        title: 'The location needs a look',
+        message: `${locationIssueText(issue)} One of them needs fixing.`,
         confirmLabel: 'Fix it',
         tone: 'danger',
       });

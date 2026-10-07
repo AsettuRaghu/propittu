@@ -124,6 +124,8 @@ export const updatePropertySchema = z
     ...propertyFields,
     /** With a pin: "the pin is right" — take the PIN code, city and state from it. */
     address_from_pin: z.boolean(),
+    /** With a pin: "the pin is right" even though the deed names a place far from it. */
+    pin_confirmed: z.boolean(),
   })
   .partial()
   .refine((p) => Object.keys(p).length > 0, { message: 'Nothing to update' })

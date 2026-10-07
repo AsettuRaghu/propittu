@@ -1,6 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { openServicesTab } from '@/lib/nav';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { DraftProperty } from '@propittu/shared';
@@ -39,6 +40,14 @@ export default function HomeScreen() {
   const { data, isPending, error, refetch } = useProperties(!limited);
   const drafts = useDraftProperties(!limited && !!me.data?.features.document_reading);
   const unfinished = waitingDrafts(drafts.data ?? []);
+  // Back on Home (e.g. from a deed being read): show the latest waiting deeds.
+  const refetchDrafts = drafts.refetch;
+  const draftsOn = drafts.isEnabled;
+  useFocusEffect(
+    useCallback(() => {
+      if (draftsOn) void refetchDrafts();
+    }, [draftsOn, refetchDrafts]),
+  );
   const properties = data ?? [];
   const hasProperties = properties.length > 0;
   const firstName = me.data?.full_name?.split(' ')[0];
