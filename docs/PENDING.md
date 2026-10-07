@@ -39,7 +39,7 @@ Nothing below is decided yet. Grouped by theme, in the suggested order.
    - Photograph deed pages instead of a PDF (proposed; owner checking).
    - "Let Pittu read this deed" for deeds uploaded as plain documents.
    - Pittu's questions during onboarding — e.g. ask them while Pittu reads the deed, instead of after saving.
-2. **Configurable services and questions (one design, built in phases)**
+2. **Configurable services and questions (one design, built in phases)** — design written: docs/CONFIGURABLE_SERVICES.md (awaiting the owner's review and the decisions in its §9)
    - Service request templates: steps, what the app collects, what staff see, statuses, outcome fields (e.g. tax year, receipt number).
    - Default schedule interval per service (e.g. a site visit every 3 months) and tracking deviation from it.
    - Campaigns from Backoffice: time-limited lower prices; area pushes when an agent is visiting a region (needs notifications).
