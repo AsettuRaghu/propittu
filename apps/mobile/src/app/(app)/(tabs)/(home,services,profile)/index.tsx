@@ -1,13 +1,16 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { openServicesTab } from '@/lib/nav';
+import { useQueryClient } from '@tanstack/react-query';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { DraftProperty } from '@propittu/shared';
 import { useDraftProperties } from '@/api/ai';
+import { ComingUp } from '@/components/ComingUp';
 import { DraftRow } from '@/components/DraftRow';
 import { useMe, useProperties } from '@/api/queries';
+import { remindersKey } from '@/api/reminders';
 import { Icon, type IconName } from '@/components/Icon';
 import { PlanBanner } from '@/components/PlanBanner';
 import { PropertyCard, PropertyCardSkeleton } from '@/components/PropertyCard';
@@ -42,11 +45,13 @@ export default function HomeScreen() {
   const unfinished = waitingDrafts(drafts.data ?? []);
   // Back on Home (e.g. from a deed being read): show the latest waiting deeds.
   const refetchDrafts = drafts.refetch;
+  const queryClient = useQueryClient();
   const draftsOn = drafts.isEnabled;
   useFocusEffect(
     useCallback(() => {
       if (draftsOn) void refetchDrafts();
-    }, [draftsOn, refetchDrafts]),
+      void queryClient.invalidateQueries({ queryKey: remindersKey });
+    }, [draftsOn, refetchDrafts, queryClient]),
   );
   const properties = data ?? [];
   const hasProperties = properties.length > 0;
@@ -75,6 +80,8 @@ export default function HomeScreen() {
       </View>
 
       {me.data && !limited ? <PlanBanner plan={me.data.plan} /> : null}
+
+      {hasProperties ? <ComingUp /> : null}
 
       {unfinished.length > 0 ? (
         <ListGroup title="Waiting for you" plain>

@@ -20,9 +20,15 @@ export function DeedGaps({ property: p }: { property: PropertyDetail }) {
 
   const takeDeedValue = async (g: DeedGap) => {
     const ok = await dialog.confirm({
-      title: `Use the deed’s ${g.label.toLowerCase()}?`,
-      message: `Change it from ${g.yours ?? 'empty'} to ${g.deed}, as your sale deed says.`,
-      confirmLabel: 'Use the deed’s',
+      title:
+        g.yours === null
+          ? `Add the ${g.label.toLowerCase()} from your deed?`
+          : `Use the deed’s ${g.label.toLowerCase()}?`,
+      message:
+        g.yours === null
+          ? `${g.deed}, as your sale deed says.`
+          : `Change it from ${g.yours} to ${g.deed}, as your sale deed says.`,
+      confirmLabel: g.yours === null ? 'Add' : 'Use the deed’s',
     });
     if (!ok) return;
     update.mutate({ [g.field]: g.value } as never, {
@@ -36,11 +42,11 @@ export function DeedGaps({ property: p }: { property: PropertyDetail }) {
     });
   };
 
-  // Fields that are simply empty can all be filled from the deed in one go.
+  // Details the deed has and the property doesn't yet — all added in one go.
   const empty = p.deed_gaps.filter((g) => g.yours === null);
   const fillEmpty = () =>
     update.mutate(Object.fromEntries(empty.map((g) => [g.field, g.value])) as never, {
-      onSuccess: () => toast(`${empty.length} details filled in from your deed`),
+      onSuccess: () => toast(`${empty.length} details added from your deed`),
       onError: (err) =>
         void dialog.alert({
           title: 'Couldn’t fill them in',
@@ -49,58 +55,70 @@ export function DeedGaps({ property: p }: { property: PropertyDetail }) {
         }),
     });
 
-  const count = p.deed_gaps.length + (pin ? 1 : 0);
-  return (
-    <ListGroup
-      title={`Differs from your deed · ${count}`}
-      plain
-      action={
-        empty.length > 1 ? (
-          <LinkButton title={`Fill ${empty.length} empty`} onPress={fillEmpty} />
-        ) : undefined
+  const differs = p.deed_gaps.filter((g) => g.yours !== null);
+  const row = (g: DeedGap) => (
+    <ListRow
+      key={g.field}
+      icon="deed"
+      accent={g.yours === null ? 'teal' : 'amber'}
+      title={g.label}
+      subtitle={g.yours === null ? `Deed: ${g.deed}` : `Deed: ${g.deed} · Yours: ${g.yours}`}
+      subtitleLines={2}
+      showChevron={false}
+      right={
+        <LinkButton
+          title={g.yours === null ? 'Add' : 'Use deed’s'}
+          onPress={() => void takeDeedValue(g)}
+        />
       }
-    >
-      {pin ? (
-        <ListRow
-          icon="pin"
-          accent="amber"
-          title="Map pin"
-          subtitle={`Deed: ${pin.other_place} · Pin: ${pin.pin_place}, ${pin.distance_km} km away (you confirmed it)`}
-          subtitleLines={3}
-          showChevron={false}
-          right={
-            <LinkButton
-              title="Move pin"
-              onPress={() =>
-                router.push({
-                  pathname: '/properties/[id]/location',
-                  params: {
-                    id: p.id,
-                    ...(pin.near
-                      ? {
-                          at: `${pin.near.latitude},${pin.near.longitude}`,
-                          atLabel: pin.other_place,
-                        }
-                      : {}),
-                  },
-                })
+    />
+  );
+
+  return (
+    <>
+      {differs.length > 0 || pin ? (
+        <ListGroup title={`Differs from your deed · ${differs.length + (pin ? 1 : 0)}`} plain>
+          {pin ? (
+            <ListRow
+              icon="pin"
+              accent="amber"
+              title="Map pin"
+              subtitle={`Deed: ${pin.other_place} · Pin: ${pin.pin_place}, ${pin.distance_km} km away (you confirmed it)`}
+              subtitleLines={3}
+              showChevron={false}
+              right={
+                <LinkButton
+                  title="Move pin"
+                  onPress={() =>
+                    router.push({
+                      pathname: '/properties/[id]/location',
+                      params: {
+                        id: p.id,
+                        ...(pin.near
+                          ? {
+                              at: `${pin.near.latitude},${pin.near.longitude}`,
+                              atLabel: pin.other_place,
+                            }
+                          : {}),
+                      },
+                    })
+                  }
+                />
               }
             />
-          }
-        />
+          ) : null}
+          {differs.map(row)}
+        </ListGroup>
       ) : null}
-      {p.deed_gaps.map((g) => (
-        <ListRow
-          key={g.field}
-          icon="deed"
-          accent="amber"
-          title={g.label}
-          subtitle={`Deed: ${g.deed} · Yours: ${g.yours ?? 'not filled in'}`}
-          subtitleLines={2}
-          showChevron={false}
-          right={<LinkButton title="Use deed’s" onPress={() => void takeDeedValue(g)} />}
-        />
-      ))}
-    </ListGroup>
+      {empty.length > 0 ? (
+        <ListGroup
+          title={`Add from your deed · ${empty.length}`}
+          plain
+          action={empty.length > 1 ? <LinkButton title="Add all" onPress={fillEmpty} /> : undefined}
+        >
+          {empty.map(row)}
+        </ListGroup>
+      ) : null}
+    </>
   );
 }

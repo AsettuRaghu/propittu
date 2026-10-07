@@ -1,5 +1,4 @@
-import type { ReactNode } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import {
   AREA_UNITS,
   AREA_UNIT_LABELS,
@@ -8,13 +7,18 @@ import {
   createPropertySchema,
   toFieldErrors,
   type AreaUnit,
+  type Facing,
+  type KhataType,
+  type LandUse,
   type CreatePropertyData,
   type Property,
   type PropertyType,
 } from '@propittu/shared';
 import { PROPERTY_TYPE_ICONS } from '@/lib/icons';
-import { space, typography } from '@/theme';
+import { space } from '@/theme';
 import { TextField } from './Field';
+import { FormSection } from './FormSection';
+import { PropertyMoreDetails } from './PropertyMoreDetails';
 import { Select } from './Select';
 
 /**
@@ -36,7 +40,33 @@ export interface PropertyFormValues {
   property_number: string;
   khata_number: string;
   notes: string;
+  // More details (strings in the form; converted on validation)
+  purchase_price_inr: string;
+  purchase_date: string;
+  sellers: string;
+  land_use: LandUse | null;
+  khata_type: KhataType | null;
+  approving_authority: string | null;
+  rera_number: string;
+  plot_dimensions: string;
+  facing: Facing | null;
+  corner_plot: YesNo | null;
+  road_width_ft: string;
+  loan_on_property: YesNo | null;
+  boundary_north: string;
+  boundary_south: string;
+  boundary_east: string;
+  boundary_west: string;
 }
+
+export type YesNo = 'yes' | 'no';
+const toYesNo = (b: boolean | null): YesNo | null => (b === null ? null : b ? 'yes' : 'no');
+const fromYesNo = (v: YesNo | null) => (v === null ? null : v === 'yes');
+/** "₹ 42,00,000" or "42 lakh"-free digits → a number; '' → null. */
+const toNumber = (v: string) => {
+  const clean = v.replace(/[₹,\s]/g, '');
+  return clean === '' ? null : Number(clean);
+};
 
 export const emptyPropertyForm: PropertyFormValues = {
   property_type: null,
@@ -51,6 +81,22 @@ export const emptyPropertyForm: PropertyFormValues = {
   property_number: '',
   khata_number: '',
   notes: '',
+  purchase_price_inr: '',
+  purchase_date: '',
+  sellers: '',
+  land_use: null,
+  khata_type: null,
+  approving_authority: null,
+  rera_number: '',
+  plot_dimensions: '',
+  facing: null,
+  corner_plot: null,
+  road_width_ft: '',
+  loan_on_property: null,
+  boundary_north: '',
+  boundary_south: '',
+  boundary_east: '',
+  boundary_west: '',
 };
 
 export function propertyToForm(p: Property): PropertyFormValues {
@@ -67,6 +113,22 @@ export function propertyToForm(p: Property): PropertyFormValues {
     property_number: p.property_number ?? '',
     khata_number: p.khata_number ?? '',
     notes: p.notes ?? '',
+    purchase_price_inr: p.purchase_price_inr === null ? '' : String(p.purchase_price_inr),
+    purchase_date: p.purchase_date ?? '',
+    sellers: p.sellers ?? '',
+    land_use: p.land_use,
+    khata_type: p.khata_type,
+    approving_authority: p.approving_authority,
+    rera_number: p.rera_number ?? '',
+    plot_dimensions: p.plot_dimensions ?? '',
+    facing: p.facing,
+    corner_plot: toYesNo(p.corner_plot),
+    road_width_ft: p.road_width_ft === null ? '' : String(p.road_width_ft),
+    loan_on_property: toYesNo(p.loan_on_property),
+    boundary_north: p.boundary_north ?? '',
+    boundary_south: p.boundary_south ?? '',
+    boundary_east: p.boundary_east ?? '',
+    boundary_west: p.boundary_west ?? '',
   };
 }
 
@@ -79,34 +141,14 @@ export function validatePropertyForm(
     ...v,
     property_type: v.property_type ?? undefined,
     area_value: area === '' ? null : Number(area),
+    purchase_price_inr: toNumber(v.purchase_price_inr),
+    road_width_ft: toNumber(v.road_width_ft),
+    corner_plot: fromYesNo(v.corner_plot),
+    loan_on_property: fromYesNo(v.loan_on_property),
   });
   return result.success
     ? { data: result.data, errors: null }
     : { data: null, errors: toFieldErrors(result.error) };
-}
-
-/**
- * A form section in the flat style: a heading (and optional line), with the
- * fields indented beneath it like list entries.
- */
-export function FormSection({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  children: ReactNode;
-}) {
-  return (
-    <View style={styles.section}>
-      <View>
-        <Text style={typography.heading}>{title}</Text>
-        {subtitle ? <Text style={typography.small}>{subtitle}</Text> : null}
-      </View>
-      <View style={styles.fields}>{children}</View>
-    </View>
-  );
 }
 
 const TYPE_OPTIONS = PROPERTY_TYPES.map((t) => ({
@@ -121,10 +163,13 @@ export function PropertyForm({
   values,
   errors,
   onChange,
+  more = false,
 }: {
   values: PropertyFormValues;
   errors: Record<string, string>;
   onChange: (patch: Partial<PropertyFormValues>) => void;
+  /** Edit and review: also the purchase, land, site and boundary details. */
+  more?: boolean;
 }) {
   const field = (key: keyof PropertyFormValues) => ({
     variant: 'flat' as const,
@@ -210,6 +255,8 @@ export function PropertyForm({
         <TextField label="Khata / property ID" {...field('khata_number')} />
       </FormSection>
 
+      {more ? <PropertyMoreDetails values={values} errors={errors} onChange={onChange} /> : null}
+
       <FormSection title="Notes (optional)">
         <TextField
           label="Anything worth remembering"
@@ -226,9 +273,6 @@ export function PropertyForm({
 
 const styles = StyleSheet.create({
   form: { gap: space.xl },
-  section: { gap: space.md },
-  // Fields sit 12 pt in from their heading, like list entries.
-  fields: { gap: space.lg, paddingLeft: space.md },
   row: { flexDirection: 'row', gap: space.lg, alignItems: 'flex-start' },
   flex: { flex: 1, minWidth: 0 },
 });

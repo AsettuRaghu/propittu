@@ -1,4 +1,5 @@
 import { Image } from 'expo-image';
+import { FormSection } from '@/components/FormSection';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
@@ -17,7 +18,6 @@ import { preparePhoto, uploadPhoto } from '@/api/uploads';
 import { Footer } from '@/components/Footer';
 import { Icon } from '@/components/Icon';
 import {
-  FormSection,
   PropertyForm,
   emptyPropertyForm,
   validatePropertyForm,

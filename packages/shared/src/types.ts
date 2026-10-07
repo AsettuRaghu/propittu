@@ -1,5 +1,6 @@
 import type { AnalysisStatus, DeedGap } from './ai';
 import type { CompletionItem, PropertyCompletion } from './completion';
+import type { PropertyHealth } from './health';
 import type { PlanSummary } from './plans';
 import type { PropertyReach, ServiceReach } from './reach';
 import type { CancelPolicy, PaymentTiming, ServiceFulfilment } from './services';
@@ -8,6 +9,9 @@ import type {
   AccountStatus,
   ApiErrorCode,
   AreaUnit,
+  Facing,
+  KhataType,
+  LandUse,
   DocumentStatus,
   ValueSource,
   StaffRole,
@@ -87,6 +91,23 @@ export interface Property {
   property_number: string | null;
   khata_number: string | null;
   notes: string | null;
+  purchase_price_inr: number | null;
+  /** YYYY-MM-DD */
+  purchase_date: string | null;
+  sellers: string | null;
+  land_use: LandUse | null;
+  khata_type: KhataType | null;
+  approving_authority: string | null;
+  rera_number: string | null;
+  plot_dimensions: string | null;
+  facing: Facing | null;
+  corner_plot: boolean | null;
+  road_width_ft: number | null;
+  loan_on_property: boolean | null;
+  boundary_north: string | null;
+  boundary_south: string | null;
+  boundary_east: string | null;
+  boundary_west: string | null;
   /** Who set the coordinates (M2 provenance); null until a pin is confirmed. */
   location_source: ValueSource | null;
   location_confirmed_at: string | null;
@@ -133,6 +154,8 @@ export interface PropertySummary {
   location_approximate: boolean;
   /** Up to five photos, for the swipeable cover. */
   photo_urls: string[];
+  /** Property health, 0–100. */
+  health_score: number;
   location_issue: LocationIssue | null;
 }
 
@@ -184,6 +207,7 @@ export interface PropertyDetail extends Property {
    * status: never read (e.g. uploaded as a plain document). Null: no deed.
    */
   deed_reading: { document_id: string; status: AnalysisStatus | null } | null;
+  health: PropertyHealth;
 }
 
 /* ------------------------------------------------------------------ *

@@ -1,4 +1,5 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { FormSection } from '@/components/FormSection';
 import { useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
@@ -27,7 +28,6 @@ import { DeedReading } from '@/components/DeedReading';
 import { DuplicateDeed } from '@/components/DuplicateDeed';
 import { LoadingState } from '@/components/States';
 import {
-  FormSection,
   PropertyForm,
   emptyPropertyForm,
   propertyToForm,
@@ -51,14 +51,19 @@ const FIELD_LABELS: Record<PrefillField, string> = {
   survey_number: 'Survey number',
   property_number: 'Plot / property number',
   khata_number: 'Khata number',
+  purchase_price_inr: 'Price paid',
+  purchase_date: 'Bought on',
+  sellers: 'Bought from',
+  boundary_north: 'North boundary',
+  boundary_south: 'South boundary',
+  boundary_east: 'East boundary',
+  boundary_west: 'West boundary',
 };
 /** Shown as "More from your deed" (not form fields). */
 const EXTRA_KEYS = [
   'buyers',
   'registration_number',
-  'registration_date',
   'sub_registrar_office',
-  'sale_consideration_inr',
   'village',
   'hobli',
   'taluk_or_mandal',
@@ -203,6 +208,16 @@ function Review({
         survey_number: String(prefill.survey_number ?? ''),
         property_number: String(prefill.property_number ?? ''),
         khata_number: String(prefill.khata_number ?? ''),
+        purchase_price_inr:
+          prefill.purchase_price_inr === null || prefill.purchase_price_inr === undefined
+            ? ''
+            : String(prefill.purchase_price_inr),
+        purchase_date: String(prefill.purchase_date ?? ''),
+        sellers: String(prefill.sellers ?? ''),
+        boundary_north: String(prefill.boundary_north ?? ''),
+        boundary_south: String(prefill.boundary_south ?? ''),
+        boundary_east: String(prefill.boundary_east ?? ''),
+        boundary_west: String(prefill.boundary_west ?? ''),
       },
   );
   // No PIN code in the deed: suggest the one of its village (the customer checks it).
@@ -318,7 +333,7 @@ function Review({
         ) : null}
         {formError ? <Banner message={formError} /> : null}
 
-        <PropertyForm values={values} errors={errors} onChange={onChange} />
+        <PropertyForm values={values} errors={errors} onChange={onChange} more />
 
         {extras.length ? (
           <FormSection title="More from your deed" subtitle="Kept with your property’s records.">

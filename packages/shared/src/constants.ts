@@ -68,6 +68,73 @@ export const PROPERTY_TYPE_LABELS: Record<PropertyType, string> = {
 };
 
 /* ------------------------------------------------------------------ *
+ * More property details (7 Oct 2026)
+ * ------------------------------------------------------------------ */
+
+export const LAND_USES = [
+  'residential',
+  'commercial',
+  'agricultural',
+  'converted',
+  'industrial',
+  'mixed',
+] as const;
+export type LandUse = (typeof LAND_USES)[number];
+export const LAND_USE_LABELS: Record<LandUse, string> = {
+  residential: 'Residential',
+  commercial: 'Commercial',
+  agricultural: 'Agricultural',
+  converted: 'Converted (agricultural to residential / DC conversion)',
+  industrial: 'Industrial',
+  mixed: 'Mixed use',
+};
+
+/** Karnataka's Khata kinds — B-Khata is a known pain point in Bengaluru. */
+export const KHATA_TYPES = ['a_khata', 'b_khata', 'e_khata', 'not_sure'] as const;
+export type KhataType = (typeof KHATA_TYPES)[number];
+export const KHATA_TYPE_LABELS: Record<KhataType, string> = {
+  a_khata: 'A-Khata',
+  b_khata: 'B-Khata',
+  e_khata: 'e-Khata',
+  not_sure: 'Not sure',
+};
+
+export const FACINGS = [
+  'north',
+  'east',
+  'south',
+  'west',
+  'north_east',
+  'north_west',
+  'south_east',
+  'south_west',
+] as const;
+export type Facing = (typeof FACINGS)[number];
+export const FACING_LABELS: Record<Facing, string> = {
+  north: 'North',
+  east: 'East',
+  south: 'South',
+  west: 'West',
+  north_east: 'North-east',
+  north_west: 'North-west',
+  south_east: 'South-east',
+  south_west: 'South-west',
+};
+
+/** Who approved the layout / building — the usual ones in Bengaluru and Hyderabad. */
+export const APPROVING_AUTHORITIES = [
+  'BDA',
+  'BBMP',
+  'BMRDA',
+  'BIAAPA',
+  'HMDA',
+  'GHMC',
+  'DTCP',
+  'Gram panchayat',
+  'Other',
+] as const;
+
+/* ------------------------------------------------------------------ *
  * Area units (§16 Step 2) — Indian units included deliberately
  * ------------------------------------------------------------------ */
 

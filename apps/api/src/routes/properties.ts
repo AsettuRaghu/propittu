@@ -2,6 +2,7 @@ import { waitUntil } from '@vercel/functions';
 import { Router } from 'express';
 import {
   computePropertyCompletion,
+  propertyHealth,
   createPropertySchema,
   OPEN_REQUEST_STATUSES,
   STORAGE_BUCKETS,
@@ -10,11 +11,7 @@ import {
   type PropertyDetail,
   type PropertySummary,
   type AnalysisStatus,
-  type DeedGap,
-  type FactValue,
-  deedGaps,
   locationIssueText,
-  PROPERTY_TYPE_LABELS,
   type ServiceFulfilment,
   type ServiceRequestStatus,
   type ValueSource,
@@ -27,6 +24,7 @@ import { assertOwnsProperty } from '../ownership.js';
 import { enforceLimit, planOf, requireFeature } from '../plan.js';
 import { removeProperty } from '../propertyRemoval.js';
 import { signDownloads } from '../storage.js';
+import { loadInsights, type PropertyInsight } from '../insights.js';
 import { loadReach } from '../reach.js';
 import {
   addressAt,
@@ -46,6 +44,9 @@ export const propertiesRouter = Router();
 export const PROPERTY_COLUMNS =
   'id, property_type, name, address_line, city, state, pincode, latitude, longitude, ' +
   'area_value, area_unit, survey_number, property_number, khata_number, notes, ' +
+  'purchase_price_inr, purchase_date, sellers, land_use, khata_type, approving_authority, ' +
+  'rera_number, plot_dimensions, facing, corner_plot, road_width_ft, loan_on_property, ' +
+  'boundary_north, boundary_south, boundary_east, boundary_west, ' +
   'location_source, location_confirmed_at, field_sources, is_draft, created_at, updated_at';
 
 const SUMMARY_COLUMNS =
@@ -71,6 +72,8 @@ export function toProperty({ location_check: _check, ...row }: PropertyRow): Pro
     latitude: num(row.latitude),
     longitude: num(row.longitude),
     area_value: num(row.area_value),
+    purchase_price_inr: num(row.purchase_price_inr),
+    road_width_ft: num(row.road_width_ft),
     field_sources: row.field_sources ?? {},
   };
 }
@@ -177,10 +180,17 @@ propertiesRouter.get('/properties', async (req, res) => {
     });
   }
 
-  const deeds = await loadDeedPlaces(
-    db,
-    rows.map((r) => r.id),
-  );
+  const [deeds, insights] = await Promise.all([
+    loadDeedPlaces(
+      db,
+      rows.map((r) => r.id),
+    ),
+    loadInsights(
+      db,
+      rows.flatMap((r) => properties.get(r.id) ?? []),
+      docTypes,
+    ),
+  ]);
   const coverPaths = [
     ...rows.flatMap((r) => (r.cover_photo_path ? [r.cover_photo_path] : [])),
     ...[...photoPaths.values()].flat(),
@@ -192,6 +202,9 @@ propertiesRouter.get('/properties', async (req, res) => {
 
   const data: PropertySummary[] = rows.map(({ cover_photo_path, ...r }) => {
     const property = properties.get(r.id);
+    const issue = property
+      ? storedIssue(checks.get(r.id), property, deedKey(deeds.get(r.id) ?? null)).issue
+      : null;
     const completion = property
       ? computePropertyCompletion({
           property,
@@ -211,9 +224,16 @@ propertiesRouter.get('/properties', async (req, res) => {
       location_approximate:
         !!property && property.latitude !== null && property.location_source !== 'user',
       photo_urls: (photoPaths.get(r.id) ?? []).flatMap((path) => urls.get(path) ?? []),
-      location_issue: property
-        ? storedIssue(checks.get(r.id), property, deedKey(deeds.get(r.id) ?? null)).issue
-        : null,
+      location_issue: issue,
+      health_score:
+        property && completion
+          ? propertyHealth({
+              completion,
+              locationGood: property.location_source === 'user' && !issue,
+              documentTypes: docTypes.get(r.id) ?? [],
+              ...(insights.get(r.id) ?? NO_INSIGHT),
+            }).score
+          : 0,
     };
   });
 
@@ -292,9 +312,11 @@ propertiesRouter.get('/properties/:id', async (req, res) => {
 
   const property = toProperty(row);
   // Pin vs PIN code: the stored check, redone after the response when out of date.
-  const [deed, gaps, deedReading] = await Promise.all([
+  const [deed, insight, deedReading] = await Promise.all([
     loadDeedPlaces(db, [id]).then((m) => m.get(id) ?? null),
-    loadDeedGaps(db, property),
+    loadInsights(db, [property], new Map([[id, documentTypes]])).then(
+      (m) => m.get(id) ?? NO_INSIGHT,
+    ),
     loadDeedReading(db, id),
   ]);
   const check = storedIssue(row.location_check, property, deedKey(deed));
@@ -305,17 +327,28 @@ propertiesRouter.get('/properties/:id', async (req, res) => {
     loadReach(db, accountId),
   ]);
 
+  const completion = computePropertyCompletion({
+    property,
+    photoCount: photos.length,
+    documentTypes,
+  });
   const data: PropertyDetail = {
     ...property,
     photos,
     videos,
     document_count: counts?.document_count ?? 0,
     service_request_count: counts?.service_request_count ?? 0,
-    completion: computePropertyCompletion({ property, photoCount: photos.length, documentTypes }),
+    completion,
     reach: reach.get(id) ?? null,
     location_issue: check.issue,
-    deed_gaps: gaps,
+    deed_gaps: insight.gaps,
     deed_reading: deedReading,
+    health: propertyHealth({
+      completion,
+      locationGood: property.location_source === 'user' && !(check.issue && !check.issue.confirmed),
+      documentTypes,
+      ...insight,
+    }),
   };
 
   ok(res, data);
@@ -468,37 +501,14 @@ async function loadDeedReading(
   return { document_id: doc.id, status: reading?.status ?? null };
 }
 
-/** Where the saved details differ from the deed (its latest reading; the deed's own words). */
-async function loadDeedGaps(db: SupabaseClient, p: Property): Promise<DeedGap[]> {
-  const facts = must<{ key: string; value: FactValue }[]>(
-    await db
-      .from('property_facts')
-      .select('key, value, created_at')
-      .eq('property_id', p.id)
-      .neq('status', 'superseded')
-      .order('created_at', { ascending: true }),
-  );
-  // Later readings win.
-  const latest = [...new Map(facts.map((f) => [f.key, f])).values()];
-  return deedGaps(
-    latest,
-    {
-      property_type: p.property_type,
-      pincode: p.pincode,
-      city: p.city,
-      state: p.state,
-      area_value: p.area_value,
-      khata_number: p.khata_number,
-      property_number: p.property_number,
-    },
-    (field, v) =>
-      field === 'property_type'
-        ? (PROPERTY_TYPE_LABELS[v as keyof typeof PROPERTY_TYPE_LABELS] ?? String(v))
-        : field === 'area_value'
-          ? `${Number(v).toLocaleString('en-IN')}`
-          : String(v),
-  );
-}
+/** No answers, visits or deed reading yet. */
+const NO_INSIGHT: PropertyInsight = {
+  answers: {},
+  lastVisitAt: null,
+  due: [],
+  gaps: [],
+  deed: 'none',
+};
 
 const toNum = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 

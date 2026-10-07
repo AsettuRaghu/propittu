@@ -5,8 +5,11 @@ import {
   ALLOWED_VIDEO_MIME_TYPES,
   AREA_UNITS,
   DOCUMENT_TYPES,
+  FACINGS,
   INDIAN_MOBILE_REGEX,
   INDIAN_PINCODE_REGEX,
+  KHATA_TYPES,
+  LAND_USES,
   maxDocumentBytes,
   MAX_PHOTO_BYTES,
   MAX_VIDEO_BYTES,
@@ -35,6 +38,9 @@ const optionalText = (max: number) =>
 
 const optionalNumber = (schema: z.ZodNumber) =>
   z.preprocess((v) => (v === '' || v === undefined ? null : v), schema.nullable());
+
+const optionalEnum = <T extends readonly [string, ...string[]]>(values: T) =>
+  z.preprocess((v) => (v === '' || v === undefined ? null : v), z.enum(values).nullable());
 
 /**
  * Any well-formed UUID, matching what Postgres' uuid type accepts.
@@ -94,6 +100,34 @@ const propertyFields = {
   property_number: optionalText(100),
   khata_number: optionalText(100),
   notes: optionalText(2000),
+  // More details (all optional; purchase, sellers and boundaries come from the deed)
+  purchase_price_inr: optionalNumber(
+    z
+      .number({ message: 'Enter the price in rupees' })
+      .int('Enter the price in whole rupees')
+      .min(1, 'Enter the price in rupees')
+      .max(100_000_000_000, 'That price looks too large'),
+  ),
+  purchase_date: z.preprocess(
+    (v) => (v === '' || v === undefined ? null : v),
+    z.iso.date({ message: 'Enter the date as YYYY-MM-DD' }).nullable(),
+  ),
+  sellers: optionalText(500),
+  land_use: optionalEnum(LAND_USES),
+  khata_type: optionalEnum(KHATA_TYPES),
+  approving_authority: optionalText(60),
+  rera_number: optionalText(60),
+  plot_dimensions: optionalText(40),
+  facing: optionalEnum(FACINGS),
+  corner_plot: z.boolean().nullable().optional(),
+  road_width_ft: optionalNumber(
+    z.number({ message: 'Enter the width in feet' }).int().min(1).max(500, 'That looks too wide'),
+  ),
+  loan_on_property: z.boolean().nullable().optional(),
+  boundary_north: optionalText(200),
+  boundary_south: optionalText(200),
+  boundary_east: optionalText(200),
+  boundary_west: optionalText(200),
 };
 
 /** A map pin is both coordinates or neither (M2: location is first-class). */

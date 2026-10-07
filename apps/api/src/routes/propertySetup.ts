@@ -271,6 +271,12 @@ const FACT_FIELD: Record<string, PrefillField> = {
   area_unit: 'area_unit',
   khata_number: 'khata_number',
   unit_number: 'property_number',
+  sale_consideration_inr: 'purchase_price_inr',
+  registration_date: 'purchase_date',
+  boundary_north: 'boundary_north',
+  boundary_south: 'boundary_south',
+  boundary_east: 'boundary_east',
+  boundary_west: 'boundary_west',
 };
 
 propertySetupRouter.post('/properties/:id/setup', async (req, res) => {

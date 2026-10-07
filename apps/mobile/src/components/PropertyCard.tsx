@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { requestStatusLabel, type PropertySummary } from '@propittu/shared';
 import { openServicesTab } from '@/lib/nav';
-import { goToCompletionStep } from '@/lib/propertySteps';
 import { accents, colors, font, radius, shadow, space } from '@/theme';
 import { Icon, type IconName } from './Icon';
 import { PropertyCover } from './PropertyCover';
@@ -53,23 +52,30 @@ export function PropertyCard({
           onPress={() => (r ? router.push(`/requests/${r.id}`) : openServicesTab('requests'))}
         />
         <View style={styles.flex} />
-        {p.next_step ? (
-          <Pressable
-            onPress={() => p.next_step && goToCompletionStep(p.id, p.next_step.key)}
-            accessibilityRole="button"
-            accessibilityLabel={`Profile ${p.completion_percent}% complete. Next: ${p.next_step.label}`}
-            hitSlop={6}
-            style={({ pressed }) => [styles.profile, pressed && styles.tilePressed]}
-          >
-            <Text style={styles.profileText}>{p.completion_percent}%</Text>
-          </Pressable>
-        ) : (
-          <View style={[styles.profile, styles.profileDone]} accessibilityLabel="Profile complete">
-            <Icon name="verified" size={22} color={accents.teal.fg} />
-          </View>
-        )}
+        <HealthTile score={p.health_score} onPress={onPress} />
       </View>
     </View>
+  );
+}
+
+/** Property health at a glance — green when well looked-after, amber, then coral. */
+function HealthTile({ score, onPress }: { score: number; onPress: () => void }) {
+  const a = accents[score >= 80 ? 'teal' : score >= 50 ? 'amber' : 'coral'];
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Property health ${score} out of 100`}
+      hitSlop={6}
+      style={({ pressed }) => [
+        styles.health,
+        { backgroundColor: a.bg },
+        pressed && styles.tilePressed,
+      ]}
+    >
+      <Icon name="shield" size={16} color={a.fg} strokeWidth={2.4} />
+      <Text style={[styles.healthText, { color: a.fg }]}>{score}</Text>
+    </Pressable>
   );
 }
 
@@ -190,17 +196,17 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: accents.teal.fg,
   },
-  profile: {
+  health: {
     height: 46,
-    minWidth: 46,
-    paddingHorizontal: space.sm,
+    minWidth: 64,
+    paddingHorizontal: space.md,
     borderRadius: 15,
-    backgroundColor: accents.amber.bg,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 5,
   },
-  profileDone: { backgroundColor: accents.teal.bg },
-  profileText: { fontSize: font(15), fontWeight: '800', color: accents.amber.fg },
+  healthText: { fontSize: font(17), fontWeight: '800' },
   bone: { backgroundColor: colors.surfaceMuted },
   boneLine: { height: 10, borderRadius: 5, backgroundColor: colors.surfaceMuted },
 });

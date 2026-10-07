@@ -59,7 +59,8 @@
       "expo-web-browser",
       "expo-sharing",
       "expo-image",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": false

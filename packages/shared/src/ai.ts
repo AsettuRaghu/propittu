@@ -74,6 +74,13 @@ export const PREFILL_FIELDS = [
   'survey_number',
   'property_number',
   'khata_number',
+  'purchase_price_inr',
+  'purchase_date',
+  'sellers',
+  'boundary_north',
+  'boundary_south',
+  'boundary_east',
+  'boundary_west',
 ] as const;
 export type PrefillField = (typeof PREFILL_FIELDS)[number];
 
@@ -120,6 +127,9 @@ function propertyName(
   return placeName(kind, place) ?? unitLabel;
 }
 
+/** A YYYY-MM-DD date, or null. */
+const isoDate = (v: string | null) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+
 /** Builds the pre-filled property from a reading's facts (nothing invented). */
 export function prefillFromFacts(facts: Pick<PropertyFact, 'key' | 'value'>[]): PropertyPrefill {
   const f = new Map(facts.map((x) => [x.key, x.value]));
@@ -143,6 +153,8 @@ export function prefillFromFacts(facts: Pick<PropertyFact, 'key' | 'value'>[]): 
   const survey =
     kind === 'land' && !project && Array.isArray(surveys) && surveys[0] ? surveys[0] : null;
   const area = f.get('area_value');
+  const price = f.get('sale_consideration_inr');
+  const sellers = f.get('sellers');
 
   const address = [
     unit ? (isFlat ? `Flat ${unit}` : `Site No. ${unit}`) : null,
@@ -168,6 +180,13 @@ export function prefillFromFacts(facts: Pick<PropertyFact, 'key' | 'value'>[]): 
     survey_number: survey,
     property_number: unit,
     khata_number: s('khata_number'),
+    purchase_price_inr: typeof price === 'number' && price > 0 ? Math.round(price) : null,
+    purchase_date: isoDate(s('registration_date')) ?? isoDate(s('execution_date')),
+    sellers: Array.isArray(sellers) && sellers.length ? sellers.join(', ') : null,
+    boundary_north: s('boundary_north'),
+    boundary_south: s('boundary_south'),
+    boundary_east: s('boundary_east'),
+    boundary_west: s('boundary_west'),
   };
 }
 
@@ -201,6 +220,13 @@ export const PREFILL_SOURCES: Record<PrefillField, string[]> = {
   survey_number: ['survey_numbers'],
   property_number: ['unit_number'],
   khata_number: ['khata_number'],
+  purchase_price_inr: ['sale_consideration_inr'],
+  purchase_date: ['registration_date', 'execution_date'],
+  sellers: ['sellers'],
+  boundary_north: ['boundary_north'],
+  boundary_south: ['boundary_south'],
+  boundary_east: ['boundary_east'],
+  boundary_west: ['boundary_west'],
 };
 
 /** Readable labels for the details Pittu shows besides the form. */
@@ -265,6 +291,13 @@ const GAP_FIELDS = {
   area_value: 'Area',
   khata_number: 'Khata number',
   property_number: 'Plot / property number',
+  purchase_price_inr: 'Purchase price',
+  purchase_date: 'Bought on',
+  sellers: 'Bought from',
+  boundary_north: 'North boundary',
+  boundary_south: 'South boundary',
+  boundary_east: 'East boundary',
+  boundary_west: 'West boundary',
 } as const;
 export type DeedGapField = keyof typeof GAP_FIELDS;
 

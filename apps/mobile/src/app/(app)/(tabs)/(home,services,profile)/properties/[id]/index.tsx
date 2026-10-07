@@ -3,13 +3,16 @@ import { openServicesTab } from '@/lib/nav';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import {
+  FACING_LABELS,
+  KHATA_TYPE_LABELS,
+  LAND_USE_LABELS,
   pittuQuestions,
   type CompletionItem,
   type CompletionKey,
   type PropertyDetail,
 } from '@propittu/shared';
 import { usePittu } from '@/api/ai';
-import { useProperty, useServiceRequests } from '@/api/queries';
+import { useProperty, useServiceRequests, useServices } from '@/api/queries';
 import { DocumentSlots } from '@/components/DocumentSlots';
 import type { IconName } from '@/components/Icon';
 import { PhotoSection, type PhotoSectionHandle } from '@/components/PhotoSection';
@@ -25,7 +28,7 @@ import { RequestRow } from '@/components/ServiceRequestList';
 import { ErrorState, LoadingState } from '@/components/States';
 import { VideoSection } from '@/components/VideoSection';
 import { Banner, IconButton, KeyValue, LinkButton, ListGroup, ListRow } from '@/components/ui';
-import { formatArea } from '@/lib/format';
+import { formatArea, formatDate } from '@/lib/format';
 import { goToCompletionStep } from '@/lib/propertySteps';
 import { radius, shadow, space } from '@/theme';
 
@@ -111,8 +114,8 @@ export default function PropertyDetailsScreen() {
       <ReachNotice propertyId={property.id} reach={property.reach} />
       <DeedGaps property={property} />
 
-      {missing.length > 0 ? (
-        <ListGroup title={`Complete your profile · ${property.completion.percent}%`} plain>
+      {missing.length > 0 || property.health.score < 100 ? (
+        <ListGroup title={`Property health · ${property.health.score}`} plain>
           {missing.map((item) => (
             <ListRow
               key={item.key}
@@ -122,6 +125,7 @@ export default function PropertyDetailsScreen() {
               onPress={() => onStep(item)}
             />
           ))}
+          <HealthActions property={property} />
           <DeedReadRow property={property} />
           <PittuRow propertyId={property.id} />
         </ListGroup>
@@ -194,6 +198,42 @@ function PittuRow({ propertyId }: { propertyId: string }) {
   );
 }
 
+/** Health points still to earn that aren't profile steps: this year's tax, a visit. */
+function HealthActions({ property: p }: { property: PropertyDetail }) {
+  const services = useServices();
+  const book = (code: string) => {
+    const service = (services.data ?? []).find((s) => s.code === code);
+    router.push({
+      pathname: '/services/request',
+      params: { propertyId: p.id, ...(service ? { serviceId: service.id } : {}) },
+    });
+  };
+  const open = (key: string) => p.health.items.some((i) => i.key === key && !i.done);
+  return (
+    <>
+      {open('tax') ? (
+        <ListRow
+          icon="receipt"
+          accent="amber"
+          title={p.health.items.find((i) => i.key === 'tax')!.label.replace('paid', 'to pay')}
+          subtitle="Paid already? Tell Pittu. Not yet? We can pay it for you"
+          subtitleLines={2}
+          onPress={() => book('property_tax_assistance')}
+        />
+      ) : null}
+      {open('visit') ? (
+        <ListRow
+          icon="camera"
+          accent="amber"
+          title="Not seen in person this year"
+          subtitle="Book a visit — photos and a short report"
+          onPress={() => book('property_visit')}
+        />
+      ) : null}
+    </>
+  );
+}
+
 /** With the profile complete, Pittu's row gets its own heading (once there is something to show). */
 function PittuSection({ property }: { property: PropertyDetail }) {
   const { data } = usePittu(property.id);
@@ -218,6 +258,67 @@ function Details({ property: p, onEdit }: { property: PropertyDetail; onEdit: ()
         <KeyValue icon="tag" label="Survey number" value={p.survey_number} />
         <KeyValue icon="deed" label="Khata / Property ID" value={p.khata_number} />
         <KeyValue icon="home" label="Plot / Property number" value={p.property_number} />
+        <KeyValue
+          icon="rupee"
+          label="Bought"
+          value={
+            [
+              p.purchase_price_inr ? `₹${p.purchase_price_inr.toLocaleString('en-IN')}` : null,
+              p.purchase_date ? `on ${formatDate(p.purchase_date)}` : null,
+              p.sellers ? `from ${p.sellers}` : null,
+            ]
+              .filter(Boolean)
+              .join(' ') || null
+          }
+        />
+        <KeyValue
+          icon="land"
+          label="Land use"
+          value={p.land_use ? LAND_USE_LABELS[p.land_use] : null}
+        />
+        <KeyValue
+          icon="verified"
+          label="Khata type · approved by"
+          value={
+            [p.khata_type ? KHATA_TYPE_LABELS[p.khata_type] : null, p.approving_authority]
+              .filter(Boolean)
+              .join(' · ') || null
+          }
+        />
+        <KeyValue icon="tag" label="RERA number" value={p.rera_number} />
+        <KeyValue
+          icon="compass"
+          label="The site"
+          value={
+            [
+              p.plot_dimensions,
+              p.facing ? `${FACING_LABELS[p.facing]} facing` : null,
+              p.corner_plot ? 'corner plot' : null,
+              p.road_width_ft ? `${p.road_width_ft} ft road` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ') || null
+          }
+        />
+        <KeyValue
+          icon="map"
+          label="Boundaries"
+          value={
+            [
+              p.boundary_north ? `N: ${p.boundary_north}` : null,
+              p.boundary_south ? `S: ${p.boundary_south}` : null,
+              p.boundary_east ? `E: ${p.boundary_east}` : null,
+              p.boundary_west ? `W: ${p.boundary_west}` : null,
+            ]
+              .filter(Boolean)
+              .join('\n') || null
+          }
+        />
+        <KeyValue
+          icon="wallet"
+          label="Loan on the property"
+          value={p.loan_on_property === null ? null : p.loan_on_property ? 'Yes' : 'No'}
+        />
         <KeyValue icon="document" label="Notes" value={p.notes} />
       </View>
     </ListGroup>

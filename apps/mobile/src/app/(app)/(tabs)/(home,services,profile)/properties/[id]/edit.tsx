@@ -113,7 +113,7 @@ function EditForm({ property }: { property: PropertyDetail }) {
         automaticallyAdjustKeyboardInsets
       >
         {formError ? <Banner message={formError} /> : null}
-        <PropertyForm values={values} errors={errors} onChange={onChange} />
+        <PropertyForm values={values} errors={errors} onChange={onChange} more />
 
         <DocumentSlots propertyId={property.id} />
 

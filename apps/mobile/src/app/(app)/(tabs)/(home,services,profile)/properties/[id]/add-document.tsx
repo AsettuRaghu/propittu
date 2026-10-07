@@ -1,4 +1,5 @@
 import * as DocumentPicker from 'expo-document-picker';
+import { FormSection } from '@/components/FormSection';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -15,7 +16,6 @@ import { prepareDocument, uploadDocument, type LocalFile } from '@/api/uploads';
 import { Footer } from '@/components/Footer';
 import { TextField } from '@/components/Field';
 import { Icon } from '@/components/Icon';
-import { FormSection } from '@/components/PropertyForm';
 import { Select } from '@/components/Select';
 import { Banner, Button, LinkButton, ProgressBar } from '@/components/ui';
 import { DOCUMENT_TYPE_VISUALS } from '@/lib/icons';
