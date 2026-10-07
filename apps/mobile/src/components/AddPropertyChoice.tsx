@@ -1,26 +1,21 @@
 import * as DocumentPicker from 'expo-document-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { formatFileSize, MAX_LONG_DOCUMENT_BYTES } from '@propittu/shared';
-import { createDraftProperty, startAnalysis } from '@/api/ai';
+import { createDraftProperty, startAnalysis, useDraftProperties } from '@/api/ai';
 import { api } from '@/api/client';
 import { prepareDocument, uploadDocument } from '@/api/uploads';
 import { errorMessage } from '@/lib/errors';
-import {
-  accents,
-  colors,
-  font,
-  gradients,
-  radius,
-  shadow,
-  space,
-  typography,
-  type Accent,
-} from '@/theme';
-import { Icon, type IconName } from './Icon';
+import { accents, colors, font, gradients, radius, shadow, space, typography } from '@/theme';
+import { DeedArt } from './DeedArt';
+import { DraftRow } from './DraftRow';
+import { Icon } from './Icon';
 import { Banner, Button, ListGroup, ListRow, ProgressBar } from './ui';
+
+/** Unfinished deed set-ups kept at once (matches the server). */
+const MAX_UNFINISHED = 2;
 
 type Phase = { kind: 'idle' } | { kind: 'uploading'; progress: number } | { kind: 'handing' };
 
@@ -34,6 +29,7 @@ export function AddPropertyChoice({ onManual }: { onManual: () => void }) {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const [problem, setProblem] = useState<string | null>(null);
   const busy = phase.kind !== 'idle';
+  const drafts = useDraftProperties();
 
   const uploadDeed = async () => {
     if (busy) return;
@@ -75,97 +71,94 @@ export function AddPropertyChoice({ onManual }: { onManual: () => void }) {
     }
   };
 
+  const waiting = (drafts.data ?? []).filter((d) => d.document_id || d.status);
+  const full = (drafts.data?.length ?? 0) >= MAX_UNFINISHED;
+
   return (
-    <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      <LinearGradient
-        colors={gradients.brand}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.hero, shadow]}
+    <View style={styles.flex}>
+      <Stack.Screen
+        options={{
+          title: '',
+          headerStyle: { backgroundColor: gradients.brand[0] },
+          headerTintColor: '#FFFFFF',
+          headerShadowVisible: false,
+        }}
+      />
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
       >
-        <View style={styles.heroIcon}>
-          <Icon name="deed" size={30} color="#FFFFFF" strokeWidth={1.8} />
-          <View style={styles.spark}>
-            <Icon name="sparkles" size={13} color={accents.amber.fg} strokeWidth={2.6} />
+        <LinearGradient
+          colors={[gradients.brand[0], gradients.brand[1], '#8E4FE8']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0.6, y: 1 }}
+          style={styles.top}
+        >
+          <View style={[styles.glow, styles.glowA]} />
+          <View style={[styles.glow, styles.glowB]} />
+          <DeedArt />
+          <View style={styles.pill}>
+            <Icon name="sparkles" size={13} color="#FFFFFF" />
+            <Text style={styles.pillText}>Recommended · about a minute</Text>
           </View>
-        </View>
-        <Text style={styles.heroTitle}>Upload your sale deed — we’ll do the rest</Text>
-        <Text style={styles.heroText}>
-          Pittu reads it and fills in the type, address, size and survey numbers. You just check and
-          save.
-        </Text>
-        {phase.kind === 'uploading' ? (
-          <View style={styles.progress}>
-            <Text style={styles.heroNote}>
-              Uploading securely… {Math.round(phase.progress * 100)}%
-            </Text>
-            <ProgressBar progress={phase.progress} />
-          </View>
-        ) : phase.kind === 'handing' ? (
-          <Text style={styles.heroNote}>Handing it to Pittu…</Text>
-        ) : (
-          <Button
-            title="Upload sale deed"
-            icon="attach"
-            variant="secondary"
-            onPress={() => void uploadDeed()}
-          />
-        )}
-        <View style={styles.privacy}>
-          <Icon name="lock" size={12} color="rgba(255,255,255,0.8)" />
-          <Text style={styles.heroNote}>
-            PDF up to {formatFileSize(MAX_LONG_DOCUMENT_BYTES)} · stored privately
+          <Text style={styles.title}>Let Pittu fill it in for you</Text>
+          <Text style={styles.text}>
+            Upload your sale deed — Pittu reads it and fills in the details. You just check and
+            save.
           </Text>
+          {phase.kind === 'uploading' ? (
+            <View style={styles.progress}>
+              <Text style={styles.note}>
+                Uploading securely… {Math.round(phase.progress * 100)}%
+              </Text>
+              <ProgressBar progress={phase.progress} />
+            </View>
+          ) : phase.kind === 'handing' ? (
+            <Text style={styles.note}>Handing it to Pittu…</Text>
+          ) : (
+            <Button
+              title="Upload sale deed"
+              icon="upload"
+              variant="secondary"
+              onPress={() => void uploadDeed()}
+              disabled={full}
+            />
+          )}
+          {problem ? <Banner message={problem} /> : null}
+          <View style={styles.privacy}>
+            <Icon name="lock" size={12} color="rgba(255,255,255,0.8)" />
+            <Text style={styles.note}>
+              {full
+                ? 'Finish or remove an unfinished property below first'
+                : `PDF up to ${formatFileSize(MAX_LONG_DOCUMENT_BYTES)} · stored privately`}
+            </Text>
+          </View>
+        </LinearGradient>
+
+        <View style={styles.bottom}>
+          {waiting.length > 0 ? (
+            <ListGroup title={`Unfinished · ${waiting.length} of ${MAX_UNFINISHED}`} plain>
+              {waiting.map((d) => (
+                <DraftRow key={d.id} draft={d} />
+              ))}
+            </ListGroup>
+          ) : null}
+          <ListGroup title="Manual entry" plain>
+            <ListRow
+              icon="edit"
+              accent="slate"
+              title="Fill in the details yourself"
+              subtitle="A couple of minutes · add the deed later"
+              onPress={busy ? undefined : onManual}
+            />
+          </ListGroup>
         </View>
-      </LinearGradient>
-
-      {problem ? <Banner message={problem} /> : null}
-
-      <ListGroup title="What Pittu picks up" plain>
-        {PICKS.map((p) => (
-          <ListRow
-            key={p.title}
-            icon={p.icon}
-            accent={p.accent}
-            title={p.title}
-            subtitle={p.text}
-          />
-        ))}
-      </ListGroup>
-
-      <ListGroup title="No deed at hand?" plain>
-        <ListRow
-          icon="edit"
-          accent="slate"
-          title="Fill it in myself"
-          subtitle="Takes a couple of minutes · add the deed later"
-          onPress={busy ? undefined : onManual}
-        />
-      </ListGroup>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
-
-const PICKS: { icon: IconName; accent: Accent; title: string; text: string }[] = [
-  {
-    icon: 'home',
-    accent: 'indigo',
-    title: 'What and where',
-    text: 'Type, address, village, district',
-  },
-  {
-    icon: 'area',
-    accent: 'teal',
-    title: 'Size and land records',
-    text: 'Area, survey and Khata numbers',
-  },
-  {
-    icon: 'receipt',
-    accent: 'amber',
-    title: 'The registration',
-    text: 'Number, date, buyers, sale price',
-  },
-];
 
 /** Shown instead of both choices when this term's property slots are all used. */
 export function PropertyLimitReached({
@@ -217,33 +210,49 @@ export function PropertyLimitReached({
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1, backgroundColor: colors.background },
   center: { textAlign: 'center' },
   content: { padding: space.lg, paddingTop: space.sm, gap: space.xl, paddingBottom: space.xxl },
-  hero: { borderRadius: radius.lg, padding: space.xl, gap: space.md },
-  heroIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+  scroll: { flexGrow: 1 },
+  top: {
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: space.xl,
+    paddingTop: space.md,
+    paddingBottom: space.xxl,
+    gap: space.md,
+    overflow: 'hidden',
   },
-  spark: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: accents.amber.bg,
+  glow: { position: 'absolute', borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.08)' },
+  glowA: { width: 320, height: 320, top: -140, right: -120 },
+  glowB: { width: 240, height: 240, bottom: -110, left: -90 },
+  pill: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderRadius: radius.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
   },
-  heroTitle: { fontSize: font(26), fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5 },
-  heroText: { fontSize: font(15), lineHeight: font(21), color: 'rgba(255,255,255,0.9)' },
-  heroNote: { fontSize: font(12.5), color: 'rgba(255,255,255,0.85)' },
-  progress: { gap: space.xs },
+  pillText: { fontSize: font(12.5), fontWeight: '700', color: '#FFFFFF' },
+  title: {
+    fontSize: font(28),
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.6,
+    textAlign: 'center',
+  },
+  text: {
+    fontSize: font(15.5),
+    lineHeight: font(22),
+    color: 'rgba(255,255,255,0.9)',
+    textAlign: 'center',
+    marginBottom: space.sm,
+  },
+  note: { fontSize: font(12.5), color: 'rgba(255,255,255,0.85)', textAlign: 'center' },
+  progress: { gap: space.xs, alignSelf: 'stretch' },
   privacy: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  bottom: { padding: space.lg, paddingTop: space.xl, gap: space.xl, paddingBottom: space.xxl },
   optionIcon: {
     width: 44,
     height: 44,

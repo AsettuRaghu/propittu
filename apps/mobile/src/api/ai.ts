@@ -1,4 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { dialog, toast } from '@/components/Dialog';
+import { errorMessage } from '@/lib/errors';
 import type {
   CreatePropertyInput,
   DocumentAnalysis,
@@ -50,6 +52,41 @@ export const useDraftProperties = (enabled = true) =>
     refetchInterval: (q) =>
       q.state.data?.some((d) => d.status === 'queued' || d.status === 'reading') ? 5000 : false,
   });
+
+/**
+ * Removes an unfinished deed set-up (the draft and its uploaded deed), and
+ * refreshes "Waiting for you" so it disappears straight away.
+ */
+export function useRemoveDraft() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api<void>(`/properties/${id}`, { method: 'DELETE' }),
+    onSettled: () => void qc.invalidateQueries({ queryKey: aiKeys.drafts }),
+  });
+}
+
+/** Asks first, then removes the draft. Resolves true once it is gone. */
+export async function confirmRemoveDraft(
+  remove: ReturnType<typeof useRemoveDraft>,
+  id: string,
+): Promise<boolean> {
+  const ok = await dialog.confirm({
+    title: 'Remove this unfinished property?',
+    message: 'The uploaded sale deed is removed too. You can always add the property again.',
+    confirmLabel: 'Remove',
+    cancelLabel: 'Keep it',
+    tone: 'danger',
+  });
+  if (!ok) return false;
+  try {
+    await remove.mutateAsync(id);
+    toast('Removed');
+    return true;
+  } catch (err) {
+    void dialog.alert({ title: 'Couldn’t remove it', message: errorMessage(err), tone: 'danger' });
+    return false;
+  }
+}
 
 /** PIN code, city and state of the deed's village — when the deed doesn't say. */
 export const usePlaceSuggestion = (propertyId: string, enabled: boolean) =>

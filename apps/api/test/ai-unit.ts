@@ -190,3 +190,17 @@ test('a recognisable name even without a project or unit', () => {
   );
   assert.equal(prefillFromFacts([f('property_kind', 'land')]).name, null, 'no place → no guess');
 });
+
+test('the society / project name leads the suggested name', () => {
+  const f = (key: string, value: unknown) => ({ key, value }) as never;
+  const project = f('project_name', 'Prasanthi Green Park');
+  assert.equal(
+    prefillFromFacts([f('property_kind', 'land'), project, f('unit_number', '28')]).name,
+    'Prasanthi Green Park – Site 28',
+  );
+  assert.equal(
+    prefillFromFacts([f('property_kind', 'land'), project, f('village', 'Bommasandra')]).name,
+    'Prasanthi Green Park, Bommasandra',
+  );
+  assert.equal(prefillFromFacts([project]).name, 'Prasanthi Green Park');
+});

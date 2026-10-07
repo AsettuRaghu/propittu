@@ -1,7 +1,7 @@
 import * as DocumentPicker from 'expo-document-picker';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   ALLOWED_DOCUMENT_MIME_TYPES,
   DOCUMENT_TYPES,
@@ -16,10 +16,17 @@ import { Footer } from '@/components/Footer';
 import { TextField } from '@/components/Field';
 import { Icon } from '@/components/Icon';
 import { FormSection } from '@/components/PropertyForm';
-import { Banner, Button, Card, IconTile, ProgressBar } from '@/components/ui';
+import { Select } from '@/components/Select';
+import { Banner, Button, LinkButton, ProgressBar } from '@/components/ui';
 import { DOCUMENT_TYPE_VISUALS } from '@/lib/icons';
 import { errorMessage } from '@/lib/errors';
-import { accents, colors, font, radius, shadow, space, typography } from '@/theme';
+import { colors, radius, space, typography } from '@/theme';
+
+const TYPE_OPTIONS = DOCUMENT_TYPES.map((t) => ({
+  value: t,
+  label: DOCUMENT_TYPE_LABELS[t],
+  icon: DOCUMENT_TYPE_VISUALS[t].icon,
+}));
 
 type Status =
   | { kind: 'idle' }
@@ -116,32 +123,14 @@ export default function AddDocumentScreen() {
       <Stack.Screen options={{ headerBackVisible: !uploading, gestureEnabled: !uploading }} />
       <ScrollView contentContainerStyle={styles.content}>
         <FormSection title="What is it?">
-          <View style={styles.typeGrid}>
-            {DOCUMENT_TYPES.map((t) => {
-              const selected = documentType === t;
-              const v = DOCUMENT_TYPE_VISUALS[t];
-              return (
-                <Pressable
-                  key={t}
-                  onPress={() => !uploading && setDocumentType(t)}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected }}
-                  style={[
-                    styles.typeTile,
-                    selected && {
-                      borderColor: accents[v.accent].fg,
-                      backgroundColor: accents[v.accent].bg,
-                    },
-                  ]}
-                >
-                  <IconTile icon={v.icon} accent={v.accent} size={34} solid={selected} />
-                  <Text style={styles.typeLabel} numberOfLines={1}>
-                    {DOCUMENT_TYPE_LABELS[t]}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <Select
+            variant="flat"
+            label="Document type"
+            placeholder="Choose the type"
+            value={documentType}
+            options={TYPE_OPTIONS}
+            onChange={(t) => !uploading && t && setDocumentType(t)}
+          />
         </FormSection>
 
         <FormSection
@@ -149,10 +138,10 @@ export default function AddDocumentScreen() {
           subtitle={`PDF, JPG or PNG · up to ${formatFileSize(MAX_DOCUMENT_BYTES)}`}
         >
           {file ? (
-            <Card flat style={styles.fileCard}>
+            <View style={styles.fileRow}>
               <Icon
                 name={file.mimeType === 'application/pdf' ? 'document' : 'image'}
-                size={24}
+                size={22}
                 color={colors.primary}
               />
               <View style={styles.fileBody}>
@@ -161,8 +150,8 @@ export default function AddDocumentScreen() {
                 </Text>
                 <Text style={typography.caption}>{formatFileSize(file.size)}</Text>
               </View>
-              {!uploading ? <Button title="Change" variant="ghost" onPress={chooseFile} /> : null}
-            </Card>
+              {!uploading ? <LinkButton title="Change" onPress={chooseFile} /> : null}
+            </View>
           ) : (
             <Button title="Choose file" variant="secondary" icon="attach" onPress={chooseFile} />
           )}
@@ -171,7 +160,9 @@ export default function AddDocumentScreen() {
 
         <FormSection title="Description">
           <TextField
+            variant="flat"
             label="Description"
+            hideLabel
             optional
             multiline
             maxLength={500}
@@ -205,27 +196,14 @@ export default function AddDocumentScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  content: { padding: space.lg, paddingTop: space.xs, gap: space.lg, paddingBottom: space.xxl },
-  typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
-  typeTile: {
-    width: '48.5%',
-    flexGrow: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-    padding: space.sm,
-    borderRadius: radius.md,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  typeLabel: { flex: 1, fontSize: font(13), fontWeight: '700', color: colors.text },
-  fileCard: {
+  content: { padding: space.lg, paddingTop: space.md, gap: space.xl, paddingBottom: space.xxl },
+  fileRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
-    backgroundColor: colors.surfaceMuted,
-    ...shadow,
+    paddingVertical: space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
   fileBody: { flex: 1, gap: 2 },
   progress: { gap: space.xs },

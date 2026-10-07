@@ -1,3 +1,4 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Animated, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
@@ -8,9 +9,10 @@ import {
   type PropertyType,
 } from '@propittu/shared';
 import { formatArea, formatDate } from '@/lib/format';
-import { accents, colors, font, radius, space, typography } from '@/theme';
+import { accents, colors, font, gradients, space, typography } from '@/theme';
+import { DeedArt } from './DeedArt';
 import { Footer } from './Footer';
-import { Icon } from './Icon';
+import { Icon, type IconName } from './Icon';
 import { Button } from './ui';
 
 /** What Pittu says while reading, paced to a typical deed (~15–30 s). */
@@ -24,203 +26,259 @@ const SCRIPT: { at: number; text: string }[] = [
   { at: 45, text: 'Long deeds take a little longer. Hang on…' },
 ];
 
-type LineKind = 'done' | 'current' | 'found' | 'missing';
-
-/** Pittu reading the deed: a scanning page and a running commentary. */
-export function DeedReading({ elapsed }: { elapsed: number }) {
-  const lines = SCRIPT.filter((s) => s.at <= elapsed);
-  return (
-    <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      <ScanningDeed />
-      <View style={styles.head}>
-        <Text style={[typography.title, styles.center]}>Pittu is reading your deed</Text>
-        <Text style={[typography.small, styles.center]}>
-          Usually under a minute. You can leave — it’ll be waiting on Home.
-        </Text>
-      </View>
-      <View style={styles.feed}>
-        {lines.map((l, i) => (
-          <FeedLine key={l.at} kind={i === lines.length - 1 ? 'current' : 'done'} text={l.text} />
-        ))}
-      </View>
-    </ScrollView>
-  );
+interface Finding {
+  kind: 'found' | 'missing';
+  icon: IconName;
+  label: string;
+  value?: string;
 }
 
 /**
- * Done reading: what Pittu found, revealed line by line — and what it
- * couldn't find, so the customer knows what to fill in next.
+ * Pittu reading the deed, on one page from start to finish: the deed being
+ * read and a running commentary; then, once done, what it found appears
+ * line by line (and what it couldn't find), counting up, and "Check and
+ * save" opens the form. Nothing moves between pages along the way.
  */
-export function DeedFindings({
-  prefill,
-  facts,
+export function DeedReading({
+  elapsed,
+  result,
   onContinue,
 }: {
-  prefill: PropertyPrefill;
-  facts: PropertyFact[];
+  elapsed: number;
+  /** Set once the reading is ready. */
+  result: { prefill: PropertyPrefill; facts: PropertyFact[] } | null;
   onContinue: () => void;
 }) {
-  const [lines] = useState(() => findings(prefill, facts));
+  const done = result !== null;
+  const [findings] = useFindings(result);
   const [shown, setShown] = useState(0);
   useEffect(() => {
-    if (shown >= lines.length) return;
-    const t = setTimeout(() => setShown((n) => n + 1), shown === 0 ? 250 : 450);
+    if (!done || shown >= findings.length) return;
+    const t = setTimeout(() => setShown((n) => n + 1), shown === 0 ? 400 : 480);
     return () => clearTimeout(t);
-  }, [shown, lines.length]);
-  const found = lines.filter((l) => l.kind === 'found').length;
+  }, [done, shown, findings.length]);
+
+  const said = SCRIPT.filter((s) => s.at <= elapsed);
+  const found = findings.slice(0, shown).filter((f) => f.kind === 'found').length;
+  const finished = done && shown >= findings.length;
 
   return (
     <View style={styles.flex}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={[styles.page, styles.pageDone]}>
-          <Icon name="check" size={40} color={accents.teal.fg} strokeWidth={2.6} />
-        </View>
-        <View style={styles.head}>
-          <Text style={[typography.title, styles.center]}>
-            {found > 0 ? `Done — I found ${found} details` : 'Done reading'}
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <LinearGradient
+          colors={[gradients.brand[0], gradients.brand[1]]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.top}
+        >
+          {done ? <DoneBadge /> : <DeedArt />}
+          <Text style={styles.title}>
+            {!done
+              ? 'Pittu is reading your deed'
+              : found === 0
+                ? 'Done reading'
+                : `${finished ? 'Done — I found' : 'Found'} ${found} detail${found === 1 ? '' : 's'}`}
           </Text>
-          <Text style={[typography.small, styles.center]}>
-            Next, check them and fill in anything I missed.
+          <Text style={styles.text}>
+            {done
+              ? 'Next, check them and fill in anything I missed.'
+              : 'Usually under a minute. You can leave — it’ll be waiting on Home.'}
           </Text>
-        </View>
+        </LinearGradient>
+
         <View style={styles.feed}>
-          {lines.slice(0, shown).map((l) => (
-            <FeedLine key={l.text} kind={l.kind} text={l.text} />
+          {said.map((l, i) => (
+            <Line
+              key={l.at}
+              kind={i === said.length - 1 && !done ? 'current' : 'said'}
+              icon="check"
+              label={l.text}
+            />
+          ))}
+          {findings.slice(0, shown).map((f) => (
+            <Line key={f.label} kind={f.kind} icon={f.icon} label={f.label} value={f.value} />
           ))}
         </View>
       </ScrollView>
       <Footer>
-        <Button title="Check and save" onPress={onContinue} />
+        <Button
+          title={done ? 'Check and save' : 'Pittu is reading…'}
+          onPress={onContinue}
+          disabled={!done}
+        />
       </Footer>
     </View>
   );
 }
 
-function findings(
-  p: PropertyPrefill,
-  facts: PropertyFact[],
-): { kind: 'found' | 'missing'; text: string }[] {
+/** The findings, worked out once when the reading arrives. */
+function useFindings(result: { prefill: PropertyPrefill; facts: PropertyFact[] } | null) {
+  const [cache, setCache] = useState<{ for: unknown; list: Finding[] }>({ for: null, list: [] });
+  if (result && cache.for !== result.facts) {
+    setCache({ for: result.facts, list: findings(result.prefill, result.facts) });
+  }
+  return [cache.list] as const;
+}
+
+function findings(p: PropertyPrefill, facts: PropertyFact[]): Finding[] {
   const fact = (k: string) => facts.find((f) => f.key === k)?.value;
   const str = (v: unknown) => (Array.isArray(v) ? v.join(', ') : v ? String(v) : null);
-  const out: { kind: 'found' | 'missing'; text: string }[] = [];
-  const add = (value: string | null, found: string, missing?: string) => {
-    if (value) out.push({ kind: 'found', text: `${found} — ${value}` });
-    else if (missing) out.push({ kind: 'missing', text: missing });
+  const out: Finding[] = [];
+  const add = (icon: IconName, label: string, value: string | null, missing?: string) => {
+    if (value) out.push({ kind: 'found', icon, label, value });
+    else if (missing) out.push({ kind: 'missing', icon: 'warning', label: missing });
   };
 
   const type = p.property_type as PropertyType | null | undefined;
-  add(type ? PROPERTY_TYPE_LABELS[type] : null, 'It’s a', 'Couldn’t tell the property type');
   add(
+    'home',
+    'Property type',
+    type ? (PROPERTY_TYPE_LABELS[type] ?? null) : null,
+    'Couldn’t tell the property type',
+  );
+  add(
+    'pin',
+    'Address',
     [p.address_line, p.city].filter(Boolean).join(', ') || null,
-    'Found the address',
     'Couldn’t find a full address',
   );
   add(
+    'area',
+    'Area',
     p.area_value ? formatArea(Number(p.area_value), (p.area_unit as AreaUnit) ?? null) : null,
-    'Found the area',
     'Couldn’t find the area',
   );
-  add(str(p.survey_number), 'Found the survey number');
-  add(str(p.khata_number), 'Found the Khata number');
-  add(str(fact('registration_number')), 'Found the registration');
+  add('tag', 'Survey number', str(p.survey_number));
+  add('tag', 'Khata number', str(p.khata_number));
+  add('receipt', 'Registration', str(fact('registration_number')));
   const date = str(fact('registration_date'));
-  add(date ? formatDate(date) : null, 'Registered on');
-  add(str(fact('buyers')), 'Bought by');
-  add(str(p.name), 'Suggested a name');
-  if (!p.pincode) out.push({ kind: 'missing', text: 'No PIN code in the deed — add it next' });
+  add('calendar', 'Registered on', date ? formatDate(date) : null);
+  add('users', 'Bought by', str(fact('buyers')));
+  add('sparkles', 'A name for it', str(p.name));
+  if (!p.pincode) out.push({ kind: 'missing', icon: 'warning', label: 'No PIN code in the deed' });
   return out;
 }
 
-/** One line of commentary; it fades in where it lands (no sliding). */
-function FeedLine({ kind, text }: { kind: LineKind; text: string }) {
+/** One line of the feed; it fades in where it lands (no sliding). */
+function Line({
+  kind,
+  icon,
+  label,
+  value,
+}: {
+  kind: 'said' | 'current' | 'found' | 'missing';
+  icon: IconName;
+  label: string;
+  value?: string;
+}) {
   const [opacity] = useState(() => new Animated.Value(0));
+  const [scale] = useState(() => new Animated.Value(kind === 'found' ? 0.92 : 1));
   useEffect(() => {
-    Animated.timing(opacity, { toValue: 1, duration: 350, useNativeDriver: true }).start();
-  }, [opacity]);
+    Animated.parallel([
+      Animated.timing(opacity, { toValue: 1, duration: 320, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1, friction: 6, useNativeDriver: true }),
+    ]).start();
+  }, [opacity, scale]);
+
+  const found = kind === 'found';
   return (
-    <Animated.View style={[styles.line, { opacity }]}>
-      <View style={styles.lineIcon}>
-        {kind === 'current' ? (
-          <ActivityIndicator size="small" color={colors.primary} />
-        ) : kind === 'missing' ? (
-          <Icon name="warning" size={16} color={colors.warning} />
-        ) : (
-          <Icon name="check" size={16} color={accents.teal.fg} strokeWidth={3} />
-        )}
-      </View>
-      <Text
+    <Animated.View style={[styles.line, { opacity, transform: [{ scale }] }]}>
+      <View
         style={[
-          styles.lineText,
-          kind === 'current' && styles.current,
-          kind === 'missing' && styles.missing,
+          styles.lineIcon,
+          found && styles.foundIcon,
+          kind === 'missing' && styles.missingIcon,
         ]}
       >
-        {text}
-      </Text>
+        {kind === 'current' ? (
+          <ActivityIndicator size="small" color={colors.primary} />
+        ) : (
+          <Icon
+            name={icon}
+            size={found ? 16 : 14}
+            color={
+              found ? accents.teal.fg : kind === 'missing' ? colors.warning : colors.textSubtle
+            }
+            strokeWidth={2.4}
+          />
+        )}
+      </View>
+      <View style={styles.flex}>
+        {found ? (
+          <>
+            <Text style={typography.caption}>{label}</Text>
+            <Text style={styles.value}>{value}</Text>
+          </>
+        ) : (
+          <Text
+            style={[
+              styles.said,
+              kind === 'current' && styles.current,
+              kind === 'missing' && styles.missing,
+            ]}
+          >
+            {label}
+          </Text>
+        )}
+      </View>
     </Animated.View>
   );
 }
 
-/** A page with a light sweeping across it, so the reading feels alive. */
-function ScanningDeed() {
-  const [sweep] = useState(() => new Animated.Value(0));
+function DoneBadge() {
+  const [scale] = useState(() => new Animated.Value(0.6));
   useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(sweep, { toValue: 1, duration: 1400, useNativeDriver: true }),
-        Animated.timing(sweep, { toValue: 0, duration: 1400, useNativeDriver: true }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [sweep]);
+    Animated.spring(scale, { toValue: 1, friction: 5, useNativeDriver: true }).start();
+  }, [scale]);
   return (
-    <View style={styles.page}>
-      <Icon name="deed" size={44} color={colors.primary} strokeWidth={1.6} />
-      <Animated.View
-        style={[
-          styles.beam,
-          {
-            transform: [
-              { translateY: sweep.interpolate({ inputRange: [0, 1], outputRange: [6, 86] }) },
-            ],
-          },
-        ]}
-      />
+    <View style={styles.badgeBox}>
+      <Animated.View style={[styles.badge, { transform: [{ scale }] }]}>
+        <Icon name="check" size={46} color={accents.teal.fg} strokeWidth={2.8} />
+      </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  center: { textAlign: 'center' },
-  content: { padding: space.xl, paddingTop: 48, gap: space.xl, paddingBottom: space.xxl },
-  head: { gap: space.xs },
-  page: {
-    alignSelf: 'center',
-    width: 96,
-    height: 96,
-    borderRadius: 28,
-    backgroundColor: colors.primarySoft,
+  flex: { flex: 1, minWidth: 0 },
+  scroll: { flexGrow: 1, paddingBottom: space.xxl },
+  top: {
+    alignItems: 'center',
+    paddingHorizontal: space.xl,
+    paddingTop: space.lg,
+    paddingBottom: space.xl,
+    gap: space.sm,
+  },
+  title: {
+    fontSize: font(24),
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+    textAlign: 'center',
+  },
+  text: { fontSize: font(14.5), color: 'rgba(255,255,255,0.88)', textAlign: 'center' },
+  badgeBox: { width: 220, height: 190, alignItems: 'center', justifyContent: 'center' },
+  badge: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
   },
-  pageDone: { backgroundColor: accents.teal.bg },
-  beam: {
-    position: 'absolute',
-    top: 0,
-    left: 10,
-    right: 10,
-    height: 3,
-    borderRadius: radius.pill,
-    backgroundColor: colors.primary,
-    opacity: 0.55,
+  feed: { padding: space.lg, paddingTop: space.xl, gap: space.md },
+  line: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  lineIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  feed: { gap: space.md },
-  line: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },
-  lineIcon: { width: 20, height: 22, alignItems: 'center', justifyContent: 'center' },
-  lineText: { flex: 1, fontSize: font(15), lineHeight: font(22), color: colors.textMuted },
+  foundIcon: { backgroundColor: accents.teal.bg },
+  missingIcon: { backgroundColor: accents.amber.bg },
+  said: { fontSize: font(14.5), lineHeight: font(20), color: colors.textMuted },
   current: { color: colors.text, fontWeight: '700' },
-  missing: { color: colors.warning, fontWeight: '600' },
+  missing: { color: colors.warning, fontWeight: '700' },
+  value: { fontSize: font(16), fontWeight: '700', color: colors.text },
 });

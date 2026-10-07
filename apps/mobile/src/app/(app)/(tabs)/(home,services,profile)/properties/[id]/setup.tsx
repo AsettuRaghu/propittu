@@ -12,12 +12,19 @@ import {
   type PropertyFact,
   type PropertyType,
 } from '@propittu/shared';
-import { startAnalysis, useAnalysis, useFinishSetup, usePlaceSuggestion } from '@/api/ai';
+import {
+  confirmRemoveDraft,
+  startAnalysis,
+  useAnalysis,
+  useFinishSetup,
+  usePlaceSuggestion,
+  useRemoveDraft,
+} from '@/api/ai';
 import { useProperty } from '@/api/queries';
-import { api, ApiError } from '@/api/client';
-import { dialog, toast } from '@/components/Dialog';
+import { ApiError } from '@/api/client';
+import { toast } from '@/components/Dialog';
 import { Footer } from '@/components/Footer';
-import { DeedFindings, DeedReading } from '@/components/DeedReading';
+import { DeedReading } from '@/components/DeedReading';
 import { DuplicateDeed } from '@/components/DuplicateDeed';
 import { LoadingState } from '@/components/States';
 import {
@@ -98,14 +105,14 @@ export default function PropertySetupScreen() {
   // Seen reading in this visit? Then the findings are revealed before the form.
   if (reading && !sawReading) setSawReading(true);
 
-  if (reading) {
-    return (
-      <>
-        <Stack.Screen options={{ title: 'Reading your deed' }} />
-        <DeedReading elapsed={elapsed} />
-      </>
-    );
-  }
+  // One page from reading to findings: the same element, so it carries on.
+  const readingPage = (result: Parameters<typeof DeedReading>[0]['result']) => (
+    <>
+      <Stack.Screen options={{ title: result ? 'Pittu’s findings' : 'Reading your deed' }} />
+      <DeedReading elapsed={elapsed} result={result} onContinue={() => setRevealed(true)} />
+    </>
+  );
+  if (reading) return readingPage(null);
 
   // The same deed is already in the locker: say so before anything else.
   if (a?.status === 'ready' && a.duplicate_of && !addAnyway) {
@@ -129,16 +136,7 @@ export default function PropertySetupScreen() {
   }
 
   if (sawReading && !revealed && a?.status === 'ready' && a.facts.length > 0) {
-    return (
-      <>
-        <Stack.Screen options={{ title: 'Pittu’s findings' }} />
-        <DeedFindings
-          prefill={prefillFromFacts(a.facts)}
-          facts={a.facts}
-          onContinue={() => setRevealed(true)}
-        />
-      </>
-    );
+    return readingPage({ prefill: prefillFromFacts(a.facts), facts: a.facts });
   }
 
   return <Review key={a?.id ?? 'manual'} propertyId={id} analysis={a ?? null} />;
@@ -215,6 +213,7 @@ function Review({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const finish = useFinishSetup(propertyId);
+  const removeDraft = useRemoveDraft();
   const scrollRef = useRef<ScrollView>(null);
 
   const byKey = new Map(facts.map((f) => [f.key, f]));
@@ -268,17 +267,9 @@ function Review({
     );
   };
 
+  // Remove this unfinished property (draft + deed) — it leaves Home too.
   const discard = async () => {
-    const ok = await dialog.confirm({
-      title: 'Discard this property?',
-      message: 'The uploaded deed will be removed too.',
-      confirmLabel: 'Discard',
-      cancelLabel: 'Keep going',
-      tone: 'danger',
-    });
-    if (!ok) return;
-    await api<void>(`/properties/${propertyId}`, { method: 'DELETE' }).catch(() => undefined);
-    router.dismissTo('/');
+    if (await confirmRemoveDraft(removeDraft, propertyId)) router.dismissTo('/');
   };
 
   return (
@@ -334,7 +325,11 @@ function Review({
         ) : null}
 
         <View style={styles.discard}>
-          <LinkButton title="Discard this property" tone="danger" onPress={() => void discard()} />
+          <LinkButton
+            title="Remove this unfinished property"
+            tone="danger"
+            onPress={() => void discard()}
+          />
         </View>
       </ScrollView>
       <Footer>

@@ -1,7 +1,6 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { api } from '@/api/client';
+import { useRemoveDraft } from '@/api/ai';
 import { accents, space, typography } from '@/theme';
 import { Footer } from './Footer';
 import { Icon } from './Icon';
@@ -22,10 +21,11 @@ export function DuplicateDeed({
   existing: { id: string; name: string };
   onAddAnyway: () => void;
 }) {
-  const [busy, setBusy] = useState(false);
+  const remove = useRemoveDraft();
+  const busy = remove.isPending;
+  // This attempt isn't needed: clear it, then show the property it belongs to.
   const openExisting = async () => {
-    setBusy(true);
-    await api<void>(`/properties/${draftId}`, { method: 'DELETE' }).catch(() => undefined);
+    await remove.mutateAsync(draftId).catch(() => undefined);
     router.dismissTo('/');
     router.push(`/properties/${existing.id}`);
   };

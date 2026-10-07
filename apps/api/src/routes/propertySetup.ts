@@ -44,7 +44,8 @@ export const propertySetupRouter = Router();
  * Sale Deed path (Pittu): draft → deed read → customer confirms
  * ------------------------------------------------------------------ */
 
-const MAX_OPEN_DRAFTS = 3;
+/** Unfinished deed set-ups kept at once (they never count toward the plan). */
+const MAX_OPEN_DRAFTS = 2;
 
 /* POST /properties/draft — a placeholder the deed can be stored against */
 propertySetupRouter.post('/properties/draft', async (req, res) => {

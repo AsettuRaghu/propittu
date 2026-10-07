@@ -145,7 +145,16 @@ function AddPropertyForm() {
 
   return (
     <View style={styles.flex}>
-      <Stack.Screen options={{ headerBackVisible: !busy, gestureEnabled: !busy }} />
+      <Stack.Screen
+        options={{
+          // Back to the standard header (the start screen colours it).
+          title: 'Add property',
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.primary,
+          headerBackVisible: !busy,
+          gestureEnabled: !busy,
+        }}
+      />
       <ScrollView
         ref={scrollRef}
         contentContainerStyle={styles.content}

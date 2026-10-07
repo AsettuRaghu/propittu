@@ -102,6 +102,24 @@ function placeName(kind: string | null, place: string | null): string | null {
   return `${(kind && what[kind]) || 'Property'} in ${place}`;
 }
 
+/**
+ * The suggested name, most recognisable first:
+ *   society / project + site or flat   "Prasanthi Green Park – Site 28"
+ *   society / project + place          "Prasanthi Green Park, Bommasandra"
+ *   kind + place                       "Plot in Bommasandra"
+ *   site or flat alone                 "Site 28"
+ */
+function propertyName(
+  kind: string | null,
+  project: string | null,
+  unitLabel: string | null,
+  place: string | null,
+): string | null {
+  if (project && unitLabel) return `${project} – ${unitLabel}`;
+  if (project) return place && !project.includes(place) ? `${project}, ${place}` : project;
+  return placeName(kind, place) ?? unitLabel;
+}
+
 /** Builds the pre-filled property from a reading's facts (nothing invented). */
 export function prefillFromFacts(facts: Pick<PropertyFact, 'key' | 'value'>[]): PropertyPrefill {
   const f = new Map(facts.map((x) => [x.key, x.value]));
@@ -140,12 +158,7 @@ export function prefillFromFacts(facts: Pick<PropertyFact, 'key' | 'value'>[]): 
 
   return {
     property_type: kind && PROPERTY_KINDS.includes(kind) ? kind : null,
-    name:
-      project && unitLabel
-        ? `${project} – ${unitLabel}`
-        : (project ??
-          unitLabel ??
-          placeName(kind, s('village') ?? s('taluk_or_mandal') ?? s('city'))),
+    name: propertyName(kind, project, unitLabel, s('village') ?? s('taluk_or_mandal') ?? s('city')),
     address_line: address || null,
     city: s('city'),
     state: s('state'),

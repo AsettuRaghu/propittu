@@ -5,6 +5,7 @@ import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { DraftProperty } from '@propittu/shared';
 import { useDraftProperties } from '@/api/ai';
+import { DraftRow } from '@/components/DraftRow';
 import { useMe, useProperties } from '@/api/queries';
 import { Icon, type IconName } from '@/components/Icon';
 import { PlanBanner } from '@/components/PlanBanner';
@@ -136,59 +137,6 @@ function waitingDrafts(drafts: DraftProperty[]): DraftProperty[] {
   const withDeed = drafts.filter((d) => d.document_id);
   const failed = withDeed.find((d) => d.status === 'failed');
   return withDeed.filter((d) => d.status !== 'failed' || d === failed);
-}
-
-/** One waiting deed, named the way Pittu read it, picking up where it was left. */
-function DraftRow({ draft: d }: { draft: DraftProperty }) {
-  const open = () =>
-    router.push({
-      pathname: '/properties/[id]/setup',
-      params: { id: d.id, doc: d.document_id ?? '' },
-    });
-  if (d.duplicate_of) {
-    return (
-      <ListRow
-        icon="deed"
-        accent="violet"
-        title={`Already in your locker: ${d.duplicate_of.name}`}
-        subtitle="Same sale deed — open it, or add it as a new property"
-        subtitleLines={2}
-        onPress={open}
-      />
-    );
-  }
-  if (d.status === 'ready') {
-    return (
-      <ListRow
-        icon="deed"
-        accent="teal"
-        title={d.name ?? 'Your new property'}
-        subtitle="Pittu has read your deed — check the details and save"
-        subtitleLines={2}
-        onPress={open}
-      />
-    );
-  }
-  if (d.status === 'failed') {
-    return (
-      <ListRow
-        icon="deed"
-        accent="amber"
-        title="Pittu couldn’t read this deed"
-        subtitle="Fill in the details yourself — it’s quick"
-        onPress={open}
-      />
-    );
-  }
-  return (
-    <ListRow
-      icon="deed"
-      accent="indigo"
-      title="Pittu is reading your deed…"
-      subtitle="It’ll be ready here in a minute"
-      onPress={open}
-    />
-  );
 }
 
 /** Onward from Home, using the pages that already exist. */
