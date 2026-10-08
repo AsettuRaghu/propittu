@@ -2,7 +2,6 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { requestStatusLabel, type PropertySummary } from '@propittu/shared';
-import { openServicesTab } from '@/lib/nav';
 import { accents, colors, font, radius, shadow, space } from '@/theme';
 import { Icon, type IconName } from './Icon';
 import { PropertyCover } from './PropertyCover';
@@ -54,7 +53,12 @@ export function PropertyCard({
             r ? `${r.service_name}, ${requestStatusLabel(r.status, r.fulfilment)}` : 'Requests'
           }
           live={!!r}
-          onPress={() => (r ? router.push(`/requests/${r.id}`) : openServicesTab('requests'))}
+          // Exactly one open: straight to it. Otherwise this property's requests.
+          onPress={() =>
+            r && p.open_request_count === 1
+              ? router.push(`/requests/${r.id}`)
+              : router.push(`/properties/${p.id}/requests`)
+          }
         />
         <View style={styles.flex} />
         <HealthTile score={p.health_score} onPress={onPress} />

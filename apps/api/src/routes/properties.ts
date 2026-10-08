@@ -156,6 +156,7 @@ propertiesRouter.get('/properties', async (req, res) => {
     docTypes.set(d.property_id, [...(docTypes.get(d.property_id) ?? []), d.document_type]);
   }
   const activeRequest = new Map<string, PropertySummary['active_request']>();
+  const openCount = new Map<string, number>();
   for (const r of must<
     {
       id: string;
@@ -168,6 +169,7 @@ propertiesRouter.get('/properties', async (req, res) => {
       service: { name: string } | null;
     }[]
   >(requestRes)) {
+    if (r.property_id) openCount.set(r.property_id, (openCount.get(r.property_id) ?? 0) + 1);
     if (!r.property_id || activeRequest.has(r.property_id)) continue;
     activeRequest.set(r.property_id, {
       id: r.id,
@@ -218,6 +220,7 @@ propertiesRouter.get('/properties', async (req, res) => {
       completion_percent: completion?.percent ?? 0,
       next_step: completion?.next[0] ?? null,
       active_request: activeRequest.get(r.id) ?? null,
+      open_request_count: openCount.get(r.id) ?? 0,
       reach: reach.get(r.id) ?? null,
       latitude: property?.latitude ?? null,
       longitude: property?.longitude ?? null,

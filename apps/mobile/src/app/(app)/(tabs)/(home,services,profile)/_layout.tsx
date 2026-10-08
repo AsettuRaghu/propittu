@@ -41,6 +41,7 @@ const SCREENS: { name: string; options: Record<string, unknown> }[] = [
   { name: 'properties/[id]/location', options: { title: 'Property location' } },
   { name: 'properties/[id]/documents', options: { title: 'Documents' } },
   { name: 'properties/[id]/media', options: { title: 'Photos & videos' } },
+  { name: 'properties/[id]/requests', options: { title: 'Service requests' } },
   { name: 'properties/[id]/add-document', options: { title: 'Add document' } },
   { name: 'services/request', options: { title: 'Request a service' } },
   { name: 'requests/[id]', options: { title: 'Service request' } },

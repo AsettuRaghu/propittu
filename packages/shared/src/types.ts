@@ -135,6 +135,8 @@ export interface PropertySummary {
   /** Profile completion (M2) and the most useful next step, for Home. */
   completion_percent: number;
   next_step: CompletionItem | null;
+  /** How many service requests are open on this property. */
+  open_request_count: number;
   /** The most recent open service request on this property, if any. */
   active_request: {
     id: string;

@@ -1,5 +1,4 @@
 import { useRef } from 'react';
-import { openServicesTab } from '@/lib/nav';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import {
@@ -344,7 +343,10 @@ function Services({ property }: { property: PropertyDetail }) {
       plain
       action={
         recent.length > 0 ? (
-          <LinkButton title="All requests" onPress={() => openServicesTab('requests')} />
+          <LinkButton
+            title="All requests"
+            onPress={() => router.push(`/properties/${property.id}/requests`)}
+          />
         ) : undefined
       }
     >
