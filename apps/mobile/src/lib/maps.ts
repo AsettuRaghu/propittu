@@ -22,6 +22,6 @@ export async function openDirections(name: string, lat: number, lng: number): Pr
 
 /** A Google Maps link anyone can open. */
 export const shareLocation = (name: string, lat: number, lng: number) =>
-  void Share.share({ message: `${name} — https://maps.google.com/?q=${lat},${lng}` }).catch(
-    () => undefined,
+  void Share.share({ message: `${name} — https://maps.google.com/?q=${lat},${lng}` }).catch((err) =>
+    console.warn('Share failed', err),
   );

@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
+import { LogBox } from 'react-native';
 import type { Reminder } from '@propittu/shared';
 
 /**
@@ -13,6 +14,10 @@ import type { Reminder } from '@propittu/shared';
  */
 
 const KEY = 'propittu.phone-reminders';
+
+// Expo Go warns that server push needs a development build. We only use
+// on-phone (local) reminders, which work there, so the warning is noise.
+LogBox.ignoreLogs(['expo-notifications']);
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
