@@ -36,6 +36,51 @@ export const useTicket = (id: string) =>
     staleTime: 0,
   });
 
+/** Tickets where our team replied since the customer last looked. */
+export function useNewReplies() {
+  const { data } = useTickets();
+  return data?.filter((t) => t.has_new_reply) ?? [];
+}
+
+/**
+ * App-wide: any change to the customer's tickets (a reply from our team, a
+ * status change) refreshes the ticket list, so the "new reply" badges appear
+ * at once. Row-level security limits the events to the customer's own tickets.
+ */
+export function useSupportUpdates() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    const refresh = () => void qc.invalidateQueries({ queryKey: ['support'] });
+    const channel = supabase
+      .channel('my-support')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'support_ticket_messages' },
+        refresh,
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'support_tickets' },
+        refresh,
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') refresh();
+      });
+    return () => void supabase.removeChannel(channel);
+  }, [qc]);
+}
+
+/** Opening a ticket marks our replies in it as read. */
+export function useMarkTicketRead(id: string, hasNewReply: boolean | undefined) {
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (!hasNewReply) return;
+    void api(`/support/tickets/${id}/read`, { method: 'POST' }).then(() =>
+      qc.invalidateQueries({ queryKey: supportKeys.tickets }),
+    );
+  }, [id, hasNewReply, qc]);
+}
+
 /**
  * Keeps an open ticket live: Supabase Realtime pushes new messages and status
  * changes for this ticket (row-level security applies, so a customer only

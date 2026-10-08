@@ -146,8 +146,16 @@ function TicketRow({ ticket: t }: { ticket: SupportTicket }) {
   return (
     <ListRow
       title={withoutCodes(t.subject)}
-      subtitle={`Raised ${formatDate(t.created_at)}`}
-      right={<Badge label={TICKET_STATUS_LABELS[t.status]} tone={TICKET_TONES[t.status]} />}
+      subtitle={
+        t.has_new_reply ? 'Propittu replied — tap to read' : `Raised ${formatDate(t.created_at)}`
+      }
+      right={
+        t.has_new_reply ? (
+          <Badge label="New reply" tone="danger" />
+        ) : (
+          <Badge label={TICKET_STATUS_LABELS[t.status]} tone={TICKET_TONES[t.status]} />
+        )
+      }
       onPress={() => router.push(`/support/${t.id}`)}
     />
   );

@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
+import { useNewReplies, useSupportUpdates } from '@/api/support';
 import { Icon, type IconName } from '@/components/Icon';
 import { colors, font, radius } from '@/theme';
 
@@ -26,6 +27,8 @@ function TabIcon({ name, focused }: { name: IconName; focused: boolean }) {
 }
 
 export default function TabsLayout() {
+  useSupportUpdates();
+  const newReplies = useNewReplies().length;
   return (
     <Tabs
       screenOptions={{
@@ -60,6 +63,9 @@ export default function TabsLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ focused }) => <TabIcon name="user" focused={focused} />,
+          // A reply from our team the customer hasn't opened yet.
+          tabBarBadge: newReplies || undefined,
+          tabBarBadgeStyle: { backgroundColor: colors.danger, fontSize: font(10) },
         }}
       />
     </Tabs>

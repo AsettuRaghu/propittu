@@ -5,8 +5,9 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import type { DraftProperty } from '@propittu/shared';
+import { withoutCodes, type DraftProperty } from '@propittu/shared';
 import { useDraftProperties } from '@/api/ai';
+import { useNewReplies } from '@/api/support';
 import { ComingUp } from '@/components/ComingUp';
 import { DraftRow } from '@/components/DraftRow';
 import { useMe, useProperties } from '@/api/queries';
@@ -16,7 +17,7 @@ import { PlanBanner } from '@/components/PlanBanner';
 import { PropertyCard, PropertyCardSkeleton } from '@/components/PropertyCard';
 import { PullRefresh } from '@/components/PullRefresh';
 import { ErrorState, LimitedAccessState } from '@/components/States';
-import { Button, IconButton, ListGroup, ListRow } from '@/components/ui';
+import { Badge, Button, IconButton, ListGroup, ListRow } from '@/components/ui';
 import { greeting } from '@/lib/format';
 import { accents, colors, font, gradients, radius, shadow, space, typography } from '@/theme';
 
@@ -80,6 +81,8 @@ export default function HomeScreen() {
       </View>
 
       {me.data && !limited ? <PlanBanner plan={me.data.plan} /> : null}
+
+      <NewReplies />
 
       {hasProperties ? <ComingUp /> : null}
 
@@ -157,8 +160,30 @@ function waitingDrafts(drafts: DraftProperty[]): DraftProperty[] {
   return withDeed.filter((d) => d.status !== 'failed' || d === failed);
 }
 
+/** Replies from our team the customer hasn't opened yet — first thing on Home. */
+function NewReplies() {
+  const tickets = useNewReplies();
+  if (tickets.length === 0) return null;
+  return (
+    <ListGroup title="New from Propittu" plain>
+      {tickets.map((t) => (
+        <ListRow
+          key={t.id}
+          icon="support"
+          accent="sky"
+          title="Propittu replied"
+          subtitle={withoutCodes(t.subject)}
+          right={<Badge label="New" tone="danger" />}
+          onPress={() => router.push(`/support/${t.id}`)}
+        />
+      ))}
+    </ListGroup>
+  );
+}
+
 /** Onward from Home, using the pages that already exist. */
 function QuickActions() {
+  const newReplies = useNewReplies().length;
   return (
     <View style={styles.footer}>
       <ListGroup title="Quick actions" plain>
@@ -179,6 +204,7 @@ function QuickActions() {
           icon="support"
           accent="sky"
           title="Help & Support"
+          right={newReplies ? <Badge label={`${newReplies} new`} tone="danger" /> : undefined}
           onPress={() => router.push('/support')}
         />
       </ListGroup>

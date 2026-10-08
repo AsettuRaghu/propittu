@@ -6,7 +6,7 @@ import {
   ticketWaitingNote,
   withoutCodes,
 } from '@propittu/shared';
-import { useLiveTicket, useReplyTicket, useTicket } from '@/api/support';
+import { useLiveTicket, useMarkTicketRead, useReplyTicket, useTicket } from '@/api/support';
 import { uploadAll } from '@/components/AttachmentPicker';
 import { ChatThread } from '@/components/ChatThread';
 import { dialog, toast } from '@/components/Dialog';
@@ -24,6 +24,7 @@ export default function TicketScreen() {
   const { data: t, isPending, error, refetch, isRefetching } = useTicket(id);
   const reply = useReplyTicket(id);
   useLiveTicket(id);
+  useMarkTicketRead(id, t?.has_new_reply);
 
   if (isPending) return <LoadingState />;
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;

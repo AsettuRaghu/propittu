@@ -5,7 +5,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { formatIndianMobile, updateProfileSchema } from '@propittu/shared';
 import { useMe } from '@/api/queries';
-import { useUpdateProfile } from '@/api/support';
+import { useNewReplies, useUpdateProfile } from '@/api/support';
 import { InlineEdit } from '@/components/InlineEdit';
 import { PullRefresh } from '@/components/PullRefresh';
 import { ErrorState, LoadingState } from '@/components/States';
@@ -25,6 +25,7 @@ const openLegal = (page: 'privacy' | 'terms') =>
  */
 export default function ProfileScreen() {
   const { data: me, isPending, error, refetch } = useMe();
+  const newReplies = useNewReplies().length;
   const updateProfile = useUpdateProfile();
   const { signingOut, logout } = useLogout();
 
@@ -90,6 +91,7 @@ export default function ProfileScreen() {
             icon="support"
             accent="teal"
             title="Help & Support"
+            right={newReplies ? <Badge label={`${newReplies} new`} tone="danger" /> : undefined}
             onPress={() => router.push('/support')}
           />
           <ListRow icon="shield" title="Privacy policy" onPress={() => openLegal('privacy')} />

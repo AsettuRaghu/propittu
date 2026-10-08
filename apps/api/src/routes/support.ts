@@ -31,7 +31,7 @@ import {
 export const supportRouter = Router();
 
 export const TICKET_COLUMNS =
-  'id, reference, subject, category, status, created_at, last_message_at, resolved_at, ' +
+  'id, reference, subject, category, status, created_at, last_message_at, resolved_at, has_new_reply, ' +
   'property:properties(id, name), service_request:service_requests(id, reference, service:services(name))';
 
 interface AttachmentRow {
@@ -221,6 +221,13 @@ supportRouter.get('/support/tickets', async (req, res) => {
         .limit(100),
     ),
   );
+});
+
+/* POST /support/tickets/:id/read — the customer opened it; our replies so far are read */
+supportRouter.post('/support/tickets/:id/read', async (req, res) => {
+  const { db } = auth(req);
+  must(await db.rpc('mark_ticket_read', { p_ticket: uuidParam(req.params.id, 'Ticket') }));
+  res.status(204).end();
 });
 
 /* POST /support/tickets {subject, category, description, property_id?, service_request_id?} */

@@ -943,6 +943,13 @@ insert into public.support_ticket_messages (ticket_id, account_id, author_id, au
 select id, account_id, '55555555-5555-5555-5555-555555555555', 'staff', 'Thanks — we have corrected it.' from public.support_tickets;
 select public.staff_set_ticket_status((select id from public.support_tickets limit 1), 'waiting_on_customer');
 select tst.ok((select status from public.support_tickets) = 'waiting_on_customer', 'staff set ticket status');
+select public.mark_ticket_read((select id from public.support_tickets limit 1));
+
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.ok((select has_new_reply from public.support_tickets), 'a staff reply shows as a new reply to A (staff opening it does not count)');
+select public.mark_ticket_read((select id from public.support_tickets limit 1));
+select tst.ok(not (select has_new_reply from public.support_tickets), 'A opening the ticket clears the new reply');
+select tst.rejects($$update public.support_tickets set customer_read_at = null$$, 'A cannot change read state directly');
 
 select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
 insert into public.support_ticket_messages (ticket_id, account_id, author_id, author_type, body)

@@ -97,6 +97,8 @@ export interface SupportTicket {
   created_at: string;
   last_message_at: string;
   resolved_at: string | null;
+  /** Our team replied since the customer last opened the ticket. */
+  has_new_reply: boolean;
   property: { id: string; name: string } | null;
   service_request: { id: string; reference: string; service: { name: string } | null } | null;
 }
