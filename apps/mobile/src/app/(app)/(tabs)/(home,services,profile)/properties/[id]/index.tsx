@@ -5,12 +5,14 @@ import {
   FACING_LABELS,
   KHATA_TYPE_LABELS,
   LAND_USE_LABELS,
+  LEGAL_LEVEL_LABELS,
   pittuQuestions,
   type CompletionItem,
   type CompletionKey,
+  type LegalLevel,
   type PropertyDetail,
 } from '@propittu/shared';
-import { usePittu } from '@/api/ai';
+import { useLegalChecks, usePittu, usePropertyNews, usePropertyValue } from '@/api/ai';
 import { useProperty, useServiceRequests, useServices } from '@/api/queries';
 import { DocumentSlots } from '@/components/DocumentSlots';
 import type { IconName } from '@/components/Icon';
@@ -26,10 +28,19 @@ import { ReachNotice } from '@/components/ReachNotice';
 import { RequestRow } from '@/components/ServiceRequestList';
 import { ErrorState, LoadingState } from '@/components/States';
 import { VideoSection } from '@/components/VideoSection';
-import { Banner, IconButton, KeyValue, LinkButton, ListGroup, ListRow } from '@/components/ui';
-import { formatArea, formatDate } from '@/lib/format';
+import {
+  Badge,
+  Banner,
+  IconButton,
+  KeyValue,
+  LinkButton,
+  ListGroup,
+  ListRow,
+} from '@/components/ui';
+import { formatArea, formatDate, rupeesShort } from '@/lib/format';
+import { hasNewNews, useNewsSeen } from '@/lib/newsSeen';
 import { goToCompletionStep } from '@/lib/propertySteps';
-import { radius, shadow, space } from '@/theme';
+import { radius, shadow, space, type Accent } from '@/theme';
 
 const STEP_ICONS: Record<CompletionKey, IconName> = {
   basics: 'home',
@@ -74,6 +85,7 @@ export default function PropertyDetailsScreen() {
   // The map prompt already asks for the pin, so it isn't repeated in the list.
   const missing = property.completion.next.filter((i) => i.key !== 'location');
   const failedPhotos = Number(failed) || 0;
+  const showHealth = missing.length > 0 || property.health.score < 100;
 
   return (
     <ScrollView
@@ -114,7 +126,7 @@ export default function PropertyDetailsScreen() {
       <ReachNotice propertyId={property.id} reach={property.reach} />
       <DeedGaps property={property} />
 
-      {missing.length > 0 || property.health.score < 100 ? (
+      {showHealth ? (
         <ListGroup title={`Property health · ${property.health.score}`} plain>
           {missing.map((item) => (
             <ListRow
@@ -129,9 +141,8 @@ export default function PropertyDetailsScreen() {
           <DeedReadRow property={property} />
           <PittuRow propertyId={property.id} />
         </ListGroup>
-      ) : (
-        <PittuSection property={property} />
-      )}
+      ) : null}
+      <PittuSection property={property} withSetup={!showHealth} />
 
       <Details property={property} onEdit={edit} />
 
@@ -242,15 +253,66 @@ function HealthActions({ property: p }: { property: PropertyDetail }) {
   );
 }
 
-/** With the profile complete, Pittu's row gets its own heading (once there is something to show). */
-function PittuSection({ property }: { property: PropertyDetail }) {
-  const { data } = usePittu(property.id);
+const LEVEL_ACCENTS: Record<LegalLevel, Accent> = { green: 'teal', amber: 'amber', red: 'coral' };
+
+/**
+ * What Pittu has for this property, each checked by our team first: news
+ * around it, its government value and the shared records check. With the
+ * profile complete, the deed reading and quick questions move here too.
+ */
+function PittuSection({ property, withSetup }: { property: PropertyDetail; withSetup: boolean }) {
+  const pittu = usePittu(property.id);
+  const news = usePropertyNews(property.id).data ?? [];
+  const value = usePropertyValue(property.id).data;
+  const check = useLegalChecks(property.id).data?.[0];
+  const seen = useNewsSeen();
   const unread = !!property.deed_reading && property.deed_reading.status !== 'ready';
-  if (!data && !unread) return null;
+  const setup = withSetup && (!!pittu.data || unread);
+  const worth = value?.government_value_inr ?? null;
+  if (!setup && !news.length && worth === null && !check) return null;
+  const open = (page: 'news' | 'value' | 'legal') =>
+    router.push(`/properties/${property.id}/${page}`);
+  const newsAt = news.reduce<string | null>(
+    (latest, n) => (n.reviewed_at && (!latest || n.reviewed_at > latest) ? n.reviewed_at : latest),
+    null,
+  );
   return (
     <ListGroup title="From Pittu" plain>
-      <DeedReadRow property={property} />
-      <PittuRow propertyId={property.id} />
+      {setup ? <DeedReadRow property={property} /> : null}
+      {setup ? <PittuRow propertyId={property.id} /> : null}
+      {news.length ? (
+        <ListRow
+          icon="map"
+          accent="sky"
+          title="Around your property"
+          subtitle={news[0]!.title}
+          subtitleLines={2}
+          right={
+            hasNewNews(seen, property.id, newsAt) ? <Badge label="New" tone="brand" /> : undefined
+          }
+          onPress={() => open('news')}
+        />
+      ) : null}
+      {worth !== null ? (
+        <ListRow
+          icon="government"
+          accent="indigo"
+          title={`Government value · ${rupeesShort(worth)}`}
+          subtitle="The government’s rate for your area — not a selling price"
+          subtitleLines={2}
+          onPress={() => open('value')}
+        />
+      ) : null}
+      {check ? (
+        <ListRow
+          icon="verified"
+          accent={check.overall ? LEVEL_ACCENTS[check.overall] : 'slate'}
+          title={`Records check · ${check.overall ? LEGAL_LEVEL_LABELS[check.overall] : 'No findings'}`}
+          subtitle={check.summary ?? 'What the EC shows, checked against your sale deed'}
+          subtitleLines={2}
+          onPress={() => open('legal')}
+        />
+      ) : null}
     </ListGroup>
   );
 }

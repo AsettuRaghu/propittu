@@ -41,3 +41,13 @@ export function greeting(now = new Date()): string {
 export function plural(count: number, one: string, many = `${one}s`): string {
   return `${count} ${count === 1 ? one : many}`;
 }
+
+/** "₹42,00,000" (Indian grouping, whole rupees). */
+export const rupees = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
+
+/** "₹1.24 crore", "₹42 lakh" — for one-line summaries. */
+export function rupeesShort(n: number): string {
+  if (n >= 1e7) return `₹${(n / 1e7).toFixed(2).replace(/\.?0+$/, '')} crore`;
+  if (n >= 1e5) return `₹${(n / 1e5).toFixed(1).replace(/\.0$/, '')} lakh`;
+  return rupees(n);
+}

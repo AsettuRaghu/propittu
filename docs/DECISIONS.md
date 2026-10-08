@@ -69,7 +69,7 @@ of each section.
 
 | Item | Risk | Fix |
 |---|---|---|
-| Session tokens are stored in `AsyncStorage`, which is not encrypted. | Someone with access to the unlocked app sandbox (for example a jailbroken phone) could read the refresh token. | Switch to `expo-secure-store` with a chunking adapter, since sessions can exceed SecureStore's 2 KB limit per item on iOS. |
+| Session tokens are stored in `AsyncStorage`, which is not encrypted. | Someone with access to the unlocked app sandbox (for example a jailbroken phone) could read the refresh token. | Done 8 Oct 2026: `expo-secure-store` with a chunking adapter (`apps/mobile/src/lib/authStorage.ts`). |
 | Abandoned `pending` upload rows are never deleted. | Clutters the database; users never see them. | A scheduled cleanup of `pending` rows older than a day, plus their storage objects. |
 | Real SMS isn't set up yet (DLT). | Only test numbers can sign in. | See SUPABASE_SETUP.md §9. |
 | Vercel Hobby plan is non-commercial. | Not allowed for a commercial launch. | Upgrade the team to Pro (about $20/month) before launch. |

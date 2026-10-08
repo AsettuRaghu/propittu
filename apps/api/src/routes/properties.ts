@@ -27,6 +27,7 @@ import { signDownloads } from '../storage.js';
 import { syncFromDeed } from '../deedFill.js';
 import { loadInsights, type PropertyInsight } from '../insights.js';
 import { loadReach } from '../reach.js';
+import { latestNewsByPincode } from '../watch/latest.js';
 import {
   addressAt,
   findIssue,
@@ -202,9 +203,10 @@ propertiesRouter.get('/properties', async (req, res) => {
     ...rows.flatMap((r) => (r.cover_photo_path ? [r.cover_photo_path] : [])),
     ...[...photoPaths.values()].flat(),
   ];
-  const [urls, reach] = await Promise.all([
+  const [urls, reach, news] = await Promise.all([
     signDownloads(db, STORAGE_BUCKETS.photos, coverPaths),
     loadReach(db, accountId),
+    latestNewsByPincode(propertyRows.flatMap((p) => (p.pincode ? [p.pincode] : []))),
   ]);
 
   const data: PropertySummary[] = rows.map(({ cover_photo_path, ...r }) => {
@@ -233,6 +235,7 @@ propertiesRouter.get('/properties', async (req, res) => {
         !!property && property.latitude !== null && property.location_source !== 'user',
       photo_urls: (photoPaths.get(r.id) ?? []).flatMap((path) => urls.get(path) ?? []),
       location_issue: issue,
+      news_at: property?.pincode ? (news.get(property.pincode) ?? null) : null,
       health_score:
         property && completion
           ? propertyHealth({

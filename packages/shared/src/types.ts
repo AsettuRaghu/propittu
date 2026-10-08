@@ -159,6 +159,8 @@ export interface PropertySummary {
   /** Property health, 0–100. */
   health_score: number;
   location_issue: LocationIssue | null;
+  /** When Pittu Watch news for this property's area was last approved (Home marks it new). */
+  news_at: string | null;
 }
 
 /**

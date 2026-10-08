@@ -6,8 +6,11 @@ import type {
   CreatePropertyInput,
   DocumentAnalysis,
   DraftProperty,
+  LegalCheck,
   PittuState,
   Property,
+  PropertyValue,
+  WatchItem,
 } from '@propittu/shared';
 import { api } from './client';
 import { keys } from './queries';
@@ -146,3 +149,29 @@ export function useAnswerPittu(propertyId: string) {
     onSuccess: (state) => qc.setQueryData(pittuKey(propertyId), state),
   });
 }
+
+/* ---- Pittu Watch, Value and Legal (all checked by the team first) ---- */
+
+/** News about the property's area that the team approved, newest first. */
+export const usePropertyNews = (propertyId: string) =>
+  useQuery({
+    queryKey: ['properties', propertyId, 'news'] as const,
+    queryFn: () => api<WatchItem[]>(`/properties/${propertyId}/watch`),
+    staleTime: 10 * 60_000,
+  });
+
+/** What the owner paid and the government value today. */
+export const usePropertyValue = (propertyId: string) =>
+  useQuery({
+    queryKey: ['properties', propertyId, 'value'] as const,
+    queryFn: () => api<PropertyValue>(`/properties/${propertyId}/value`),
+    staleTime: 10 * 60_000,
+  });
+
+/** Records checks the team has shared with the owner, newest first. */
+export const useLegalChecks = (propertyId: string) =>
+  useQuery({
+    queryKey: ['properties', propertyId, 'legal-checks'] as const,
+    queryFn: () => api<LegalCheck[]>(`/properties/${propertyId}/legal-checks`),
+    staleTime: 10 * 60_000,
+  });

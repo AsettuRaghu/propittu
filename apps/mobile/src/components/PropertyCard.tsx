@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { requestStatusLabel, type PropertySummary } from '@propittu/shared';
+import { hasNewNews, useNewsSeen } from '@/lib/newsSeen';
 import { accents, colors, font, radius, shadow, space } from '@/theme';
 import { Icon, type IconName } from './Icon';
 import { PropertyCover } from './PropertyCover';
@@ -11,7 +12,8 @@ import { PropertyCover } from './PropertyCover';
  * type's colours, with the name, place, live weather and location on top;
  * below, what's stored and what's moving as icons you can tap — documents,
  * photos, requests (a live dot while one is in progress) and how complete
- * the profile is.
+ * the profile is — and, when Pittu has approved news about its area, a map
+ * tile (with a dot until the owner has seen it).
  */
 export function PropertyCard({
   property: p,
@@ -21,6 +23,8 @@ export function PropertyCard({
   onPress: () => void;
 }) {
   const r = p.active_request;
+  const seen = useNewsSeen();
+  const freshNews = hasNewNews(seen, p.id, p.news_at);
   const photos = p.photo_urls?.length ? p.photo_urls : p.cover_photo_url ? [p.cover_photo_url] : [];
 
   return (
@@ -60,6 +64,15 @@ export function PropertyCard({
               : router.push(`/properties/${p.id}/requests`)
           }
         />
+        {p.news_at ? (
+          <IconStat
+            icon="map"
+            count={0}
+            label={freshNews ? 'New news around this property' : 'News around this property'}
+            dot={freshNews}
+            onPress={() => router.push(`/properties/${p.id}/news`)}
+          />
+        ) : null}
         <View style={styles.flex} />
         <HealthTile score={p.health_score} onPress={onPress} />
       </View>
@@ -88,18 +101,23 @@ function HealthTile({ score, onPress }: { score: number; onPress: () => void }) 
   );
 }
 
-/** An icon with its count as a badge; `live` adds a gently pulsing dot. */
+/**
+ * An icon with its count as a badge; `live` adds a gently pulsing dot,
+ * `dot` a still one (something new to see).
+ */
 function IconStat({
   icon,
   count,
   label,
   live = false,
+  dot = false,
   onPress,
 }: {
   icon: IconName;
   count: number;
   label: string;
   live?: boolean;
+  dot?: boolean;
   onPress: () => void;
 }) {
   return (
@@ -110,13 +128,14 @@ function IconStat({
       accessibilityLabel={`${label}: ${count}`}
       style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
     >
-      <Icon name={icon} size={22} color={count ? colors.text : colors.textSubtle} />
+      <Icon name={icon} size={22} color={count || dot ? colors.text : colors.textSubtle} />
       {count > 0 ? (
         <View style={styles.badge}>
           <Text style={styles.badgeText}>{count > 99 ? '99+' : count}</Text>
         </View>
       ) : null}
       {live ? <LiveDot /> : null}
+      {dot ? <View style={styles.newDot} /> : null}
     </Pressable>
   );
 }
@@ -204,6 +223,17 @@ const styles = StyleSheet.create({
     height: 9,
     borderRadius: 5,
     backgroundColor: accents.teal.fg,
+  },
+  newDot: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: colors.primary,
+    borderWidth: 2,
+    borderColor: colors.surface,
   },
   health: {
     height: 46,

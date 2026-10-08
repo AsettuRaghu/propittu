@@ -30,10 +30,9 @@ docs/DECISIONS.md; Pittu's design in docs/PITTU.md.
 
 ## Next that needs no decision (Claude)
 
-- App screens for the new Pittu features: "Around your property" (approved Watch news) with a marker on
-  Home cards, the government value, and the shared legal report — for the next app publish.
-- "Let Pittu read this deed" for sale deeds uploaded as ordinary documents.
-- S1 secure login storage (see Go-live) — build, then test after a publish.
+- Built 8 Oct 2026, waiting for the next app publish and a phone test: the property page's "From
+  Pittu" rows (Around your property, Government value, Records check) with their screens, the news dot
+  on Home cards, and S1 secure login storage. ("Let Pittu read this deed" was already in the app.)
 - Check that the live server reaches the GDELT news index after the first daily Watch run.
 - Portal lists: move search and filters to the server when they pass a few hundred rows.
 
@@ -56,9 +55,9 @@ docs/DECISIONS.md; Pittu's design in docs/PITTU.md.
 
 ## Go-live setup (5.B.4)
 
-- **Must do before launch — S1 (owner confirmed 7 Oct 2026):** move the login session from plain app
-  storage to secure storage (`expo-secure-store`), per docs/SECURITY.md S1 (~2 h). Also make sure a
-  reinstall starts at a clean login.
+- **S1 secure login storage:** built 8 Oct 2026 (`apps/mobile/src/lib/authStorage.ts`); test after
+  the next publish that you stay signed in through the update, and that deleting and reinstalling the
+  app starts at sign-in (this part needs a real build, not Expo Go).
 - Git history (owner decision 7 Oct 2026: leave as is): commit `fa2c037` still contains a real phone
   number, PAN and Aadhaar-style number in an old test file (now replaced with fakes). Rewriting
   history was declined for now; revisit if the repo stays public at launch, or make the repo private.

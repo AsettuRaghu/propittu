@@ -1,6 +1,5 @@
 import type { Session } from '@supabase/supabase-js';
 import { useQueryClient } from '@tanstack/react-query';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   createContext,
   useCallback,
@@ -12,6 +11,7 @@ import {
   type ReactNode,
 } from 'react';
 import { setSessionExpiredHandler } from '@/api/client';
+import { authStorage } from '@/lib/authStorage';
 import { AUTH_STORAGE_KEY, supabase } from '@/lib/supabase';
 
 interface SessionContextValue {
@@ -65,7 +65,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     const { error } = await supabase.auth.signOut();
     if (error) {
-      await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
+      await authStorage.removeItem(AUTH_STORAGE_KEY);
       userIdRef.current = null;
       setSession(null);
     }
