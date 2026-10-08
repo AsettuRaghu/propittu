@@ -92,3 +92,5 @@ Nothing below is decided yet. Grouped by theme, in the suggested order.
 - Market value estimate (discussed 6 Oct): design doc pending the owner's answers on area, rate setting, pricing and a valuer partner.
 
 - Service-specific fields (e.g. tax assessment year) on paperwork-help outcomes.
+
+- **In-app Backoffice link hidden (8 Oct 2026).** The team works in the web portal; the in-app Backoffice screens remain but the Profile link is hidden. Decide before go-live: bring it back or remove the in-app Backoffice.

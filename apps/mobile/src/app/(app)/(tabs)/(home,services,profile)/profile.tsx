@@ -75,14 +75,9 @@ export default function ProfileScreen() {
               }
               onPress={() => router.push('/plan')}
             />
-            {me.staff_role ? (
-              <ListRow
-                icon="staff"
-                accent="slate"
-                title="Backoffice"
-                onPress={() => router.push('/backoffice')}
-              />
-            ) : null}
+            {/* The in-app Backoffice link is hidden for now (owner, 8 Oct 2026): the team
+                uses the web portal. The screens stay; decide before go-live whether to
+                bring the link back or remove the in-app Backoffice. */}
           </ListGroup>
         )}
 
