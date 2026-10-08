@@ -95,3 +95,4 @@ Nothing below is decided yet. Grouped by theme, in the suggested order.
 
 - **In-app Backoffice link hidden (8 Oct 2026).** The team works in the web portal; the in-app Backoffice screens remain but the Profile link is hidden. Decide before go-live: bring it back or remove the in-app Backoffice.
 - **Feature request, priority 4 (parked 8 Oct 2026): vendors in service steps.** A vendor directory (skills, PIN coverage, rates) and a "vendor task" step type so a vendor (e.g. a lawyer for legal verification) can be assigned to a request. Not urgent; revisit after the service templates/steps design.
+- **Long-term goal, priority 4 (parked 8 Oct 2026): service templates and steps.** Per-service intake fields, steps (staff, site visit, customer input, approval, payment, documents), conditions and calculations, outcome fields, versions — design in docs/CONFIGURABLE_SERVICES.md. Vendors (above) build on it. Not urgent.

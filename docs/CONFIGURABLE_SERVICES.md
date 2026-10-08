@@ -1,6 +1,6 @@
 # Configurable services and Pittu questions — design
 
-Status: **design for review, not built** (7 Oct 2026). Covers five owner notes as one design:
+Status: **design for review, not built** (7 Oct 2026). **Parked as a long-term goal, priority 4 (8 Oct 2026).** Covers five owner notes as one design:
 service request templates, customising the whole service module, default schedule intervals
 and deviation, campaigns, and configurable Pittu questions.
 
