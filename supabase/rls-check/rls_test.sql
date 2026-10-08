@@ -1588,6 +1588,28 @@ select tst.ok((select count(*) = 0 from public.plan_version_benefits b join publ
                join public.plans p on p.id = v.plan_id
                where p.code = 'plus' and v.is_current and b.kind = 'included_service'),
   'new Plus buyers get the new version (no included visits)');
+
+-- Renewals can stay on the version the customer has (per-version setting).
+select ap.plan_version_id as a_version from public.account_plans ap
+where ap.account_id = 'acc0000a-0000-0000-0000-00000000000a' and ap.starts_at <= now() and ap.ends_at > now()
+order by ap.starts_at desc limit 1 \gset
+select public.staff_set_version_renewals(:'a_version', true);
+reset role;
+select tst.ok((public.plan_change('acc0000a-0000-0000-0000-00000000000a', 'plus')->>'plan_version_id')::uuid = :'a_version',
+  'with "renewals stay on this version", renewing Plus keeps the customer''s own version');
+select tst.ok(public.plan_change('acc0000a-0000-0000-0000-00000000000a', 'plus')->>'mode' = 'renewal', 'and it is still a renewal');
+set role authenticated;
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+select public.staff_set_version_renewals(:'a_version', false);
+reset role;
+select tst.ok((public.plan_change('acc0000a-0000-0000-0000-00000000000a', 'plus')->>'plan_version_id')::uuid =
+              (select v.id from public.plan_versions v join public.plans p on p.id = v.plan_id where p.code = 'plus' and v.is_current),
+  'with the setting off, a renewal moves to the newest version');
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rejects($$select public.staff_set_version_renewals((select id from public.plan_versions limit 1), true)$$,
+  'a customer cannot change the renewal setting');
+reset role;
 reset role;
 
 \echo

@@ -120,6 +120,8 @@ export interface AccountPlanState {
     ends_at: string;
     cancel_at_period_end: boolean;
     days_left: number;
+    /** Set when this version renews on itself: the renewal price (else the plan's current price). */
+    renewal_price_paise: number | null;
   } | null;
   usage: {
     properties: number;
@@ -171,6 +173,8 @@ export interface StaffPlanVersion {
   billing_period: 'none' | 'month' | 'year';
   term_days: number;
   is_current: boolean;
+  /** Customers holding this version renew on it instead of the newest one. */
+  renewals_keep: boolean;
   created_at: string;
   benefits: PlanBenefits;
   /** Customers whose plan in force right now is this version. */
@@ -214,7 +218,12 @@ export const planVersionSchema = z.object({
   billing_period: z.enum(['none', 'month', 'year']),
   term_days: z.number().int().min(1).max(3660),
   benefits: planBenefitsSchema,
+  /** Customers on the version being replaced keep renewing on it. */
+  keep_renewals: z.boolean().optional(),
 });
+
+/** PATCH /backoffice/plan-versions/:id */
+export const planVersionRenewalsSchema = z.object({ renewals_keep: z.boolean() });
 export type PlanVersionInput = z.input<typeof planVersionSchema>;
 
 const planFields = {

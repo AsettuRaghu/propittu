@@ -43,6 +43,7 @@ interface CurrentPlanRow {
     currency: 'INR';
     billing_period: 'none' | 'month' | 'year';
     term_days: number;
+    renewals_keep: boolean;
     plan: { code: string; name: string; description: string };
     benefits: BenefitRow[];
   };
@@ -50,7 +51,7 @@ interface CurrentPlanRow {
 
 const CURRENT_PLAN_SELECT =
   'id, source, starts_at, ends_at, cancel_at_period_end, usage_since, ' +
-  'plan_version:plan_versions(id, version, price_paise, currency, billing_period, term_days, ' +
+  'plan_version:plan_versions(id, version, price_paise, currency, billing_period, term_days, renewals_keep, ' +
   'plan:plans(code, name, description), benefits:plan_version_benefits(kind, code, value, period))';
 
 export interface PlanState {
@@ -377,6 +378,9 @@ export async function describeAccountPlan(
           ends_at: current.ends_at,
           cancel_at_period_end: current.cancel_at_period_end,
           days_left: daysLeft(current.ends_at),
+          renewal_price_paise: current.plan_version.renewals_keep
+            ? current.plan_version.price_paise
+            : null,
         }
       : null,
     usage: {

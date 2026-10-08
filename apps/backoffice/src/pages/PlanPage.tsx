@@ -204,6 +204,7 @@ function Editor({ plan }: { plan: StaffPlan | null }) {
     }, 'Plan created. It is not on sale until you put it on sale.');
 
   const [reviewing, setReviewing] = useState(false);
+  const [keepRenewals, setKeepRenewals] = useState(true);
   const serviceName = (code: string) => services.data?.find((x) => x.code === code)?.name ?? code;
   const changes = plan?.current
     ? diffVersions(toVersionBody(toTerms(plan.current)), toVersionBody(terms), serviceName)
@@ -214,7 +215,7 @@ function Editor({ plan }: { plan: StaffPlan | null }) {
       () =>
         api(`/backoffice/plans/${plan.id}/versions`, {
           method: 'POST',
-          body: toVersionBody(terms),
+          body: { ...toVersionBody(terms), keep_renewals: !isTrial && keepRenewals },
         }),
       'New version published. Customers see it in the app now.',
     ).then(() => setReviewing(false));
@@ -555,8 +556,19 @@ function Editor({ plan }: { plan: StaffPlan | null }) {
                           included services removed here, until their term ends
                           {isTrial ? '' : ' (also when the team adds time to their plan)'}.
                         </span>
-                        {!isTrial ? <span>When they renew, they move to this version.</span> : null}
                       </div>
+                      {!isTrial ? (
+                        <label className="check">
+                          <input
+                            type="checkbox"
+                            checked={keepRenewals}
+                            onChange={(e) => setKeepRenewals(e.target.checked)}
+                          />
+                          {keepRenewals
+                            ? `When they renew, they stay on version ${plan.current?.version} (same price and benefits). You can change this later in the version history.`
+                            : 'When they renew, they move to this new version.'}
+                        </label>
+                      ) : null}
                       <div className="row">
                         <button className="btn primary" disabled={busy} onClick={publish}>
                           Confirm and publish
@@ -691,6 +703,20 @@ function Preview({
 }
 
 function Versions({ plan }: { plan: StaffPlan }) {
+  const qc = useQueryClient();
+  const [err, setErr] = useState<string | null>(null);
+  const toggle = async (v: StaffPlanVersion, keep: boolean) => {
+    setErr(null);
+    try {
+      await api(`/backoffice/plan-versions/${v.id}`, {
+        method: 'PATCH',
+        body: { renewals_keep: keep },
+      });
+      await qc.invalidateQueries({ queryKey: ['bo-plans'] });
+    } catch (e) {
+      setErr(errorText(e));
+    }
+  };
   const cols: Column<StaffPlanVersion>[] = [
     {
       key: 'v',
@@ -729,6 +755,27 @@ function Versions({ plan }: { plan: StaffPlan }) {
       sort: (v) => v.created_at,
       render: (v) => date(v.created_at),
     },
+    ...(plan.code === 'trial'
+      ? []
+      : [
+          {
+            key: 'renew',
+            header: 'Renews on itself',
+            sort: (v: StaffPlanVersion) => (v.renewals_keep ? 1 : 0),
+            render: (v: StaffPlanVersion) =>
+              v.is_current ? (
+                <span className="sub">newest</span>
+              ) : (
+                <input
+                  type="checkbox"
+                  checked={v.renewals_keep}
+                  aria-label={`Customers on v${v.version} renew on it`}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => void toggle(v, e.target.checked)}
+                />
+              ),
+          },
+        ]),
   ];
   return (
     <>
@@ -739,6 +786,13 @@ function Versions({ plan }: { plan: StaffPlan }) {
         rowKey={(v) => v.id}
         defaultSort={{ key: 'v', dir: 'desc' }}
       />
+      {plan.code !== 'trial' ? (
+        <span className="sub">
+          Ticked: customers on that version renew on it, at its price and benefits. Unticked: they
+          move to the newest version when they renew.
+        </span>
+      ) : null}
+      {err ? <span className="error">{err}</span> : null}
     </>
   );
 }

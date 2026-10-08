@@ -145,6 +145,7 @@ export default function PlanScreen() {
                 state={cardState(p)}
                 laterDate={s.current ? formatDate(s.current.ends_at) : null}
                 renewFrom={renewFrom}
+                renewPrice={s.current?.renewal_price_paise ?? null}
                 busy={purchase.busyCode === p.code}
                 disabled={purchase.busy}
                 onChoose={() => void purchase.choose(p)}
@@ -285,6 +286,7 @@ function PlanRow({
   state,
   laterDate,
   renewFrom,
+  renewPrice,
   busy,
   disabled,
   onChoose,
@@ -293,11 +295,17 @@ function PlanRow({
   state: CardState;
   laterDate: string | null;
   renewFrom: string | null;
+  /** The customer's own version renews on itself at this price. */
+  renewPrice: number | null;
   busy: boolean;
   disabled: boolean;
   onChoose: () => void;
 }) {
-  const price = formatPrice(plan.price_paise);
+  const price = formatPrice(
+    (state === 'current' || state === 'renew_later') && renewPrice !== null
+      ? renewPrice
+      : plan.price_paise,
+  );
   const holdsText = `Up to ${propertiesHeld(plan.benefits) ?? '—'} properties`;
   const action = (title: string) => (
     <Button title={title} size="sm" loading={busy} disabled={disabled} onPress={onChoose} />

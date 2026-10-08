@@ -2,6 +2,7 @@ import { Router, type RequestHandler } from 'express';
 import {
   planCreateSchema,
   planUpdateSchema,
+  planVersionRenewalsSchema,
   planVersionSchema,
   staffCan,
   type PlanBenefits,
@@ -41,7 +42,7 @@ async function listPlans(db: ReturnType<typeof auth>['db']): Promise<StaffPlan[]
       .from('plans')
       .select(
         'id, code, name, description, is_public, is_active, sort_order, created_at, ' +
-          'versions:plan_versions(id, version, price_paise, billing_period, term_days, is_current, created_at, ' +
+          'versions:plan_versions(id, version, price_paise, billing_period, term_days, is_current, renewals_keep, created_at, ' +
           'benefits:plan_version_benefits(kind, code, value, period))',
       )
       .order('sort_order'),
@@ -165,6 +166,7 @@ plansConsoleRouter.post('/plans/:id/versions', canManage, async (req, res) => {
       p_billing_period: v.billing_period,
       p_term_days: v.term_days,
       p_benefits: toRows(v.benefits),
+      p_keep_renewals: v.keep_renewals ?? false,
     }),
   );
   await audit(
@@ -179,4 +181,20 @@ plansConsoleRouter.post('/plans/:id/versions', canManage, async (req, res) => {
     res,
     (await listPlans(ctx.db)).find((p) => p.id === id),
   );
+});
+
+/* PATCH /backoffice/plan-versions/:id {renewals_keep} — renewals stay on this version, or move on */
+plansConsoleRouter.patch('/plan-versions/:id', canManage, async (req, res) => {
+  const ctx = auth(req);
+  const id = uuidParam(req.params.id, 'Plan version');
+  const { renewals_keep } = planVersionRenewalsSchema.parse(req.body);
+  must(await ctx.db.rpc('staff_set_version_renewals', { p_version: id, p_keep: renewals_keep }));
+  await audit(
+    ctx,
+    'staff.plan.version_renewals',
+    { type: 'plan_version', id },
+    { renewals_keep },
+    'staff',
+  );
+  res.status(204).end();
 });
