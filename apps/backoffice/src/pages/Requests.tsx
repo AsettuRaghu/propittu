@@ -102,7 +102,7 @@ export function Requests() {
                           {r.customer_name || '—'}
                           <span className="sub">{r.customer_phone ?? ''}</span>
                         </td>
-                        <td>{r.property?.name ?? 'Removed'}</td>
+                        <td>{r.property?.name ?? 'Property deleted'}</td>
                         <td>
                           <span className={`badge ${REQUEST_TONES[r.status]}`}>
                             {requestStatusLabel(r.status, r.fulfilment)}

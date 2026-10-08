@@ -78,7 +78,7 @@ function Body({ r, onChanged }: { r: BackofficeRequestDetail; onChanged: () => v
         </dd>
         <dt>Property</dt>
         <dd>
-          {r.property?.name ?? 'Removed'}
+          {r.property?.name ?? 'Property deleted'}
           {r.property_address ? <span className="sub">{r.property_address}</span> : null}
         </dd>
         <dt>Requested</dt>

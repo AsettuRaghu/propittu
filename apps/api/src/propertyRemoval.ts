@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { STORAGE_BUCKETS } from '@propittu/shared';
+import { OPEN_REQUEST_STATUSES, STORAGE_BUCKETS } from '@propittu/shared';
+import { cancelOpenLinks } from './billing/billing.js';
 import { must } from './errors.js';
 import { removeObjects } from './storage.js';
 
@@ -14,6 +15,18 @@ export async function removeProperty(
   accountId: string,
   id: string,
 ): Promise<void> {
+  // Its open requests are cancelled by the database (before-delete trigger);
+  // their payment links must not stay payable either.
+  const { data: open } = await db
+    .from('service_requests')
+    .select('id')
+    .eq('property_id', id)
+    .in('status', OPEN_REQUEST_STATUSES);
+  await Promise.all(
+    (open ?? []).map((r: { id: string }) =>
+      cancelOpenLinks({ kind: 'extra_service', requestId: r.id }),
+    ),
+  );
   const [photos, documents, videos] = await Promise.all(
     (['property_photos', 'property_documents', 'property_videos'] as const).map((table) =>
       db.from(table).select('storage_path').eq('property_id', id).eq('account_id', accountId),
