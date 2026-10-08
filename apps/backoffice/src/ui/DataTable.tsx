@@ -127,36 +127,31 @@ export function DataTable<T>({
 
   return (
     <section className="section">
-      <div className="toolbar">
-        {searchText ? (
-          <input
-            type="search"
-            className="search"
-            placeholder={searchPlaceholder}
-            value={q}
-            onChange={(e) => {
-              setQ(e.target.value);
-              setLimit(pageSize);
-            }}
-            aria-label={searchPlaceholder}
-          />
-        ) : null}
-        {toolbar}
-        <span className="toolbar-end">
-          {rows ? (
-            <span className="sub">
-              {shown.length === rows.length
-                ? `${rows.length}`
-                : `${shown.length} of ${rows.length}`}
-            </span>
+      {searchText || toolbar || exportName ? (
+        <div className="toolbar">
+          {searchText ? (
+            <input
+              type="search"
+              className="search"
+              placeholder={searchPlaceholder}
+              value={q}
+              onChange={(e) => {
+                setQ(e.target.value);
+                setLimit(pageSize);
+              }}
+              aria-label={searchPlaceholder}
+            />
           ) : null}
-          {exportName && shown.length > 0 ? (
-            <button className="btn small" onClick={exportCsv}>
-              Export CSV
-            </button>
-          ) : null}
-        </span>
-      </div>
+          {toolbar}
+          <span className="toolbar-end">
+            {exportName && shown.length > 0 ? (
+              <button className="btn small" onClick={exportCsv}>
+                Export CSV
+              </button>
+            ) : null}
+          </span>
+        </div>
+      ) : null}
       {loading ? <div className="empty">Loading…</div> : null}
       {error ? <div className="empty error">{error}</div> : null}
       {rows && shown.length === 0 ? <div className="empty">{q ? 'No matches.' : empty}</div> : null}

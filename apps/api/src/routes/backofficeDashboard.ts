@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import {
   OPEN_REQUEST_STATUSES,
-  OPEN_TICKET_STATUSES,
   requestExpectedBy,
   type BackofficeDashboard,
   type ServiceRequestStatus,
@@ -38,10 +37,7 @@ dashboardRouter.get('/dashboard', async (req, res) => {
     db
       .from('support_tickets')
       .select('id', { count: 'exact', head: true })
-      .in(
-        'status',
-        OPEN_TICKET_STATUSES.filter((s) => s !== 'waiting_on_customer'),
-      ),
+      .eq('awaiting_staff', true),
     db
       .from('payments')
       .select('amount_paise')

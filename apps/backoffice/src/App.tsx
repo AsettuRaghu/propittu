@@ -6,6 +6,8 @@ import { Shell } from './layout/Shell';
 import { Customers } from './pages/Customers';
 import { Dashboard } from './pages/Dashboard';
 import { Payments } from './pages/Payments';
+import { PlanPage } from './pages/PlanPage';
+import { Plans } from './pages/Plans';
 import { Pittu } from './pages/Pittu';
 import { Reports } from './pages/Reports';
 import { Requests } from './pages/Requests';
@@ -35,6 +37,8 @@ export function App() {
               <Route path="support" element={<Support />} />
               <Route path="customers" element={<Customers />} />
               <Route path="payments" element={<Payments />} />
+              <Route path="plans" element={<Plans />} />
+              <Route path="plans/:id" element={<PlanPage />} />
               <Route path="services" element={<Services />} />
               <Route path="services/:id" element={<ServicePage />} />
               <Route path="pittu" element={<Pittu />} />

@@ -43,6 +43,16 @@ export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
 };
 export const OPEN_TICKET_STATUSES: TicketStatus[] = ['open', 'in_progress', 'waiting_on_customer'];
 
+/**
+ * What the team works with: Open (not answered yet), In progress, Resolved.
+ * Older statuses fold in: "awaiting customer" counts as in progress and
+ * "closed" as resolved.
+ */
+export const STAFF_TICKET_STATUSES = ['open', 'in_progress', 'resolved'] as const;
+export type StaffTicketStatus = (typeof STAFF_TICKET_STATUSES)[number];
+export const ticketStage = (s: TicketStatus): StaffTicketStatus =>
+  s === 'waiting_on_customer' ? 'in_progress' : s === 'closed' ? 'resolved' : s;
+
 /** Our reply promise, shown next to the reply box. */
 export const SUPPORT_REPLY_PROMISE = 'We’ll reply within 1–3 working days.';
 
@@ -99,6 +109,8 @@ export interface SupportTicket {
   resolved_at: string | null;
   /** Our team replied since the customer last opened the ticket. */
   has_new_reply: boolean;
+  /** The customer wrote last and it is not resolved: it needs a reply from us. */
+  awaiting_staff: boolean;
   property: { id: string; name: string } | null;
   service_request: { id: string; reference: string; service: { name: string } | null } | null;
 }

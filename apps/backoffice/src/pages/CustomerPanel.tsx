@@ -1,28 +1,38 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Link } from 'react-router';
+import { useNavigate } from 'react-router';
 import {
   LIMIT_LABELS,
   ORDER_DISPLAY_LABELS,
   PLAN_STATUS_LABELS,
   PROPERTY_TYPE_LABELS,
   formatIndianMobile,
+  formatStorageMb,
   requestStatusLabel,
   type AuditEntry,
   type BackofficeAccountDetail,
+  type BackofficeRequest,
+  type Order,
   type PropertySlot,
   type PublicPlan,
 } from '@propittu/shared';
 import { api, errorText } from '../lib/api';
 import { date, dateTime, rupees } from '../lib/format';
 import { Feedback, useAction } from '../ui/action';
+import { DataTable, type Column } from '../ui/DataTable';
+import { Section } from '../ui/Section';
 import { ORDER_TONES, REQUEST_TONES } from '../ui/status';
 import { useEscape } from '../ui/useEscape';
 import { PropertyView } from './PropertyView';
 
-const SOURCE_LABELS = { trial: 'Free Trial', payment: 'Paid', staff: 'Given by the team' };
+const SOURCE_LABELS = {
+  trial: 'Free Trial',
+  payment: 'Paid by the customer',
+  staff: 'Given by the team',
+};
+const DAY = 86_400_000;
 
-/** One customer beside the list: plan, access, properties, requests, payments, history. */
+/** One customer: who they are, their plan, and everything they have with us. */
 export function CustomerPanel({
   id,
   propertyId,
@@ -44,225 +54,266 @@ export function CustomerPanel({
     void qc.invalidateQueries({ queryKey: ['bo-accounts'] });
     void qc.invalidateQueries({ queryKey: ['bo-account', id] });
     void qc.invalidateQueries({ queryKey: ['bo-slots', id] });
+    void qc.invalidateQueries({ queryKey: ['bo-activity', id] });
   };
-  const a = data?.account;
+
+  if (isPending) return <div className="empty">Loading…</div>;
+  if (error || !data) return <div className="empty error">{errorText(error)}</div>;
+  const a = data.account;
 
   return (
-    <aside className="panel" aria-label="Customer">
-      <div className="panel-head">
+    <div className="customer">
+      <header className="ticket-head">
         <div>
-          <h2>{a ? a.full_name || 'Customer' : 'Customer'}</h2>
-          {a?.phone ? <span className="mono">{formatIndianMobile(a.phone)}</span> : null}
+          <h2>{a.full_name || (a.phone ? formatIndianMobile(a.phone) : 'Customer')}</h2>
+          <span className="sub">
+            {a.phone ? formatIndianMobile(a.phone) : 'No phone'} · customer since{' '}
+            {date(a.created_at)}
+          </span>
         </div>
         <div className="row">
-          {a ? (
-            <span className={`badge ${a.status === 'active' ? 'good' : 'bad'}`}>{a.status}</span>
-          ) : null}
+          <span className={`badge ${data.plan.status === 'expired' ? 'bad' : 'good'}`}>
+            {data.plan.plan?.name ?? 'No plan'} · {PLAN_STATUS_LABELS[data.plan.status]}
+          </span>
+          <span className={`badge ${a.status === 'active' ? 'good' : 'bad'}`}>{a.status}</span>
         </div>
-      </div>
-      {isPending ? <div className="empty">Loading…</div> : null}
-      {error ? <div className="empty error">{errorText(error)}</div> : null}
-      {data && propertyId ? (
-        <PropertyView id={propertyId} onBack={() => openProperty(null)} />
+      </header>
+      {data.blocked_reason ? (
+        <div className="callout warn">Blocked: {data.blocked_reason}</div>
       ) : null}
-      {data && !propertyId ? (
-        <Body d={data} openProperty={openProperty} onChanged={refresh} />
-      ) : null}
-    </aside>
-  );
-}
 
-function Body({
-  d,
-  openProperty,
-  onChanged,
-}: {
-  d: BackofficeAccountDetail;
-  openProperty: (id: string) => void;
-  onChanged: () => void;
-}) {
-  return (
-    <div className="panel-body">
-      <dl className="kv">
-        <dt>Customer since</dt>
-        <dd>{date(d.account.created_at)}</dd>
-        <dt>Access</dt>
-        <dd className={d.blocked_reason ? 'error' : ''}>{d.blocked_reason ?? 'Full access'}</dd>
-      </dl>
-      <Plan d={d} onChanged={onChanged} />
-      <div className="block">
-        <h3>Properties ({d.properties.length})</h3>
-        {d.properties.length === 0 ? <span className="sub">None yet.</span> : null}
-        <ul className="list">
-          {d.properties.map((p) => (
-            <li key={p.id}>
-              <button className="link" onClick={() => openProperty(p.id)}>
-                {p.name}
-              </button>
-              <span className="sub">
-                {PROPERTY_TYPE_LABELS[p.property_type]}
-                {p.city ? ` · ${p.city}` : ''} · {p.document_count} documents · {p.photo_count}{' '}
-                photos · {p.video_count} videos
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
-      <div className="block">
-        <h3>Requests ({d.requests.length})</h3>
-        {d.requests.length === 0 ? <span className="sub">None yet.</span> : null}
-        <ul className="list">
-          {d.requests.map((r) => (
-            <li key={r.id}>
-              <Link to={`/requests?status=all&id=${r.id}`}>{r.service.name}</Link>{' '}
-              <span className={`badge ${REQUEST_TONES[r.status]}`}>
-                {requestStatusLabel(r.status, r.fulfilment)}
-              </span>
-              <span className="sub">
-                {r.property?.name ?? 'Property deleted'} · {date(r.created_at)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
-      <div className="block">
-        <h3>Payments ({d.orders.length})</h3>
-        {d.orders.length === 0 ? <span className="sub">None yet.</span> : null}
-        <ul className="list">
-          {d.orders.map((o) => (
-            <li key={o.id}>
-              {o.description} · {rupees(o.amount_paise)}{' '}
-              <span className={`badge ${ORDER_TONES[o.display_status]}`}>
-                {ORDER_DISPLAY_LABELS[o.display_status]}
-              </span>
-              <span className="sub mono">
-                {o.reference} · {date(o.paid_at ?? o.created_at)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
-      <Slots accountId={d.account.id} onChanged={onChanged} />
-      <AccountStatus d={d} onChanged={onChanged} />
-      <Activity accountId={d.account.id} />
+      {propertyId ? (
+        <PropertyView id={propertyId} onBack={() => openProperty(null)} />
+      ) : (
+        <div className="sections">
+          <PlanSection d={data} onChanged={refresh} />
+          <Section title="Properties" count={data.properties.length}>
+            <Properties d={data} open={openProperty} />
+          </Section>
+          <Section title="Service requests" count={data.requests.length}>
+            <Requests rows={data.requests} />
+          </Section>
+          <Section title="Payments" count={data.orders.length}>
+            <Payments rows={data.orders} />
+          </Section>
+          <Slots accountId={a.id} onChanged={refresh} />
+          <Section title="Account" open={false}>
+            <AccountStatus d={data} onChanged={refresh} />
+          </Section>
+          <Section title="History" open={false}>
+            <Activity accountId={a.id} />
+          </Section>
+        </div>
+      )}
     </div>
   );
 }
 
-function Plan({ d, onChanged }: { d: BackofficeAccountDetail; onChanged: () => void }) {
+/* ---- Plan: what they have, what they use, and the three things we can do ---- */
+
+function PlanSection({ d, onChanged }: { d: BackofficeAccountDetail; onChanged: () => void }) {
   const { plan } = d;
+  const limits = plan.plan?.benefits.limits ?? {};
+  const u = plan.usage;
+  const rows: { label: string; used: number; limit?: number; fmt?: (n: number) => string }[] = [
+    { label: 'Properties (this term)', used: u.property_slots_used, limit: limits.max_properties },
+    {
+      label: LIMIT_LABELS.max_storage_mb,
+      used: Math.ceil(u.storage_bytes / (1024 * 1024)),
+      limit: limits.max_storage_mb,
+      fmt: formatStorageMb,
+    },
+    {
+      label: 'Documents (fullest property)',
+      used: u.max_documents_on_a_property,
+      limit: limits.max_documents_per_property,
+    },
+    {
+      label: 'Photos (fullest property)',
+      used: u.max_photos_on_a_property,
+      limit: limits.max_photos_per_property,
+    },
+    {
+      label: 'Videos (fullest property)',
+      used: u.max_videos_on_a_property,
+      limit: limits.max_videos_per_property,
+    },
+    ...u.included.map((i) => ({
+      label: `Included: ${i.code.replace(/_/g, ' ')}`,
+      used: i.used,
+      limit: i.quantity,
+    })),
+  ];
+  return (
+    <Section title="Plan">
+      <div className="facts">
+        <div>
+          <span>Plan</span>
+          <b>{plan.plan?.name ?? 'No active plan'}</b>
+        </div>
+        <div>
+          <span>Status</span>
+          <b>{PLAN_STATUS_LABELS[plan.status]}</b>
+        </div>
+        <div>
+          <span>Source</span>
+          <b>{plan.current ? SOURCE_LABELS[plan.current.source] : '—'}</b>
+        </div>
+        <div>
+          <span>Ends</span>
+          <b>
+            {plan.current
+              ? `${date(plan.current.ends_at)} · ${plan.current.days_left} days left`
+              : '—'}
+          </b>
+        </div>
+      </div>
+      <table className="usage">
+        <tbody>
+          {rows.map((r) => {
+            const pct = r.limit ? Math.min(100, Math.round((r.used / r.limit) * 100)) : 0;
+            const f = r.fmt ?? String;
+            return (
+              <tr key={r.label}>
+                <td>{r.label}</td>
+                <td className="num">
+                  {f(r.used)}
+                  {r.limit !== undefined ? ` of ${f(r.limit)}` : ' · no limit'}
+                </td>
+                <td className="bar-col">
+                  {r.limit !== undefined ? (
+                    <div className={`bar ${pct >= 100 ? 'bad' : pct >= 80 ? 'warn' : ''}`}>
+                      <span style={{ width: `${pct}%` }} />
+                    </div>
+                  ) : null}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <span className="sub">
+        Received so far: {plan.received.services_completed} services · {plan.received.visit_reports}{' '}
+        visit reports · {plan.received.paid_orders} paid orders
+      </span>
+      <PlanActions d={d} onChanged={onChanged} />
+    </Section>
+  );
+}
+
+function PlanActions({ d, onChanged }: { d: BackofficeAccountDetail; onChanged: () => void }) {
   const plans = useQuery({ queryKey: ['plans'], queryFn: () => api<PublicPlan[]>('/plans') });
-  const [code, setCode] = useState('');
-  const [days, setDays] = useState('');
-  const [extra, setExtra] = useState('7');
   const a = useAction(onChanged);
   const base = `/backoffice/accounts/${d.account.id}/plan`;
-  const limits = plan.plan?.benefits.limits ?? {};
+  const current = d.plan.current;
+  const [extra, setExtra] = useState(7);
+  const [code, setCode] = useState('');
+  const [days, setDays] = useState('');
   const chosen = plans.data?.find((p) => p.code === code);
-
-  const give = () => {
-    if (!chosen) return;
-    const n = days ? Number(days) : undefined;
-    if (
-      !window.confirm(
-        `Give ${chosen.name}${n ? ` for ${n} days` : ''}? It starts now and replaces the current plan (a paid period is ended, not refunded).`,
-      )
-    )
-      return;
-    a.mutate({ path: base, body: { plan_code: code, days: n }, ok: `${chosen.name} given` });
-  };
+  const newEnd = current ? new Date(Date.parse(current.ends_at) + extra * DAY).toISOString() : null;
 
   return (
-    <div className="block">
-      <h3>Plan</h3>
-      <dl className="kv">
-        <dt>Plan</dt>
-        <dd>
-          {plan.plan?.name ?? 'No active plan'} ·{' '}
-          <span className="badge">{PLAN_STATUS_LABELS[plan.status]}</span>
-        </dd>
-        {plan.current ? (
-          <>
-            <dt>Source</dt>
-            <dd>{SOURCE_LABELS[plan.current.source]}</dd>
-            <dt>Ends</dt>
-            <dd>
-              {date(plan.current.ends_at)} ({plan.current.days_left} days left)
-              {plan.current.cancel_at_period_end ? ' · will not renew' : ''}
-            </dd>
-          </>
-        ) : null}
-        <dt>Properties</dt>
-        <dd>
-          {plan.usage.properties}
-          {limits.max_properties !== undefined ? ` of ${limits.max_properties}` : ''} ·{' '}
-          {plan.usage.property_slots_used} slots used this term
-        </dd>
-        <dt>Storage</dt>
-        <dd>{Math.ceil(plan.usage.storage_bytes / (1024 * 1024))} MB</dd>
-        <dt>Files</dt>
-        <dd>
-          {plan.usage.documents} documents · {plan.usage.photos} photos · {plan.usage.videos} videos
-        </dd>
-        {plan.over_limit.length > 0 ? (
-          <>
-            <dt>Over limit</dt>
-            <dd className="error">{plan.over_limit.map((l) => LIMIT_LABELS[l]).join(', ')}</dd>
-          </>
-        ) : null}
-        <dt>Received</dt>
-        <dd>
-          {plan.received.services_completed} services · {plan.received.visit_reports} visit reports
-          · {plan.received.paid_orders} paid orders
-        </dd>
-      </dl>
-      <div className="row">
-        <select value={code} onChange={(e) => setCode(e.target.value)} aria-label="Plan to give">
-          <option value="">Give a plan…</option>
-          {plans.data?.map((p) => (
-            <option key={p.code} value={p.code}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-        <input
-          className="short"
-          type="number"
-          min={1}
-          max={3660}
-          placeholder="Days"
-          value={days}
-          onChange={(e) => setDays(e.target.value)}
-          aria-label="Days (optional)"
-        />
-        <button className="btn primary" disabled={!chosen || a.isPending} onClick={give}>
-          Give
-        </button>
-      </div>
-      {plan.current ? (
+    <div className="actions-grid">
+      {current ? (
+        <div className="action-card">
+          <h4>Add time to the current plan</h4>
+          <p className="sub">
+            Keeps the same plan and pushes its end date later. Nothing is charged.
+          </p>
+          <div className="row">
+            {[7, 30, 90].map((n) => (
+              <button
+                key={n}
+                className={`btn small ${extra === n ? 'primary' : ''}`}
+                onClick={() => setExtra(n)}
+              >
+                +{n} days
+              </button>
+            ))}
+            <input
+              className="short"
+              type="number"
+              min={1}
+              max={365}
+              value={extra}
+              onChange={(e) => setExtra(Math.max(1, Math.min(365, Number(e.target.value) || 1)))}
+              aria-label="Days to add"
+            />
+          </div>
+          <p>
+            Ends <b>{date(current.ends_at)}</b> → <b>{date(newEnd)}</b>
+          </p>
+          <button
+            className="btn primary"
+            disabled={a.isPending}
+            onClick={() => {
+              if (window.confirm(`Add ${extra} days? The plan will end on ${date(newEnd)}.`))
+                a.mutate({
+                  path: `${base}/extend`,
+                  body: { days: extra },
+                  ok: `Added ${extra} days`,
+                });
+            }}
+          >
+            Add {extra} days
+          </button>
+        </div>
+      ) : null}
+
+      <div className="action-card">
+        <h4>Give a different plan</h4>
+        <p className="sub">
+          Starts today and replaces the current plan. A paid period is ended, not refunded. Leave
+          days empty for the plan's normal term.
+        </p>
         <div className="row">
+          <select value={code} onChange={(e) => setCode(e.target.value)} aria-label="Plan to give">
+            <option value="">Choose a plan…</option>
+            {plans.data?.map((p) => (
+              <option key={p.code} value={p.code}>
+                {p.name} ({p.term_days} days)
+              </option>
+            ))}
+          </select>
           <input
             className="short"
             type="number"
             min={1}
-            max={365}
-            value={extra}
-            onChange={(e) => setExtra(e.target.value)}
-            aria-label="Days to add"
+            max={3660}
+            placeholder="Days"
+            value={days}
+            onChange={(e) => setDays(e.target.value)}
+            aria-label="Days (optional)"
           />
-          <button
-            className="btn"
-            disabled={!Number(extra) || a.isPending}
-            onClick={() =>
+        </div>
+        <button
+          className="btn"
+          disabled={!chosen || a.isPending}
+          onClick={() => {
+            if (!chosen) return;
+            const n = days ? Number(days) : undefined;
+            if (
+              window.confirm(
+                `Give ${chosen.name} for ${n ?? chosen.term_days} days, starting today?`,
+              )
+            )
               a.mutate({
-                path: `${base}/extend`,
-                body: { days: Number(extra) },
-                ok: `Added ${extra} days`,
-              })
-            }
-          >
-            Add days
-          </button>
+                path: base,
+                body: { plan_code: code, days: n },
+                ok: `${chosen.name} given`,
+              });
+          }}
+        >
+          Give {chosen?.name ?? 'plan'}
+        </button>
+      </div>
+
+      {current ? (
+        <div className="action-card">
+          <h4>End the plan now</h4>
+          <p className="sub">
+            The customer moves to limited access straight away. Their data is kept.
+          </p>
           <button
             className="btn danger"
             disabled={a.isPending}
@@ -280,6 +331,152 @@ function Plan({ d, onChanged }: { d: BackofficeAccountDetail; onChanged: () => v
   );
 }
 
+/* ---- What they have with us ---- */
+
+type Prop = BackofficeAccountDetail['properties'][number];
+function Properties({ d, open }: { d: BackofficeAccountDetail; open: (id: string) => void }) {
+  const cols: Column<Prop>[] = [
+    { key: 'name', header: 'Property', sort: (p) => p.name, render: (p) => p.name },
+    {
+      key: 'type',
+      header: 'Type',
+      sort: (p) => p.property_type,
+      render: (p) => PROPERTY_TYPE_LABELS[p.property_type],
+    },
+    { key: 'city', header: 'City', sort: (p) => p.city, render: (p) => p.city ?? '—' },
+    {
+      key: 'docs',
+      header: 'Documents',
+      align: 'right',
+      sort: (p) => p.document_count,
+      render: (p) => p.document_count,
+    },
+    {
+      key: 'photos',
+      header: 'Photos',
+      align: 'right',
+      sort: (p) => p.photo_count,
+      render: (p) => p.photo_count,
+    },
+    {
+      key: 'videos',
+      header: 'Videos',
+      align: 'right',
+      sort: (p) => p.video_count,
+      render: (p) => p.video_count,
+    },
+  ];
+  return (
+    <DataTable
+      rows={d.properties}
+      columns={cols}
+      rowKey={(p) => p.id}
+      onRowClick={(p) => open(p.id)}
+      defaultSort={{ key: 'name', dir: 'asc' }}
+      empty="No properties yet."
+    />
+  );
+}
+
+function Requests({ rows }: { rows: BackofficeRequest[] }) {
+  const navigate = useNavigate();
+  const cols: Column<BackofficeRequest>[] = [
+    {
+      key: 'service',
+      header: 'Service',
+      sort: (r) => r.service.name,
+      render: (r) => (
+        <>
+          {r.service.name}
+          <span className="sub mono">{r.reference}</span>
+        </>
+      ),
+    },
+    {
+      key: 'property',
+      header: 'Property',
+      sort: (r) => r.property?.name ?? '',
+      render: (r) => r.property?.name ?? 'Property deleted',
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      sort: (r) => r.status,
+      render: (r) => (
+        <span className={`badge ${REQUEST_TONES[r.status]}`}>
+          {requestStatusLabel(r.status, r.fulfilment)}
+        </span>
+      ),
+    },
+    {
+      key: 'date',
+      header: 'Requested',
+      sort: (r) => r.created_at,
+      render: (r) => date(r.created_at),
+    },
+  ];
+  return (
+    <DataTable
+      rows={rows}
+      columns={cols}
+      rowKey={(r) => r.id}
+      onRowClick={(r) => void navigate(`/requests?status=all&id=${r.id}`)}
+      defaultSort={{ key: 'date', dir: 'desc' }}
+      empty="No service requests yet."
+    />
+  );
+}
+
+function Payments({ rows }: { rows: Order[] }) {
+  const navigate = useNavigate();
+  const cols: Column<Order>[] = [
+    {
+      key: 'for',
+      header: 'For',
+      sort: (o) => o.description,
+      render: (o) => (
+        <>
+          {o.description}
+          <span className="sub mono">{o.reference}</span>
+        </>
+      ),
+    },
+    {
+      key: 'amount',
+      header: 'Amount',
+      align: 'right',
+      sort: (o) => o.amount_paise,
+      render: (o) => rupees(o.amount_paise),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      sort: (o) => o.display_status,
+      render: (o) => (
+        <span className={`badge ${ORDER_TONES[o.display_status]}`}>
+          {ORDER_DISPLAY_LABELS[o.display_status]}
+        </span>
+      ),
+    },
+    {
+      key: 'date',
+      header: 'Date',
+      sort: (o) => o.paid_at ?? o.created_at,
+      render: (o) => date(o.paid_at ?? o.created_at),
+    },
+  ];
+  return (
+    <DataTable
+      rows={rows}
+      columns={cols}
+      rowKey={(o) => o.id}
+      onRowClick={(o) => void navigate(`/payments?view=all&period=all&id=${o.id}`)}
+      defaultSort={{ key: 'date', dir: 'desc' }}
+      empty="No payments yet."
+    />
+  );
+}
+
 function Slots({ accountId, onChanged }: { accountId: string; onChanged: () => void }) {
   const { data } = useQuery({
     queryKey: ['bo-slots', accountId],
@@ -289,18 +486,21 @@ function Slots({ accountId, onChanged }: { accountId: string; onChanged: () => v
   const held = data?.filter((s) => s.property_deleted_at && !s.released_at) ?? [];
   if (held.length === 0) return null;
   return (
-    <div className="block">
-      <h3>Deleted but still counted</h3>
+    <Section
+      title="Deleted but still counted"
+      count={held.length}
+      aside={<span className="sub">Uses a property slot until the term ends</span>}
+    >
       <ul className="list">
         {held.map((s) => (
           <li key={s.id}>
             {s.property_name}
             <span className="sub">Deleted {date(s.property_deleted_at)}</span>
             <button
-              className="link"
+              className="btn small"
               disabled={a.isPending}
               onClick={() => {
-                const reason = window.prompt('Why free this slot? (shown in the audit log)');
+                const reason = window.prompt('Why free this slot? (kept in the history)');
                 if (reason && reason.trim().length >= 3)
                   a.mutate({
                     path: `/backoffice/slots/${s.id}/release`,
@@ -315,26 +515,28 @@ function Slots({ accountId, onChanged }: { accountId: string; onChanged: () => v
         ))}
       </ul>
       <Feedback a={a} />
-    </div>
+    </Section>
   );
 }
 
 function AccountStatus({ d, onChanged }: { d: BackofficeAccountDetail; onChanged: () => void }) {
   const a = useAction(onChanged);
   const path = `/backoffice/accounts/${d.account.id}/status`;
-  if (d.account.status === 'closed') return null;
+  if (d.account.status === 'closed') return <span className="sub">This account is closed.</span>;
   return (
-    <div className="block">
-      <h3>Account</h3>
+    <div className="stack">
+      <span className="sub">
+        {d.account.status === 'active'
+          ? 'Suspending stops the customer using the app until you reactivate them. Nothing is deleted.'
+          : 'This customer is suspended and cannot use the app.'}
+      </span>
       <div className="row">
         {d.account.status === 'active' ? (
           <button
             className="btn danger"
             disabled={a.isPending}
             onClick={() => {
-              if (
-                window.confirm('Suspend this customer? They cannot use the app until reactivated.')
-              )
+              if (window.confirm('Suspend this customer?'))
                 a.mutate({ path, body: { status: 'suspended' }, ok: 'Suspended' });
             }}
           >
@@ -356,35 +558,42 @@ function AccountStatus({ d, onChanged }: { d: BackofficeAccountDetail; onChanged
 }
 
 function Activity({ accountId }: { accountId: string }) {
-  const [open, setOpen] = useState(false);
   const { data, error, isPending } = useQuery({
     queryKey: ['bo-activity', accountId],
     queryFn: () => api<AuditEntry[]>(`/backoffice/accounts/${accountId}/activity?kind=events`),
-    enabled: open,
   });
+  const cols: Column<AuditEntry>[] = [
+    {
+      key: 'when',
+      header: 'When',
+      sort: (e) => e.created_at,
+      render: (e) => dateTime(e.created_at),
+    },
+    {
+      key: 'what',
+      header: 'What happened',
+      sort: (e) => e.action,
+      render: (e) => <span className="mono">{e.action}</span>,
+    },
+    {
+      key: 'who',
+      header: 'By',
+      sort: (e) => e.actor_name ?? e.actor_type,
+      render: (e) => e.actor_name ?? e.actor_type,
+    },
+  ];
   return (
-    <div className="block">
-      <h3>History</h3>
-      {!open ? (
-        <button className="link" onClick={() => setOpen(true)}>
-          Show what happened on this account
-        </button>
-      ) : null}
-      {open && isPending ? <span className="sub">Loading…</span> : null}
-      {error ? <span className="error">{errorText(error)}</span> : null}
-      {data ? (
-        <ul className="list">
-          {data.length === 0 ? <li className="sub">Nothing recorded yet.</li> : null}
-          {data.map((e) => (
-            <li key={e.id}>
-              <span className="mono">{e.action}</span>
-              <span className="sub">
-                {dateTime(e.created_at)} · {e.actor_name ?? e.actor_type}
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </div>
+    <DataTable
+      rows={data}
+      columns={cols}
+      rowKey={(e) => e.id}
+      searchText={(e) => `${e.action} ${e.actor_name ?? ''}`}
+      searchPlaceholder="Search history"
+      defaultSort={{ key: 'when', dir: 'desc' }}
+      loading={isPending}
+      error={error ? errorText(error) : null}
+      empty="Nothing recorded yet."
+      pageSize={20}
+    />
   );
 }

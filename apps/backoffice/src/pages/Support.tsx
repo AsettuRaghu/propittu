@@ -2,32 +2,42 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import {
+  STAFF_TICKET_STATUSES,
   TICKET_CATEGORIES,
   TICKET_CATEGORY_LABELS,
-  TICKET_STATUSES,
   TICKET_STATUS_LABELS,
   formatIndianMobile,
+  ticketStage,
   type BackofficeTicket,
   type BackofficeTicketDetail,
-  type TicketStatus,
+  type StaffTicketStatus,
 } from '@propittu/shared';
 import { api, errorText } from '../lib/api';
 import { dateTime, relative } from '../lib/format';
 import { useTicketList } from '../lib/lists';
 import { useLive } from '../lib/live';
 import { useUrlState } from '../lib/params';
-import { DataTable, type Column } from '../ui/DataTable';
 import { Age } from '../ui/Age';
-import { TICKET_TONES } from '../ui/status';
+import { DataTable, type Column } from '../ui/DataTable';
 import { Tiles } from '../ui/Tiles';
 import { useEscape } from '../ui/useEscape';
 
-const onUs = (t: BackofficeTicket) => t.status === 'open' || t.status === 'in_progress';
+const STAGE_TONES: Record<StaffTicketStatus, string> = {
+  open: 'warn',
+  in_progress: 'info',
+  resolved: 'good',
+};
+const stageLabel = (s: StaffTicketStatus) => TICKET_STATUS_LABELS[s];
 
-/** The support inbox: live, newest activity first; pick a ticket to reply beside the list. */
+function StageBadge({ t }: { t: BackofficeTicket }) {
+  const s = ticketStage(t.status);
+  return <span className={`badge ${STAGE_TONES[s]}`}>{stageLabel(s)}</span>;
+}
+
+/** The support inbox, live: what needs a reply first; open a ticket to answer it. */
 export function Support() {
   const [params, set] = useUrlState();
-  const view = params.get('status') ?? 'on_us';
+  const view = params.get('status') ?? 'reply';
   const category = params.get('category') ?? '';
   const selected = params.get('id');
   const { data, error, isPending } = useTicketList();
@@ -35,16 +45,19 @@ export function Support() {
   const [now] = useState(() => Date.now());
 
   const views = {
-    on_us: onUs,
-    new: (t: BackofficeTicket) => unseen.has(t.id),
-    waiting_on_customer: (t: BackofficeTicket) => t.status === 'waiting_on_customer',
-    resolved: (t: BackofficeTicket) => t.status === 'resolved' || t.status === 'closed',
+    reply: (t: BackofficeTicket) => t.awaiting_staff,
+    open: (t: BackofficeTicket) => ticketStage(t.status) === 'open',
+    in_progress: (t: BackofficeTicket) => ticketStage(t.status) === 'in_progress',
+    resolved: (t: BackofficeTicket) => ticketStage(t.status) === 'resolved',
     all: () => true,
   };
-  const count = (f: (t: BackofficeTicket) => boolean) => data?.filter(f).length ?? '–';
+  const count = (k: keyof typeof views) => data?.filter(views[k]).length ?? '–';
   const rows = data?.filter(
-    (t) => (views[view as keyof typeof views] ?? onUs)(t) && (!category || t.category === category),
+    (t) =>
+      (views[view as keyof typeof views] ?? views.reply)(t) &&
+      (!category || t.category === category),
   );
+  const close = () => set({ id: null, full: null });
 
   const columns: Column<BackofficeTicket>[] = [
     {
@@ -54,7 +67,7 @@ export function Support() {
       render: (t) => (
         <>
           {t.subject}
-          {unseen.has(t.id) ? <span className="badge warn new">New reply</span> : null}
+          {unseen.has(t.id) ? <span className="badge bad new">New reply</span> : null}
           <span className="sub mono">{t.reference}</span>
         </>
       ),
@@ -63,7 +76,7 @@ export function Support() {
     {
       key: 'customer',
       header: 'Customer',
-      sort: (t) => t.customer_name ?? '',
+      sort: (t) => t.customer_name ?? t.customer_phone ?? '',
       render: (t) => (
         <>
           {t.customer_name || '—'}
@@ -75,7 +88,7 @@ export function Support() {
       csv: (t) => `${t.customer_name ?? ''} ${t.customer_phone ?? ''}`.trim(),
     },
     {
-      key: 'category',
+      key: 'topic',
       header: 'Topic',
       sort: (t) => TICKET_CATEGORY_LABELS[t.category],
       render: (t) => (
@@ -84,15 +97,19 @@ export function Support() {
           <span className="sub">{t.service_request?.service?.name ?? t.property?.name ?? ''}</span>
         </>
       ),
+      csv: (t) => TICKET_CATEGORY_LABELS[t.category],
     },
     {
       key: 'status',
       header: 'Status',
-      sort: (t) => t.status,
+      sort: (t) => STAFF_TICKET_STATUSES.indexOf(ticketStage(t.status)),
       render: (t) => (
-        <span className={`badge ${TICKET_TONES[t.status]}`}>{TICKET_STATUS_LABELS[t.status]}</span>
+        <>
+          <StageBadge t={t} />
+          {t.awaiting_staff ? <span className="sub warn-text">Needs a reply</span> : null}
+        </>
       ),
-      csv: (t) => TICKET_STATUS_LABELS[t.status],
+      csv: (t) => stageLabel(ticketStage(t.status)),
     },
     {
       key: 'created',
@@ -105,7 +122,11 @@ export function Support() {
       header: 'Last message',
       sort: (t) => t.last_message_at,
       render: (t) =>
-        onUs(t) ? <Age since={t.last_message_at} now={now} /> : relative(t.last_message_at),
+        t.awaiting_staff ? (
+          <Age since={t.last_message_at} now={now} />
+        ) : (
+          relative(t.last_message_at)
+        ),
       csv: (t) => t.last_message_at,
     },
   ];
@@ -114,27 +135,18 @@ export function Support() {
     <div className="page">
       <div className="page-head">
         <div>
-          <h1>Support</h1>
-          <p>Live: new tickets and replies appear as they arrive. Waiting on us by default.</p>
+          <h1>Support tickets</h1>
+          <p>Live: new tickets and replies appear as they arrive. Tickets needing a reply first.</p>
         </div>
       </div>
       <Tiles
         value={view}
         onChange={(v) => set({ status: v, id: null })}
         tiles={[
-          { value: 'on_us', label: 'Waiting on us', count: count(onUs), tone: 'warn' },
-          {
-            value: 'new',
-            label: 'New replies',
-            count: unseen.size,
-            tone: unseen.size ? 'bad' : '',
-          },
-          {
-            value: 'waiting_on_customer',
-            label: 'Waiting on customer',
-            count: count(views.waiting_on_customer),
-          },
-          { value: 'resolved', label: 'Resolved', count: count(views.resolved), tone: 'good' },
+          { value: 'reply', label: 'Needs a reply', count: count('reply'), tone: 'bad' },
+          { value: 'open', label: 'Open', count: count('open'), tone: 'warn' },
+          { value: 'in_progress', label: 'In progress', count: count('in_progress') },
+          { value: 'resolved', label: 'Resolved', count: count('resolved'), tone: 'good' },
           { value: 'all', label: 'Everything', count: data?.length ?? '–' },
         ]}
       />
@@ -144,12 +156,8 @@ export function Support() {
         rowKey={(t) => t.id}
         selected={selected}
         onRowClick={(t) => set({ id: t.id })}
-        onClose={() => set({ id: null, full: null })}
-        detail={
-          selected ? (
-            <TicketPanel id={selected} onClose={() => set({ id: null, full: null })} />
-          ) : null
-        }
+        onClose={close}
+        detail={selected ? <TicketPanel id={selected} onClose={close} /> : null}
         searchText={(t) =>
           `${t.reference} ${t.subject} ${t.customer_name ?? ''} ${t.customer_phone ?? ''} ${TICKET_CATEGORY_LABELS[t.category]} ${t.property?.name ?? ''} ${t.service_request?.service?.name ?? ''}`
         }
@@ -178,6 +186,7 @@ export function Support() {
   );
 }
 
+/** One ticket: a tidy summary on the left, the conversation and reply on the right. */
 function TicketPanel({ id, onClose }: { id: string; onClose: () => void }) {
   const qc = useQueryClient();
   const {
@@ -211,109 +220,111 @@ function TicketPanel({ id, onClose }: { id: string; onClose: () => void }) {
     },
   });
   const setStatus = useMutation({
-    mutationFn: (status: TicketStatus) =>
+    mutationFn: (status: StaffTicketStatus) =>
       api(`/backoffice/tickets/${id}/status`, { method: 'POST', body: { status } }),
     onSuccess: refresh,
   });
 
+  if (isPending) return <div className="empty">Loading…</div>;
+  if (error || !t) return <div className="empty error">{errorText(error)}</div>;
+  const stage = ticketStage(t.status);
+
   return (
-    <aside className="panel" aria-label="Ticket">
-      <div className="panel-head">
+    <div className="ticket">
+      <header className="ticket-head">
         <div>
-          <h2>{t?.subject ?? 'Ticket'}</h2>
-          {t ? <span className="mono">{t.reference}</span> : null}
+          <h2>{t.subject}</h2>
+          <span className="sub">
+            <span className="mono">{t.reference}</span> · {TICKET_CATEGORY_LABELS[t.category]} ·
+            opened {dateTime(t.created_at)}
+          </span>
         </div>
-      </div>
-      {isPending ? <div className="empty">Loading…</div> : null}
-      {error ? <div className="empty error">{errorText(error)}</div> : null}
-      {t ? (
-        <div className="panel-body chat">
-          <div className="chat-side">
-            <dl className="kv">
-              <dt>Customer</dt>
-              <dd>
-                <Link to={`/customers?id=${t.account_id}`}>
-                  {t.customer_name || 'Open customer'}
-                </Link>
-                <br />
-                <span className="mono">
-                  {t.customer_phone ? formatIndianMobile(t.customer_phone) : ''}
-                </span>
-              </dd>
-              <dt>Opened</dt>
-              <dd>{dateTime(t.created_at)}</dd>
-              <dt>Category</dt>
-              <dd>{TICKET_CATEGORY_LABELS[t.category]}</dd>
-              {t.property ? (
-                <>
-                  <dt>Property</dt>
-                  <dd>{t.property.name}</dd>
-                </>
-              ) : null}
+        <div className="segmented" role="group" aria-label="Status">
+          {STAFF_TICKET_STATUSES.map((s) => (
+            <button
+              key={s}
+              aria-pressed={stage === s}
+              className={stage === s ? STAGE_TONES[s] : ''}
+              disabled={setStatus.isPending}
+              onClick={() => stage !== s && setStatus.mutate(s)}
+            >
+              {stageLabel(s)}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      <div className="ticket-grid">
+        <aside className="ticket-side">
+          <div className="card-block">
+            <h3>Customer</h3>
+            <Link to={`/customers?id=${t.account_id}`} className="strong">
+              {t.customer_name || 'Customer'}
+            </Link>
+            <span className="sub">
+              {t.customer_phone ? formatIndianMobile(t.customer_phone) : 'No phone'}
+            </span>
+          </div>
+          {t.property || t.service_request ? (
+            <div className="card-block">
+              <h3>About</h3>
               {t.service_request ? (
                 <>
-                  <dt>Request</dt>
-                  <dd>
-                    <Link to={`/requests?status=all&id=${t.service_request.id}`}>
-                      {t.service_request.service?.name ?? 'Service request'}
-                    </Link>{' '}
-                    <span className="mono">{t.service_request.reference}</span>
-                  </dd>
+                  <Link to={`/requests?status=all&id=${t.service_request.id}`} className="strong">
+                    {t.service_request.service?.name ?? 'Service request'}
+                  </Link>
+                  <span className="sub mono">{t.service_request.reference}</span>
                 </>
               ) : null}
-              <dt>Status</dt>
-              <dd>
-                <select
-                  id="ticket-status"
-                  value={t.status}
-                  disabled={setStatus.isPending}
-                  onChange={(e) => setStatus.mutate(e.target.value as TicketStatus)}
-                >
-                  {TICKET_STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {TICKET_STATUS_LABELS[s]}
-                    </option>
-                  ))}
-                </select>
-              </dd>
-            </dl>
-          </div>
-          <div className="chat-main">
-            <div className="thread">
-              {t.messages.map((m) => (
-                <div key={m.id} className={`msg ${m.author_type === 'staff' ? 'staff' : ''}`}>
-                  {m.body}
-                  {m.attachments.length ? (
-                    <small>{m.attachments.length} attachment(s)</small>
-                  ) : null}
-                  <small>
-                    {m.author_type === 'staff' ? 'Propittu' : 'Customer'} · {dateTime(m.created_at)}
-                  </small>
-                </div>
-              ))}
+              {t.property ? <span>{t.property.name}</span> : null}
             </div>
-            <div className="block">
-              <textarea
-                id="reply"
-                placeholder="Write a reply…"
-                value={reply}
-                onChange={(e) => setReply(e.target.value)}
-              />
-              <div className="row">
-                <button
-                  className="btn primary"
-                  disabled={!reply.trim() || send.isPending}
-                  onClick={() => send.mutate()}
-                >
-                  {send.isPending ? 'Sending…' : 'Send reply'}
-                </button>
+          ) : null}
+          <div className="card-block">
+            <h3>Timeline</h3>
+            <span className="sub">Last message {relative(t.last_message_at)}</span>
+            {t.resolved_at ? <span className="sub">Resolved {dateTime(t.resolved_at)}</span> : null}
+            {t.awaiting_staff ? (
+              <span className="warn-text">The customer is waiting for a reply.</span>
+            ) : null}
+          </div>
+          {setStatus.error ? <div className="error">{errorText(setStatus.error)}</div> : null}
+        </aside>
+
+        <section className="ticket-chat">
+          <div className="thread">
+            {t.messages.map((m) => (
+              <div key={m.id} className={`msg ${m.author_type === 'staff' ? 'staff' : ''}`}>
+                {m.body}
+                {m.attachments.length ? <small>{m.attachments.length} attachment(s)</small> : null}
+                <small>
+                  {m.author_type === 'staff' ? 'Propittu' : t.customer_name || 'Customer'} ·{' '}
+                  {dateTime(m.created_at)}
+                </small>
               </div>
-              {send.error ? <div className="error">{errorText(send.error)}</div> : null}
-              {setStatus.error ? <div className="error">{errorText(setStatus.error)}</div> : null}
+            ))}
+          </div>
+          <div className="composer">
+            <textarea
+              placeholder="Write a reply…  (Ctrl/⌘ + Enter to send)"
+              value={reply}
+              onChange={(e) => setReply(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && reply.trim()) send.mutate();
+              }}
+            />
+            <div className="row between">
+              {send.error ? <span className="error">{errorText(send.error)}</span> : <span />}
+              <button
+                className="btn primary"
+                disabled={!reply.trim() || send.isPending}
+                onClick={() => send.mutate()}
+              >
+                {send.isPending ? 'Sending…' : 'Send reply'}
+              </button>
             </div>
           </div>
-        </div>
-      ) : null}
-    </aside>
+        </section>
+      </div>
+    </div>
   );
 }

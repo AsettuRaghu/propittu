@@ -47,11 +47,16 @@ export function Shell() {
           <Item to="/" end label="Dashboard" />
           <div className="nav-label">Work</div>
           <Item to="/requests" label="Service requests" count={data?.requests.requested} />
-          <Item to="/support" label="Support" count={unseen.size || data?.tickets_waiting} />
+          <Item
+            to="/support"
+            label="Support tickets"
+            count={unseen.size || data?.tickets_waiting}
+          />
           <div className="nav-label">Customers</div>
           <Item to="/customers" label="Customers" />
-          <Item to="/payments" label="Plans & payments" count={data?.refunds_needed.length} />
+          <Item to="/payments" label="Payments" count={data?.refunds_needed.length} />
           <div className="nav-label">Setup</div>
+          <Item to="/plans" label="Plans" />
           <Item to="/services" label="Services & coverage" />
           <Item to="/pittu" label="Pittu" />
           <div className="nav-label">Insights</div>

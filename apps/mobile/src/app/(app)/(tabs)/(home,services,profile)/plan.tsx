@@ -15,7 +15,7 @@ import {
 } from '@propittu/shared';
 import { PullRefresh } from '@/components/PullRefresh';
 import { useOrders } from '@/api/billing';
-import { useAccountPlan, usePlans } from '@/api/queries';
+import { useAccountPlan, usePlans, useServices } from '@/api/queries';
 import { PageHeader, Strong } from '@/components/PageHeader';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
 import { UsageRow } from '@/components/UsageRow';
@@ -214,6 +214,10 @@ function PlanHeader({
 /* ---- Usage: every allowance as a row — used / limit and what's left ---- */
 
 function UsageTab({ state: s }: { state: AccountPlanState }) {
+  // Included services are named from the catalogue (plans are configured in Backoffice).
+  const catalogue = useServices();
+  const serviceName = (code: string) =>
+    catalogue.data?.find((x) => x.code === code)?.name ?? INCLUDED_SERVICE_LABELS[code] ?? code;
   const l = s.plan?.benefits.limits ?? {};
   const u = s.usage;
   const deleted = u.deleted_still_counted.length;
@@ -232,7 +236,7 @@ function UsageTab({ state: s }: { state: AccountPlanState }) {
           key={i.code}
           icon="compass"
           accent="teal"
-          label={INCLUDED_SERVICE_LABELS[i.code] ?? i.code}
+          label={serviceName(i.code)}
           hint="Included this year"
           used={i.used}
           limit={i.quantity}

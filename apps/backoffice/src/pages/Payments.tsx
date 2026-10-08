@@ -1,12 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
-import {
-  ORDER_DISPLAY_LABELS,
-  formatIndianMobile,
-  type BackofficeOrder,
-  type PublicPlan,
-} from '@propittu/shared';
+import { ORDER_DISPLAY_LABELS, formatIndianMobile, type BackofficeOrder } from '@propittu/shared';
 import { api, errorText } from '../lib/api';
 import { date, dateTime, rupees } from '../lib/format';
 import { useUrlState } from '../lib/params';
@@ -37,7 +32,6 @@ export function Payments() {
     queryKey: ['bo-payments'],
     queryFn: () => api<BackofficeOrder[]>('/backoffice/payments?status=all'),
   });
-  const plans = useQuery({ queryKey: ['plans'], queryFn: () => api<PublicPlan[]>('/plans') });
 
   const from = (() => {
     if (period === 'all') return 0;
@@ -168,8 +162,11 @@ export function Payments() {
     <div className="page">
       <div className="page-head">
         <div>
-          <h1>Plans &amp; payments</h1>
-          <p>The latest 300 payments. To give or change a plan, open the customer.</p>
+          <h1>Payments</h1>
+          <p>
+            Every payment for plans and extra services (the latest 300). Plans themselves are set up
+            under Plans.
+          </p>
         </div>
         <div className="row">
           <select
@@ -261,40 +258,6 @@ export function Payments() {
         error={error ? errorText(error) : null}
         empty="No payments in this period."
       />
-
-      {plans.data ? (
-        <section className="section">
-          <div className="section-head">
-            <h2>Plans on sale</h2>
-            <span className="sub">Prices and terms customers see today.</span>
-          </div>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Plan</th>
-                  <th className="num">Price</th>
-                  <th className="num">Term</th>
-                  <th>Version</th>
-                </tr>
-              </thead>
-              <tbody>
-                {plans.data.map((p) => (
-                  <tr key={p.code}>
-                    <td>
-                      {p.name}
-                      <span className="sub">{p.description}</span>
-                    </td>
-                    <td className="num">{rupees(p.price_paise)}</td>
-                    <td className="num">{p.term_days} days</td>
-                    <td>{p.version}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      ) : null}
     </div>
   );
 }

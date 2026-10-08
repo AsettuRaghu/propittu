@@ -1,7 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import {
+  CANCEL_POLICY_LABELS,
+  PAYMENT_TIMING_LABELS,
   PREFERRED_SLOT_LABELS,
+  SERVICE_FULFILMENT_LABELS,
+  formatIndianMobile,
   VISIT_CONDITIONS,
   VISIT_CONDITION_LABELS,
   requestExpectedBy,
@@ -11,11 +15,13 @@ import {
   type ServiceRequestStatus,
   type VisitCondition,
 } from '@propittu/shared';
+import { Link } from 'react-router';
 import { api, errorText } from '../lib/api';
 import { date, dateTime, rupees } from '../lib/format';
 import { Feedback, useAction } from '../ui/action';
 import { REQUEST_TONES } from '../ui/status';
 import { useEscape } from '../ui/useEscape';
+import { useServices } from './Services';
 
 const ACTION_LABELS: Partial<Record<ServiceRequestStatus, string>> = {
   confirmed: 'Accept',
@@ -67,61 +73,108 @@ export function RequestPanel({ id, onClose }: { id: string; onClose: () => void 
 
 function Body({ r, onChanged }: { r: BackofficeRequestDetail; onChanged: () => void }) {
   const due = requestExpectedBy(r);
+  const [info, setInfo] = useState(false);
+  const services = useServices();
+  const service = services.data?.find((s) => s.id === r.service.id);
   return (
     <div className="panel-body">
-      <dl className="kv">
-        <dt>Customer</dt>
-        <dd>
-          {r.customer_name || '—'}
-          <br />
-          <span className="mono">{r.customer_phone ?? ''}</span>
-        </dd>
-        <dt>Property</dt>
-        <dd>
-          {r.property?.name ?? 'Property deleted'}
-          {r.property_address ? <span className="sub">{r.property_address}</span> : null}
-        </dd>
-        <dt>Requested</dt>
-        <dd>{dateTime(r.created_at)}</dd>
-        {r.fulfilment === 'visit' ? (
-          <>
-            <dt>Preferred</dt>
-            <dd>
-              {r.preferred_date ? date(r.preferred_date) : 'Any day'}
-              {r.preferred_slot ? ` · ${PREFERRED_SLOT_LABELS[r.preferred_slot]}` : ''}
-            </dd>
-          </>
+      <div className="card-block">
+        <h3>Customer and property</h3>
+        <div className="row between">
+          <Link to={`/customers?id=${r.account_id}`} className="strong">
+            {r.customer_name || 'Customer'}
+          </Link>
+          <span className="sub">
+            {r.customer_phone ? formatIndianMobile(r.customer_phone) : ''}
+          </span>
+        </div>
+        <div className="row between">
+          <span>{r.property?.name ?? 'Property deleted'}</span>
+          <span className="sub">{r.property?.city ?? ''}</span>
+        </div>
+        {r.property_address ? (
+          <span className="sub clip" title={r.property_address}>
+            {r.property_address}
+          </span>
         ) : null}
-        {r.scheduled_for ? (
-          <>
-            <dt>Visit</dt>
-            <dd>{dateTime(r.scheduled_for)}</dd>
-          </>
+      </div>
+
+      <div className="card-block">
+        <div className="row between">
+          <h3>Request</h3>
+          <button
+            className={`info-btn ${info ? 'on' : ''}`}
+            onClick={() => setInfo((v) => !v)}
+            aria-expanded={info}
+            title="What the customer was shown for this service"
+          >
+            i
+          </button>
+        </div>
+        {info ? (
+          <div className="service-info">
+            <b>{r.service.name}</b>
+            {service?.description ? <span>{service.description}</span> : null}
+            {r.service.includes.length ? (
+              <ul>
+                {r.service.includes.map((l) => (
+                  <li key={l}>{l}</li>
+                ))}
+              </ul>
+            ) : null}
+            <span className="sub">
+              {SERVICE_FULFILMENT_LABELS[r.fulfilment]}
+              {r.service.turnaround ? ` · ${r.service.turnaround}` : ''}
+              {r.service.expected_days ? ` · usually ${r.service.expected_days} working days` : ''}
+            </span>
+            <span className="sub">
+              {PAYMENT_TIMING_LABELS[r.payment_timing]} · {CANCEL_POLICY_LABELS[r.cancel_policy]}
+            </span>
+          </div>
         ) : null}
-        <dt>Due</dt>
-        <dd>{due ? date(due) : '—'}</dd>
-        <dt>Cost</dt>
-        <dd>
-          {r.coverage === 'included'
-            ? 'Included in plan'
-            : r.price_paise === null
-              ? 'On quote — not priced yet'
-              : rupees(r.price_paise)}
-          {r.order ? <span className="sub">Payment: {r.order.status}</span> : null}
-        </dd>
-        {r.description ? (
-          <>
-            <dt>Notes</dt>
-            <dd>{r.description}</dd>
-          </>
-        ) : null}
-        {r.status_note ? (
-          <>
-            <dt>Last update</dt>
-            <dd>{r.status_note}</dd>
-          </>
-        ) : null}
-      </dl>
+        <dl className="kv">
+          <dt>Requested</dt>
+          <dd>{dateTime(r.created_at)}</dd>
+          {r.fulfilment === 'visit' ? (
+            <>
+              <dt>Preferred</dt>
+              <dd>
+                {r.preferred_date ? date(r.preferred_date) : 'Any day'}
+                {r.preferred_slot ? ` · ${PREFERRED_SLOT_LABELS[r.preferred_slot]}` : ''}
+              </dd>
+            </>
+          ) : null}
+          {r.scheduled_for ? (
+            <>
+              <dt>Visit</dt>
+              <dd>{dateTime(r.scheduled_for)}</dd>
+            </>
+          ) : null}
+          <dt>Due</dt>
+          <dd>{due ? date(due) : '—'}</dd>
+          <dt>Cost</dt>
+          <dd>
+            {r.coverage === 'included'
+              ? 'Included in plan'
+              : r.price_paise === null
+                ? 'On quote — not priced yet'
+                : rupees(r.price_paise)}
+            {r.order ? <span className="sub">Payment: {r.order.status}</span> : null}
+          </dd>
+          {r.description ? (
+            <>
+              <dt>Customer notes</dt>
+              <dd>{r.description}</dd>
+            </>
+          ) : null}
+          {r.status_note ? (
+            <>
+              <dt>Last update</dt>
+              <dd>{r.status_note}</dd>
+            </>
+          ) : null}
+        </dl>
+      </div>
 
       <StatusActions r={r} onChanged={onChanged} />
       {r.coverage === 'extra' &&

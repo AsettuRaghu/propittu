@@ -15,6 +15,7 @@ import {
 import { api, errorText } from '../lib/api';
 import { date } from '../lib/format';
 import { Feedback, useAction } from '../ui/action';
+import { DataTable, type Column } from '../ui/DataTable';
 
 const show = (v: unknown) =>
   v === null || v === undefined || v === ''
@@ -22,6 +23,34 @@ const show = (v: unknown) =>
     : typeof v === 'object'
       ? JSON.stringify(v)
       : String(v as string | number | boolean);
+
+type Fact = NonNullable<BackofficeProperty['pittu']>['facts'][number];
+const FACT_COLUMNS: Column<Fact>[] = [
+  {
+    key: 'field',
+    header: 'Field',
+    sort: (f) => FACT_LABELS[f.key] ?? f.key,
+    render: (f) => FACT_LABELS[f.key] ?? f.key,
+  },
+  { key: 'read', header: 'Read', sort: (f) => show(f.value), render: (f) => show(f.value) },
+  {
+    key: 'kept',
+    header: 'Kept',
+    sort: (f) => show(f.final_value),
+    render: (f) => show(f.final_value),
+  },
+  {
+    key: 'status',
+    header: 'Status',
+    sort: (f) => f.status,
+    render: (f) => (
+      <>
+        {f.status}
+        {f.confidence ? <span className="sub">{f.confidence}</span> : null}
+      </>
+    ),
+  },
+];
 
 /** One property inside the customer panel: details, reach, documents, what Pittu read. */
 export function PropertyView({ id, onBack }: { id: string; onBack: () => void }) {
@@ -276,29 +305,12 @@ function Pittu({ p, onChanged }: { p: BackofficeProperty; onChanged: () => void 
         </dl>
       ) : null}
       {pittu.facts.length > 0 ? (
-        <table className="compact">
-          <thead>
-            <tr>
-              <th>Field</th>
-              <th>Read</th>
-              <th>Kept</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pittu.facts.map((f) => (
-              <tr key={f.key}>
-                <td>{FACT_LABELS[f.key] ?? f.key}</td>
-                <td>{show(f.value)}</td>
-                <td>{show(f.final_value)}</td>
-                <td>
-                  {f.status}
-                  {f.confidence ? <span className="sub">{f.confidence}</span> : null}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <DataTable
+          rows={pittu.facts}
+          columns={FACT_COLUMNS}
+          rowKey={(f) => f.key}
+          defaultSort={{ key: 'field', dir: 'asc' }}
+        />
       ) : null}
     </div>
   );

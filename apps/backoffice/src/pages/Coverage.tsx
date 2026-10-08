@@ -1,8 +1,33 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import type { BackofficeCoverage, ServiceArea, ServiceState } from '@propittu/shared';
+import type { BackofficeCoverage, ReachDemand, ServiceArea, ServiceState } from '@propittu/shared';
 import { api, errorText } from '../lib/api';
 import { Feedback, useAction } from '../ui/action';
+import { DataTable, type Column } from '../ui/DataTable';
+
+const DEMAND_COLUMNS: Column<ReachDemand>[] = [
+  {
+    key: 'pincode',
+    header: 'PIN code',
+    sort: (d) => d.pincode,
+    render: (d) => <span className="mono">{d.pincode ?? 'No PIN code'}</span>,
+  },
+  { key: 'place', header: 'Place', sort: (d) => d.place, render: (d) => d.place ?? '—' },
+  {
+    key: 'properties',
+    header: 'Properties',
+    align: 'right',
+    sort: (d) => d.properties,
+    render: (d) => d.properties,
+  },
+  {
+    key: 'interested',
+    header: 'Asked to hear',
+    align: 'right',
+    sort: (d) => d.interested,
+    render: (d) => d.interested,
+  },
+];
 
 /** Areas (PIN codes our team visits), states (paperwork help), and where demand is. */
 export function Coverage() {
@@ -45,38 +70,19 @@ export function Coverage() {
         </div>
       </section>
 
-      <section className="section">
-        <div className="section-head">
-          <h2>Waiting for us</h2>
-          <span className="sub">Properties outside our areas, by PIN code.</span>
-        </div>
-        {data.demand.length === 0 ? (
-          <div className="empty">No demand outside our areas yet.</div>
-        ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>PIN code</th>
-                  <th>Place</th>
-                  <th>Properties</th>
-                  <th>Asked to hear</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.demand.map((d) => (
-                  <tr key={d.pincode ?? 'none'}>
-                    <td className="mono">{d.pincode ?? 'No PIN code'}</td>
-                    <td>{d.place ?? '—'}</td>
-                    <td>{d.properties}</td>
-                    <td>{d.interested}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      <div className="section-title">
+        Waiting for us · properties outside our areas, by PIN code
+      </div>
+      <DataTable
+        rows={data.demand}
+        columns={DEMAND_COLUMNS}
+        rowKey={(d) => d.pincode ?? 'none'}
+        searchText={(d) => `${d.pincode ?? ''} ${d.place ?? ''}`}
+        searchPlaceholder="Search PIN code or place"
+        defaultSort={{ key: 'properties', dir: 'desc' }}
+        exportName="demand"
+        empty="No demand outside our areas yet."
+      />
     </>
   );
 }

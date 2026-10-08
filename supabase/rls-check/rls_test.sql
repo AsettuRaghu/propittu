@@ -449,7 +449,7 @@ select tst.rejects(
   'A cannot write usage records');
 select tst.rows($$update public.usage_records set released_at = now()$$, 0,
   'A cannot release (refund) its own usage');
-select tst.rows($$update public.plan_version_benefits set value = 999$$, 0,
+select tst.rejects($$update public.plan_version_benefits set value = 999$$,
   'A cannot raise its own Usage Limits');
 select tst.rejects($$insert into public.plans (code, name) values ('free_forever', 'Free')$$,
   'A cannot create Plans');
@@ -1539,6 +1539,37 @@ insert into auth.users (id, phone) values ('bbbbbbbb-0000-0000-0000-00000000000b
 select tst.ok(not exists (select 1 from public.account_plans ap join public.account_members m on m.account_id = ap.account_id
                           where m.user_id = 'bbbbbbbb-0000-0000-0000-00000000000b'),
   'signing up again with the same number does not start a new free trial');
+
+-- =====================================================================
+\echo
+\echo '== Plans console: publishing a new version =='
+-- =====================================================================
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rejects($$select public.staff_publish_plan_version((select id from public.plans where code = 'basic'), 1, 'year', 365, '[]')$$,
+  'a customer cannot publish a plan version');
+
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+select tst.rejects($$update public.plan_versions set price_paise = 1$$,
+  'staff cannot edit a published version in place (versions are history)');
+select tst.rejects($$insert into public.plan_version_benefits (plan_version_id, kind, code, value)
+                     select id, 'limit', 'max_properties', 99 from public.plan_versions limit 1$$,
+  'staff cannot add benefits to a published version');
+select tst.rejects($$select public.staff_publish_plan_version((select id from public.plans where code = 'basic'), 199900, 'year', 365,
+                     '[{"kind":"included_service","code":"no_such_service","value":1,"period":"year"}]')$$,
+  'an included service must exist in the catalogue');
+select public.staff_publish_plan_version(
+  (select id from public.plans where code = 'basic'), 199900, 'year', 365,
+  '[{"kind":"feature","code":"property_profile","value":null,"period":null},
+    {"kind":"limit","code":"max_properties","value":4,"period":null}]');
+select tst.ok((select count(*) = 1 from public.plan_versions v join public.plans p on p.id = v.plan_id
+               where p.code = 'basic' and v.is_current), 'exactly one current version after publishing');
+select tst.ok((select v.price_paise = 199900 and v.version > 1 from public.plan_versions v join public.plans p on p.id = v.plan_id
+               where p.code = 'basic' and v.is_current), 'the new version is current with the new price and a higher number');
+select tst.ok((select count(*) = 2 from public.plan_version_benefits b join public.plan_versions v on v.id = b.plan_version_id
+               join public.plans p on p.id = v.plan_id where p.code = 'basic' and v.is_current),
+  'the new version carries exactly the benefits given');
+reset role;
 
 \echo
 \echo 'ALL RLS CHECKS PASSED'

@@ -74,9 +74,7 @@ export function Dashboard() {
       r.fulfilment === 'visit' &&
       age(r.confirmed_at ?? r.updated_at) > 48,
   );
-  const onUs = (tickets.data ?? []).filter(
-    (t) => t.status === 'open' || t.status === 'in_progress',
-  );
+  const onUs = (tickets.data ?? []).filter((t) => t.awaiting_staff);
   const oldestTicket = Math.max(0, ...onUs.map((t) => age(t.last_message_at)));
   const ending = (accounts.data ?? []).filter(
     (a) =>
@@ -118,7 +116,7 @@ export function Dashboard() {
       ? { level: 'good', title: 'Support inbox is clear', detail: 'No ticket is waiting on us.' }
       : {
           level: oldestTicket > 24 ? 'bad' : oldestTicket > 4 ? 'warn' : 'good',
-          title: `${onUs.length} support ticket${onUs.length > 1 ? 's' : ''} waiting on us`,
+          title: `${onUs.length} support ticket${onUs.length > 1 ? 's need' : ' needs'} a reply`,
           detail: `The oldest has waited ${days(oldestTicket)} for a reply.`,
           to: '/support',
         },
@@ -401,40 +399,52 @@ export function Dashboard() {
       ) : null}
 
       {refunds.length ? (
-        <section className="section" id="refunds">
-          <div className="section-head">
-            <h2>Refunds needed</h2>
-            <span className="sub">Refund it in Razorpay, then tell the customer.</span>
+        <div id="refunds" className="stack">
+          <div className="section-title">
+            Refunds needed · refund it in Razorpay, then tell the customer
           </div>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Received</th>
-                  <th>Order</th>
-                  <th>Customer</th>
-                  <th>What</th>
-                  <th className="num">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {refunds.map((x) => (
-                  <tr key={x.event_id}>
-                    <td>{dateTime(x.received_at)}</td>
-                    <td className="mono">{x.order_reference ?? '—'}</td>
-                    <td>{x.customer_name || '—'}</td>
-                    <td>{x.description ?? '—'}</td>
-                    <td className="num">{rupees(x.amount_paise)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+          <DataTable
+            rows={refunds}
+            columns={REFUND_COLUMNS}
+            rowKey={(x) => x.event_id}
+            defaultSort={{ key: 'received', dir: 'desc' }}
+            exportName="refunds-needed"
+          />
+        </div>
       ) : null}
     </div>
   );
 }
+
+type Refund = BackofficeDashboard['refunds_needed'][number];
+const REFUND_COLUMNS: Column<Refund>[] = [
+  {
+    key: 'received',
+    header: 'Received',
+    sort: (x) => x.received_at,
+    render: (x) => dateTime(x.received_at),
+  },
+  {
+    key: 'order',
+    header: 'Order',
+    sort: (x) => x.order_reference,
+    render: (x) => <span className="mono">{x.order_reference ?? '—'}</span>,
+  },
+  {
+    key: 'customer',
+    header: 'Customer',
+    sort: (x) => x.customer_name,
+    render: (x) => x.customer_name || '—',
+  },
+  { key: 'what', header: 'What', sort: (x) => x.description, render: (x) => x.description ?? '—' },
+  {
+    key: 'amount',
+    header: 'Amount',
+    align: 'right',
+    sort: (x) => x.amount_paise,
+    render: (x) => rupees(x.amount_paise),
+  },
+];
 
 const rank = (l: Level) => (l === 'bad' ? 2 : l === 'warn' ? 1 : 0);
 

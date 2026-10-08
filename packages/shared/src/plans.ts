@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 /**
  * Plans, Benefits and Usage (M5/M6) — shared vocabulary.
  *
@@ -23,6 +25,13 @@ export const LIMIT_CODES = [
   'max_storage_mb',
 ] as const;
 export type LimitCode = (typeof LIMIT_CODES)[number];
+
+export const FEATURE_LABELS: Record<FeatureCode, string> = {
+  property_profile: 'Add and keep properties',
+  document_upload: 'Upload documents',
+  photo_upload: 'Upload photos',
+  video_upload: 'Upload videos',
+};
 
 export const LIMIT_LABELS: Record<LimitCode, string> = {
   max_properties: 'Properties',
@@ -150,3 +159,82 @@ export interface PlanSummary {
   /** Whole days until ends_at, computed by the API. */
   days_left: number | null;
 }
+
+/* ------------------------------------------------------------------ *
+ * Plans console (Backoffice portal)
+ * ------------------------------------------------------------------ */
+
+export interface StaffPlanVersion {
+  id: string;
+  version: number;
+  price_paise: number;
+  billing_period: 'none' | 'month' | 'year';
+  term_days: number;
+  is_current: boolean;
+  created_at: string;
+  benefits: PlanBenefits;
+  /** Customers whose plan in force right now is this version. */
+  customers_now: number;
+}
+
+/** GET /backoffice/plans — every plan, its versions, and who is on it. */
+export interface StaffPlan {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  /** On sale: listed in the app and purchasable (the Trial never is). */
+  is_public: boolean;
+  /** Switched off: not sold, not granted, and (for the Trial) no new trials. */
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  current: StaffPlanVersion | null;
+  versions: StaffPlanVersion[];
+  customers_now: number;
+}
+
+const planBenefitsSchema = z.object({
+  features: z.array(z.enum(FEATURE_CODES)).max(FEATURE_CODES.length),
+  limits: z.partialRecord(z.enum(LIMIT_CODES), z.number().int().min(0).max(1_000_000)),
+  included: z
+    .array(
+      z.object({
+        code: z.string().regex(/^[a-z][a-z0-9_]*$/),
+        quantity: z.number().int().min(1).max(1000),
+        period: z.enum(['year', 'term']),
+      }),
+    )
+    .max(20),
+});
+
+/** POST /backoffice/plans/:id/versions — price, term and benefits become a new version. */
+export const planVersionSchema = z.object({
+  price_paise: z.number().int().min(0).max(100_000_000),
+  billing_period: z.enum(['none', 'month', 'year']),
+  term_days: z.number().int().min(1).max(3660),
+  benefits: planBenefitsSchema,
+});
+export type PlanVersionInput = z.input<typeof planVersionSchema>;
+
+const planFields = {
+  name: z.string().trim().min(1, 'Enter a name').max(60),
+  description: z.string().trim().max(500),
+  is_public: z.boolean(),
+  is_active: z.boolean(),
+  sort_order: z.number().int().min(0).max(10_000),
+};
+
+/** PATCH /backoffice/plans/:id — changes in place (no new version). */
+export const planUpdateSchema = z.object(planFields).partial();
+
+/** POST /backoffice/plans — a new plan with its first version. */
+export const planCreateSchema = z.object({
+  code: z
+    .string()
+    .regex(/^[a-z][a-z0-9_]*$/, 'Lowercase letters, digits and _ only')
+    .max(40),
+  ...planFields,
+  version: planVersionSchema,
+});
+export type PlanCreateInput = z.input<typeof planCreateSchema>;
