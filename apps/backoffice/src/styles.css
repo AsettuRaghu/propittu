@@ -1406,3 +1406,17 @@ td.bar-col {
 .status-pick select.tone-good {
   color: var(--good);
 }
+.danger-zone {
+  border: 1px solid var(--bad);
+  background: var(--bad-soft);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.btn.danger-solid {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: #fff;
+}

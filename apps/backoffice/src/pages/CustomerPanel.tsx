@@ -519,30 +519,19 @@ function Slots({ accountId, onChanged }: { accountId: string; onChanged: () => v
   );
 }
 
+const SUSPEND_PHRASE = 'SUSPEND THE ACCOUNT';
+
 function AccountStatus({ d, onChanged }: { d: BackofficeAccountDetail; onChanged: () => void }) {
   const a = useAction(onChanged);
+  const [asking, setAsking] = useState(false);
+  const [typed, setTyped] = useState('');
   const path = `/backoffice/accounts/${d.account.id}/status`;
   if (d.account.status === 'closed') return <span className="sub">This account is closed.</span>;
-  return (
-    <div className="stack">
-      <span className="sub">
-        {d.account.status === 'active'
-          ? 'Suspending stops the customer using the app until you reactivate them. Nothing is deleted.'
-          : 'This customer is suspended and cannot use the app.'}
-      </span>
-      <div className="row">
-        {d.account.status === 'active' ? (
-          <button
-            className="btn danger"
-            disabled={a.isPending}
-            onClick={() => {
-              if (window.confirm('Suspend this customer?'))
-                a.mutate({ path, body: { status: 'suspended' }, ok: 'Suspended' });
-            }}
-          >
-            Suspend
-          </button>
-        ) : (
+  if (d.account.status !== 'active')
+    return (
+      <div className="stack">
+        <span className="sub">This customer is suspended and cannot use the app.</span>
+        <div className="row">
           <button
             className="btn"
             disabled={a.isPending}
@@ -550,8 +539,64 @@ function AccountStatus({ d, onChanged }: { d: BackofficeAccountDetail; onChanged
           >
             Reactivate
           </button>
-        )}
+        </div>
+        <Feedback a={a} />
       </div>
+    );
+  return (
+    <div className="stack">
+      <span className="sub">
+        Suspending stops the customer using the app until you reactivate them. Nothing is deleted.
+      </span>
+      {!asking ? (
+        <div className="row">
+          <button className="btn danger" onClick={() => setAsking(true)}>
+            Suspend…
+          </button>
+        </div>
+      ) : (
+        <div className="danger-zone">
+          <b>Are you sure? This locks the customer out of the app.</b>
+          <label className="field">
+            Type <span className="mono strong">{SUSPEND_PHRASE}</span> to confirm
+            <input
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              placeholder={SUSPEND_PHRASE}
+              autoFocus
+              onPaste={(e) => e.preventDefault()}
+            />
+          </label>
+          <div className="row">
+            <button
+              className="btn danger-solid"
+              disabled={typed.trim() !== SUSPEND_PHRASE || a.isPending}
+              onClick={() =>
+                a.mutate(
+                  { path, body: { status: 'suspended' }, ok: 'Suspended' },
+                  {
+                    onSuccess: () => {
+                      setAsking(false);
+                      setTyped('');
+                    },
+                  },
+                )
+              }
+            >
+              Suspend the account
+            </button>
+            <button
+              className="btn"
+              onClick={() => {
+                setAsking(false);
+                setTyped('');
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
       <Feedback a={a} />
     </div>
   );
