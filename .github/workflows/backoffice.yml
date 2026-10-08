@@ -1,0 +1,71 @@
+# Propittu Backoffice portal: check, build, then deploy to Vercel.
+#
+# On every push to main that touches the portal or the shared package:
+#   typecheck → lint → build (static site) → deploy dist/ to the Vercel
+#   project "propittu-admin". Pull requests run the checks only.
+# Uses the same team-scoped Vercel token as the API (see docs/DEPLOYMENT.md);
+# the portal's public settings (API address, Supabase URL and publishable
+# key — no secrets) come from repository variables.
+
+name: Backoffice
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/backoffice/**'
+      - 'packages/shared/**'
+      - 'package-lock.json'
+      - '.github/workflows/backoffice.yml'
+  pull_request:
+    paths:
+      - 'apps/backoffice/**'
+      - 'packages/shared/**'
+      - 'package-lock.json'
+      - '.github/workflows/backoffice.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: backoffice-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci --workspace @propittu/backoffice --workspace @propittu/shared --include-workspace-root=false
+
+      - name: Typecheck
+        run: npm run typecheck --workspace @propittu/shared --workspace @propittu/backoffice
+
+      - name: Lint
+        run: npm run lint --workspace @propittu/backoffice
+
+      - name: Build
+        working-directory: apps/backoffice
+        env:
+          VITE_API_URL: ${{ vars.BACKOFFICE_API_URL }}
+          VITE_SUPABASE_URL: ${{ vars.BACKOFFICE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.BACKOFFICE_SUPABASE_PUBLISHABLE_KEY }}
+        run: npm run build
+
+      - name: Deploy to Vercel (production)
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        working-directory: apps/backoffice/dist
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_BACKOFFICE_PROJECT_ID }}
+        run: npx --yes vercel@62.2.0 deploy --prod --yes --token "$VERCEL_TOKEN"

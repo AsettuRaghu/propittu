@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { dashboardRouter } from './backofficeDashboard.js';
 import { cancelOpenLinks } from '../billing/billing.js';
 import { Router, type RequestHandler } from 'express';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -135,6 +136,7 @@ const allow =
   };
 
 backofficeRouter.use(requireStaff);
+backofficeRouter.use(dashboardRouter);
 
 const staffAudit = (
   ctx: AuthContext,

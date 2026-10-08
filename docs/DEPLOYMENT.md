@@ -218,3 +218,20 @@ App Store and Play Store review times are outside our control (§44).
 - [ ] EAS `production` environment variables point to production URLs
 - [ ] Manual checklist in [TESTING.md](TESTING.md) passed on Android and iOS
 - [ ] Session storage moved to encrypted storage ([DECISIONS.md](DECISIONS.md#known-debt-before-public-launch))
+
+## Backoffice portal (apps/backoffice)
+
+The team's command center in the browser: <https://propittu-admin.vercel.app>.
+
+- **Code:** `apps/backoffice` in this repository (React + Vite, TypeScript), sharing `packages/shared`.
+- **Login:** the same Supabase phone OTP as the app. Only accounts with an active `staff_members`
+  row get in (the API enforces the same on every `/backoffice` call).
+- **Hosting:** Vercel project `propittu-admin` in the `propittu` team — a static site (no server).
+- **Deploys:** `.github/workflows/backoffice.yml` on every push to `main` touching the portal or
+  `packages/shared`: typecheck → lint → build → deploy `dist/`. It uses the same `VERCEL_TOKEN`
+  secret and these repository variables: `VERCEL_BACKOFFICE_PROJECT_ID`, `BACKOFFICE_API_URL`,
+  `BACKOFFICE_SUPABASE_URL`, `BACKOFFICE_SUPABASE_PUBLISHABLE_KEY` (public values only).
+- **API access:** the API allows browser calls only from the portal's address (and
+  `http://localhost:5173` for development); add others with the `PORTAL_ORIGINS` env var.
+- **Run locally:** copy `apps/backoffice/.env.example` to `.env.local`, then
+  `npm run dev --workspace @propittu/backoffice`.

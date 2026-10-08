@@ -8,7 +8,10 @@
     "apps/mobile": {
       "ignoreDependencies": ["expo-system-ui"]
     },
-    "packages/shared": {}
+    "packages/shared": {},
+    "apps/backoffice": {
+      "entry": ["src/main.tsx"]
+    }
   },
   "ignoreBinaries": ["supabase", "expo-doctor"]
 }

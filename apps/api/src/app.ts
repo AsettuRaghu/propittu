@@ -26,6 +26,13 @@ import { servicesRouter } from './routes/services.js';
 import { videosRouter } from './routes/videos.js';
 import { weatherRouter } from './routes/weather.js';
 
+/** Websites allowed to call the API from a browser: the Backoffice portal. */
+const PORTAL_ORIGINS = [
+  'https://propittu-admin.vercel.app',
+  'http://localhost:5173',
+  ...(process.env.PORTAL_ORIGINS ?? '').split(',').filter(Boolean),
+];
+
 export function createApp(): express.Express {
   const app = express();
 
@@ -42,6 +49,20 @@ export function createApp(): express.Express {
       'Content-Security-Policy',
       "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'",
     );
+    next();
+  });
+  // The Backoffice portal (a separate website) may call this API from a
+  // browser; only its own address (and local development) is allowed.
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin && PORTAL_ORIGINS.includes(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Vary', 'Origin');
+      res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE');
+      res.setHeader('Access-Control-Max-Age', '600');
+      if (req.method === 'OPTIONS') return void res.status(204).end();
+    }
     next();
   });
   // The host (Vercel) terminates TLS at its proxy; trust one hop for client IPs.
