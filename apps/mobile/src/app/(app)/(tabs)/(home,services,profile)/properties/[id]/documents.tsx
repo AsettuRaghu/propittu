@@ -22,6 +22,7 @@ import { useDeleteDocument, useDocuments } from '@/api/queries';
 import { openDocument } from '@/api/uploads';
 import { dialog, toast } from '@/components/Dialog';
 import { Icon } from '@/components/Icon';
+import { PropertyContext } from '@/components/PropertyContext';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
 import { Badge, Button, Card, IconButton, IconTile, type Tone } from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
@@ -100,6 +101,11 @@ export default function DocumentsScreen() {
         <FlatList
           data={data}
           keyExtractor={(d) => d.id}
+          ListHeaderComponent={
+            <View style={styles.context}>
+              <PropertyContext propertyId={id} />
+            </View>
+          }
           contentContainerStyle={data.length === 0 ? styles.empty : styles.list}
           ItemSeparatorComponent={() => <View style={{ height: space.sm }} />}
           refreshControl={<PullRefresh onRefresh={() => refetch()} />}
@@ -180,8 +186,9 @@ export default function DocumentsScreen() {
 }
 
 const styles = StyleSheet.create({
+  context: { paddingBottom: space.md },
   list: { padding: space.lg },
-  empty: { flexGrow: 1 },
+  empty: { flexGrow: 1, padding: space.lg },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   body: { flex: 1, gap: 3 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' },

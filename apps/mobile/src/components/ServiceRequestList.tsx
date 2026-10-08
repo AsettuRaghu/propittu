@@ -1,7 +1,8 @@
 import { router } from 'expo-router';
 import { openServicesTab } from '@/lib/nav';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text } from 'react-native';
+import type { ReactNode } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   OPEN_REQUEST_STATUSES,
   requestExpectedBy,
@@ -24,7 +25,14 @@ const HISTORY_MONTHS = 18;
  * first, then past requests (last 18 months, newest first) in a section
  * that folds away while something is in progress.
  */
-export function ServiceRequestList({ propertyId }: { propertyId?: string }) {
+export function ServiceRequestList({
+  propertyId,
+  header,
+}: {
+  propertyId?: string;
+  /** Shown above the list (e.g. which property these requests belong to). */
+  header?: ReactNode;
+}) {
   const { data, isPending, error, refetch } = useServiceRequests(propertyId);
   const [since] = useState(() => {
     const d = new Date();
@@ -41,13 +49,16 @@ export function ServiceRequestList({ propertyId }: { propertyId?: string }) {
 
   if (active.length === 0 && past.length === 0) {
     return (
-      <EmptyState
-        icon="requests"
-        accent="coral"
-        title="No requests yet"
-        message="Book a visit, an inspection or paperwork help — you'll follow it here."
-        action={<Button title="Browse services" onPress={() => openServicesTab()} />}
-      />
+      <View style={styles.flex}>
+        {header ? <View style={styles.header}>{header}</View> : null}
+        <EmptyState
+          icon="requests"
+          accent="coral"
+          title="No requests yet"
+          message="Book a visit, an inspection or paperwork help — you'll follow it here."
+          action={<Button title="Browse services" onPress={() => openServicesTab()} />}
+        />
+      </View>
     );
   }
 
@@ -57,6 +68,7 @@ export function ServiceRequestList({ propertyId }: { propertyId?: string }) {
       showsVerticalScrollIndicator={false}
       refreshControl={<PullRefresh onRefresh={() => refetch()} />}
     >
+      {header}
       <ListGroup title={active.length ? `In progress · ${active.length}` : 'In progress'} plain>
         {active.length ? (
           active.map((r) => <RequestRow key={r.id} request={r} />)
@@ -113,4 +125,6 @@ export function RequestRow({ request: r }: { request: ServiceRequest }) {
 const styles = StyleSheet.create({
   content: { padding: space.lg, paddingTop: space.md, gap: space.xl, paddingBottom: space.xxl },
   none: { paddingHorizontal: 14, paddingVertical: space.md },
+  flex: { flex: 1 },
+  header: { paddingHorizontal: space.lg, paddingTop: space.md },
 });

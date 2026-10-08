@@ -1,22 +1,55 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
+import { useRef } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useProperty } from '@/api/queries';
-import { PhotoSection } from '@/components/PhotoSection';
+import { dialog } from '@/components/Dialog';
+import { PhotoSection, type PhotoSectionHandle } from '@/components/PhotoSection';
+import { PropertyContext } from '@/components/PropertyContext';
 import { PullRefresh } from '@/components/PullRefresh';
 import { ErrorState, LoadingState } from '@/components/States';
-import { VideoSection } from '@/components/VideoSection';
-import { ListGroup } from '@/components/ui';
+import { VideoSection, type VideoSectionHandle } from '@/components/VideoSection';
+import { IconButton, ListGroup } from '@/components/ui';
 import { space } from '@/theme';
 
 /**
- * A property's photos and videos on one page — the shortcut from the Home
- * card's photo count and from the property page, like Documents.
- * Add, view and delete work here exactly as on the property page.
+ * A property's photos and videos on one page — same pattern as Documents:
+ * the header names the page, + adds, and a quiet line says whose they are.
  */
 export default function MediaScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: property, isPending, error, refetch } = useProperty(id);
+  const photos = useRef<PhotoSectionHandle>(null);
+  const videos = useRef<VideoSectionHandle>(null);
 
+  const add = async () => {
+    const choice = await dialog.actions({
+      title: 'Add to this property',
+      actions: [
+        { label: 'Photos', value: 'photo' as const, icon: 'camera' as const },
+        { label: 'A video', value: 'video' as const, icon: 'video' as const },
+      ],
+    });
+    if (!choice) return;
+    // Let the sheet close; iOS won't show a picker over a closing sheet.
+    await new Promise((r) => setTimeout(r, 350));
+    if (choice === 'photo') photos.current?.add();
+    else videos.current?.add();
+  };
+
+  const header = (
+    <Stack.Screen
+      options={{
+        headerRight: () => (
+          <IconButton
+            icon="add"
+            label="Add photos or a video"
+            onPress={() => void add()}
+            size={36}
+          />
+        ),
+      }}
+    />
+  );
   if (isPending) return <LoadingState />;
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
 
@@ -26,15 +59,16 @@ export default function MediaScreen() {
       showsVerticalScrollIndicator={false}
       refreshControl={<PullRefresh onRefresh={() => refetch()} />}
     >
-      <Stack.Screen options={{ title: property.name }} />
+      {header}
+      <PropertyContext propertyId={property.id} />
       <ListGroup title={`Photos · ${property.photos.length}`} plain>
         <View style={styles.inner}>
-          <PhotoSection propertyId={property.id} photos={property.photos} />
+          <PhotoSection ref={photos} propertyId={property.id} photos={property.photos} />
         </View>
       </ListGroup>
       <ListGroup title={`Videos · ${property.videos.length}`} plain>
         <View style={styles.inner}>
-          <VideoSection propertyId={property.id} videos={property.videos} />
+          <VideoSection ref={videos} propertyId={property.id} videos={property.videos} />
         </View>
       </ListGroup>
     </ScrollView>

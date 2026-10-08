@@ -241,6 +241,9 @@ function LocationButton({
           : { label: 'Adjust the pin', value: 'pin' as const, icon: 'pin' as const },
       ],
     });
+    if (!choice) return;
+    // Let the sheet finish closing: iOS won't present Share over a closing sheet.
+    await new Promise((r) => setTimeout(r, 350));
     if (choice === 'go') await openDirections(p.name, lat, lng);
     else if (choice === 'share') shareLocation(p.name, lat, lng);
     else if (choice === 'pin') pin();

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useImperativeHandle, useState, type Ref } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MAX_VIDEOS_PER_PROPERTY, formatFileSize, type PropertyVideo } from '@propittu/shared';
 import { useDeleteVideo, useInvalidateProperty } from '@/api/queries';
@@ -11,12 +11,18 @@ import { Icon } from './Icon';
 import { Banner, ProgressBar } from './ui';
 
 /** Property videos: add, play, delete (M3). */
+export interface VideoSectionHandle {
+  add: () => void;
+}
+
 export function VideoSection({
   propertyId,
   videos,
+  ref,
 }: {
   propertyId: string;
   videos: PropertyVideo[];
+  ref?: Ref<VideoSectionHandle>;
 }) {
   const invalidate = useInvalidateProperty();
   const deleteVideo = useDeleteVideo(propertyId);
@@ -40,6 +46,7 @@ export function VideoSection({
       setProgress(null);
     }
   };
+  useImperativeHandle(ref, () => ({ add: () => void addVideo() }));
 
   const openActions = async (video: PropertyVideo) => {
     const choice = await dialog.actions({
