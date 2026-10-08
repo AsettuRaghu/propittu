@@ -52,9 +52,6 @@ export function Shell() {
             label="Support tickets"
             count={unseen.size || data?.tickets_waiting}
           />
-          <Item to="/legal" label="Pittu Legal" count={data?.pittu?.legal_in_review} />
-          <Item to="/watch" label="Pittu Watch" count={data?.pittu?.watch_to_review} />
-          <Item to="/value" label="Pittu Value" count={data?.pittu?.value_rows_to_check} />
           <div className="nav-label">Customers</div>
           <Item to="/customers" label="Customers" />
           <Item to="/payments" label="Payments" count={data?.refunds_needed.length} />
@@ -62,7 +59,11 @@ export function Shell() {
           <Item to="/plans" label="Plans" />
           <Item to="/services" label="Services" />
           <Item to="/coverage" label="Coverage" />
-          <Item to="/pittu" label="Pittu" />
+          <div className="nav-label">Pittu AI</div>
+          <Item to="/pittu" label="Overview" />
+          <Item to="/legal" label="Legal" count={data?.pittu?.legal_in_review} />
+          <Item to="/watch" label="Watch" count={data?.pittu?.watch_to_review} />
+          <Item to="/value" label="Value" count={data?.pittu?.value_rows_to_check} />
           <div className="nav-label">Insights</div>
           <Item to="/reports" label="Reports" />
         </nav>

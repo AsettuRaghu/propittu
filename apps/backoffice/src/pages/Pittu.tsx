@@ -161,7 +161,7 @@ export function Pittu() {
     <div className="page">
       <div className="page-head">
         <div>
-          <h1>Pittu</h1>
+          <h1>Pittu AI</h1>
           <p>
             {s
               ? `${s.enabled ? 'On' : 'Off'} · ${s.pilot_accounts} pilot customers · since ${date(s.month_start)}`
