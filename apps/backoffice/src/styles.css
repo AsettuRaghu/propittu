@@ -1235,37 +1235,6 @@ input.grow {
   margin: 0 0 2px;
   font-size: 19px;
 }
-.segmented {
-  display: inline-flex;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--surface);
-}
-.segmented button {
-  border: 0;
-  border-right: 1px solid var(--line);
-  background: none;
-  padding: 6px 14px;
-  font-weight: 600;
-  color: var(--muted);
-  cursor: pointer;
-}
-.segmented button:last-child {
-  border-right: 0;
-}
-.segmented button[aria-pressed='true'].warn {
-  background: var(--warn-soft);
-  color: var(--warn);
-}
-.segmented button[aria-pressed='true'].info {
-  background: var(--brand-soft);
-  color: var(--brand);
-}
-.segmented button[aria-pressed='true'].good {
-  background: var(--good-soft);
-  color: var(--good);
-}
 .ticket-grid {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
@@ -1416,4 +1385,24 @@ td.bar-col {
 .section.publish.dirty {
   border-color: var(--brand);
   box-shadow: inset 4px 0 0 var(--brand);
+}
+.status-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.status-pick select {
+  font-weight: 600;
+  min-width: 220px;
+}
+.status-pick select.tone-warn {
+  color: var(--warn);
+}
+.status-pick select.tone-info {
+  color: var(--brand);
+}
+.status-pick select.tone-good {
+  color: var(--good);
 }

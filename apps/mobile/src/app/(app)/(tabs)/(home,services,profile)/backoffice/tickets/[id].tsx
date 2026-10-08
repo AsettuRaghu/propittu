@@ -5,7 +5,8 @@ import {
   staffCan,
   TICKET_CATEGORY_LABELS,
   TICKET_STATUS_LABELS,
-  TICKET_STATUSES,
+  ticketMoves,
+  ticketStage,
 } from '@propittu/shared';
 import { PullRefresh } from '@/components/PullRefresh';
 import { useMe } from '@/api/queries';
@@ -92,9 +93,14 @@ export default function BoTicketScreen() {
             <View>
               <SectionTitle title="Status" />
               <Chips
-                options={TICKET_STATUSES.map((s) => ({ value: s, label: TICKET_STATUS_LABELS[s] }))}
-                value={t.status}
+                // The current stage, then only the moves allowed from it.
+                options={[ticketStage(t.status), ...ticketMoves(t.status)].map((s) => ({
+                  value: s,
+                  label: TICKET_STATUS_LABELS[s],
+                }))}
+                value={ticketStage(t.status)}
                 onChange={(s) =>
+                  s !== ticketStage(t.status) &&
                   setStatus.mutate(s, {
                     onSuccess: () => toast(`Marked ${TICKET_STATUS_LABELS[s].toLowerCase()}`),
                     onError: fail("Couldn't update"),

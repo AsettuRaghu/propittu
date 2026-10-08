@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import {
   STAFF_TICKET_STATUSES,
@@ -7,6 +7,7 @@ import {
   TICKET_CATEGORY_LABELS,
   TICKET_STATUS_LABELS,
   formatIndianMobile,
+  ticketMoves,
   ticketStage,
   type BackofficeTicket,
   type BackofficeTicketDetail,
@@ -28,6 +29,12 @@ const STAGE_TONES: Record<StaffTicketStatus, string> = {
   resolved: 'good',
 };
 const stageLabel = (s: StaffTicketStatus) => TICKET_STATUS_LABELS[s];
+const moveLabel = (from: StaffTicketStatus, to: StaffTicketStatus) =>
+  from === 'resolved'
+    ? '↺ Reopen (back to in progress)'
+    : to === 'resolved'
+      ? '→ Mark resolved'
+      : '→ Mark in progress';
 
 function StageBadge({ t }: { t: BackofficeTicket }) {
   const s = ticketStage(t.status);
@@ -206,6 +213,13 @@ function TicketPanel({ id, onClose }: { id: string; onClose: () => void }) {
     markSeen(id);
   }, [id, lastAt, markSeen]);
   const [reply, setReply] = useState('');
+  // Open on the newest message, and follow new ones as they arrive.
+  const thread = useRef<HTMLDivElement>(null);
+  const count = t?.messages.length ?? 0;
+  useEffect(() => {
+    const el = thread.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [count, id]);
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: ['bo-tickets'] });
     void qc.invalidateQueries({ queryKey: ['bo-ticket', id] });
@@ -239,19 +253,24 @@ function TicketPanel({ id, onClose }: { id: string; onClose: () => void }) {
             opened {dateTime(t.created_at)}
           </span>
         </div>
-        <div className="segmented" role="group" aria-label="Status">
-          {STAFF_TICKET_STATUSES.map((s) => (
-            <button
-              key={s}
-              aria-pressed={stage === s}
-              className={stage === s ? STAGE_TONES[s] : ''}
-              disabled={setStatus.isPending}
-              onClick={() => stage !== s && setStatus.mutate(s)}
-            >
-              {stageLabel(s)}
-            </button>
-          ))}
-        </div>
+        <label className="status-pick">
+          Status
+          <select
+            value=""
+            disabled={setStatus.isPending}
+            onChange={(e) =>
+              e.target.value && setStatus.mutate(e.target.value as StaffTicketStatus)
+            }
+            className={`tone-${STAGE_TONES[stage]}`}
+          >
+            <option value="">{stageLabel(stage)}</option>
+            {ticketMoves(t.status).map((s) => (
+              <option key={s} value={s}>
+                {moveLabel(stage, s)}
+              </option>
+            ))}
+          </select>
+        </label>
       </header>
 
       <div className="ticket-grid">
@@ -291,7 +310,7 @@ function TicketPanel({ id, onClose }: { id: string; onClose: () => void }) {
         </aside>
 
         <section className="ticket-chat">
-          <div className="thread">
+          <div className="thread" ref={thread}>
             {t.messages.map((m) => (
               <div key={m.id} className={`msg ${m.author_type === 'staff' ? 'staff' : ''}`}>
                 {m.body}

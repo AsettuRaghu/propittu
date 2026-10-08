@@ -58,6 +58,9 @@ import {
   OPEN_TICKET_STATUSES,
   TICKET_STATUSES,
   ticketMessageSchema,
+  TICKET_STATUS_LABELS,
+  ticketMoves,
+  ticketStage,
   ticketStatusSchema,
   type BackofficeProperty,
   type BackofficeRequest,
@@ -1395,8 +1398,17 @@ backofficeRouter.post('/tickets/:id/messages', allow('support.manage'), async (r
 backofficeRouter.post('/tickets/:id/status', allow('support.manage'), async (req, res) => {
   const ctx = auth(req);
   const id = uuidParam(req.params.id, 'Ticket');
-  const { status } = ticketStatusSchema.parse(req.body);
+  const { status: asked } = ticketStatusSchema.parse(req.body);
   const ticket = await loadTicketDetail(ctx.db, id);
+  // Older clients may still send the folded-in statuses.
+  const status = ticketStage(asked);
+  if (!ticketMoves(ticket.status).includes(status)) {
+    throw new HttpError(
+      409,
+      'CONFLICT',
+      `A ${TICKET_STATUS_LABELS[ticketStage(ticket.status)].toLowerCase()} ticket cannot be moved to ${TICKET_STATUS_LABELS[status].toLowerCase()}.`,
+    );
+  }
   must(await ctx.db.rpc('staff_set_ticket_status', { p_ticket: id, p_status: status }));
   await staffAudit(
     ctx,

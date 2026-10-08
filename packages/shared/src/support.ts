@@ -53,6 +53,18 @@ export type StaffTicketStatus = (typeof STAFF_TICKET_STATUSES)[number];
 export const ticketStage = (s: TicketStatus): StaffTicketStatus =>
   s === 'waiting_on_customer' ? 'in_progress' : s === 'closed' ? 'resolved' : s;
 
+/**
+ * Where staff may move a ticket from here. Forward only, plus reopening a
+ * resolved one; never back to Open by hand (Open means "not answered yet",
+ * and the first reply moves it on by itself).
+ */
+export function ticketMoves(s: TicketStatus): StaffTicketStatus[] {
+  const stage = ticketStage(s);
+  if (stage === 'open') return ['in_progress', 'resolved'];
+  if (stage === 'in_progress') return ['resolved'];
+  return ['in_progress'];
+}
+
 /** Our reply promise, shown next to the reply box. */
 export const SUPPORT_REPLY_PROMISE = 'We’ll reply within 1–3 working days.';
 
