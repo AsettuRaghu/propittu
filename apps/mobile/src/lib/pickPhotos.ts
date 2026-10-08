@@ -28,8 +28,6 @@ export async function pickPhotos(limit: number): Promise<ImagePicker.ImagePicker
       },
     ],
   });
-  // Let the sheet finish closing; iOS refuses to present a picker over a dismissing modal.
-  if (source) await new Promise((r) => setTimeout(r, 350));
   if (source === 'camera') return fromCamera();
   if (source === 'library') return fromLibrary(limit);
   return [];

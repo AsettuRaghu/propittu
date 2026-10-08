@@ -51,7 +51,6 @@ export function useAttachmentAdder({ files, onChange, disabled = false }: Props)
           ].slice(0, MAX_ATTACHMENTS_PER_MESSAGE),
         );
       } else {
-        await new Promise((r) => setTimeout(r, 350));
         const result = await DocumentPicker.getDocumentAsync({
           type: [...ALLOWED_DOCUMENT_MIME_TYPES],
           copyToCacheDirectory: true,

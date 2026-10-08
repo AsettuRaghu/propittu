@@ -30,8 +30,6 @@ export default function MediaScreen() {
       ],
     });
     if (!choice) return;
-    // Let the sheet close; iOS won't show a picker over a closing sheet.
-    await new Promise((r) => setTimeout(r, 350));
     if (choice === 'photo') photos.current?.add();
     else videos.current?.add();
   };

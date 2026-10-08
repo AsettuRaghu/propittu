@@ -1,9 +1,10 @@
 import * as Haptics from 'expo-haptics';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -241,11 +242,20 @@ export function DialogHost() {
     return () => clearTimeout(timer);
   }, [toastState, toastAnim]);
 
+  // Callers hear back only once the sheet is fully gone (iOS: Modal's onDismiss),
+  // so the next native sheet — Share, a picker — can open straight away.
+  const afterClose = useRef<(() => void) | null>(null);
   const close = <T,>(settle: () => T) => {
     Animated.timing(slide, { toValue: 0, duration: 160, useNativeDriver: true }).start(() => {
       setRequest(null);
-      settle();
+      if (Platform.OS === 'ios') afterClose.current = () => void settle();
+      else settle();
     });
+  };
+  const onDismissed = () => {
+    const settle = afterClose.current;
+    afterClose.current = null;
+    settle?.();
   };
 
   const dismiss = () => {
@@ -259,7 +269,13 @@ export function DialogHost() {
 
   return (
     <>
-      <Modal visible={request !== null} transparent animationType="fade" onRequestClose={dismiss}>
+      <Modal
+        visible={request !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={dismiss}
+        onDismiss={onDismissed}
+      >
         <Pressable style={styles.backdrop} onPress={dismiss} accessibilityLabel="Close" />
         {request ? (
           <Animated.View
