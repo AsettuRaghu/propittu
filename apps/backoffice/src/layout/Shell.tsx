@@ -1,9 +1,11 @@
 import { NavLink, Outlet } from 'react-router';
 import { useStaff } from '../auth/Session';
+import { useLive } from '../lib/live';
 
 /** Sidebar + page: the Backoffice frame on a laptop screen. */
 export function Shell() {
   const { me, signOut } = useStaff();
+  const { unseen } = useLive();
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -19,7 +21,10 @@ export function Shell() {
             Dashboard
           </NavLink>
           <NavLink to="/requests">Requests</NavLink>
-          <NavLink to="/support">Support</NavLink>
+          <NavLink to="/support">
+            Support
+            {unseen.size ? <span className="count">{unseen.size}</span> : null}
+          </NavLink>
           <NavLink to="/customers">Customers</NavLink>
           <NavLink to="/payments">Plans &amp; payments</NavLink>
           <NavLink to="/services">Services &amp; coverage</NavLink>

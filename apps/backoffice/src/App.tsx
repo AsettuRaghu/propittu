@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { StaffGate } from './auth/Session';
+import { LiveProvider } from './lib/live';
 import { Shell } from './layout/Shell';
 import { Customers } from './pages/Customers';
 import { Dashboard } from './pages/Dashboard';
@@ -20,7 +21,13 @@ export function App() {
       <StaffGate>
         <BrowserRouter>
           <Routes>
-            <Route element={<Shell />}>
+            <Route
+              element={
+                <LiveProvider>
+                  <Shell />
+                </LiveProvider>
+              }
+            >
               <Route index element={<Dashboard />} />
               <Route path="requests" element={<Requests />} />
               <Route path="support" element={<Support />} />

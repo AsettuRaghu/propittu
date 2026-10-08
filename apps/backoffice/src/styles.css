@@ -651,3 +651,16 @@ label.check {
 tbody tr.static {
   cursor: default;
 }
+.nav .count {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--warn);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+.badge.new {
+  margin-left: 8px;
+}

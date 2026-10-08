@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   TICKET_CATEGORY_LABELS,
   TICKET_STATUSES,
@@ -9,6 +9,7 @@ import {
   type TicketStatus,
 } from '@propittu/shared';
 import { api, errorText } from '../lib/api';
+import { useLive } from '../lib/live';
 import { useUrlState } from '../lib/params';
 import { dateTime, relative } from '../lib/format';
 import { TICKET_TONES } from '../ui/status';
@@ -28,7 +29,10 @@ export function Support() {
   const { data, error, isPending } = useQuery({
     queryKey: ['bo-tickets', status],
     queryFn: () => api<BackofficeTicket[]>(`/backoffice/tickets?status=${status}`),
+    // Live updates arrive through Realtime; this is only a safety net.
+    refetchInterval: 60_000,
   });
+  const { unseen } = useLive();
 
   return (
     <div className="page">
@@ -75,6 +79,9 @@ export function Support() {
                     >
                       <td>
                         {t.subject}
+                        {unseen.has(t.id) ? (
+                          <span className="badge warn new">New reply</span>
+                        ) : null}
                         <span className="sub mono">
                           {t.reference} · {TICKET_CATEGORY_LABELS[t.category]}
                         </span>
@@ -112,7 +119,14 @@ function TicketPanel({ id, onClose }: { id: string; onClose: () => void }) {
   } = useQuery({
     queryKey: ['bo-ticket', id],
     queryFn: () => api<BackofficeTicketDetail>(`/backoffice/tickets/${id}`),
+    refetchInterval: 60_000,
   });
+  const { markSeen } = useLive();
+  const lastAt = t?.last_message_at;
+  useEffect(() => {
+    // Open (or a new message while open) counts as seen.
+    markSeen(id);
+  }, [id, lastAt, markSeen]);
   const [reply, setReply] = useState('');
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: ['bo-tickets'] });
