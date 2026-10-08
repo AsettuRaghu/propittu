@@ -1517,3 +1517,40 @@ a.link-pin:hover {
   padding-top: 8px;
   border-top: 1px solid var(--line);
 }
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--surface-muted);
+}
+.picker textarea {
+  min-height: 90px;
+}
+.checklist {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 4px 14px;
+  max-height: 280px;
+  overflow: auto;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.checklist small {
+  color: var(--subtle);
+}
+label.check.muted {
+  color: var(--subtle);
+}
+.chip-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.chip-group b {
+  font-size: 13px;
+}

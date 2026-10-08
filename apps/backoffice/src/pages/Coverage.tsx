@@ -13,6 +13,7 @@ import { api, errorText } from '../lib/api';
 import { useUrlState } from '../lib/params';
 import { Feedback, useAction } from '../ui/action';
 import { DataTable, type Column } from '../ui/DataTable';
+import { PlacePicker } from '../ui/PlacePicker';
 import { Section } from '../ui/Section';
 import { Tiles } from '../ui/Tiles';
 import { useEscape } from '../ui/useEscape';
@@ -594,14 +595,8 @@ function ZonePane({
   useEscape(onClose);
   const a = useAction(onChanged);
   const summary = useCoverageSummary();
-  const [st, setSt] = useState('');
-  const [dSt, setDSt] = useState('');
-  const [dist, setDist] = useState('');
-  const [pins, setPins] = useState('');
   const [excl, setExcl] = useState('');
   const base = `/backoffice/zones/${zone.id}`;
-  const states = [...new Set(summary.data?.map((r) => r.state))].sort();
-  const districts = summary.data?.filter((r) => r.state === dSt).map((r) => r.district) ?? [];
   const add = (kind: ZoneRuleKind, values: string[] | string, ok: string, after?: () => void) =>
     a.mutate({ path: `${base}/rules`, body: { kind, values }, ok }, { onSuccess: after });
   const chips = (kind: ZoneRuleKind, fmt: (v: string) => string = (v) => v) => {
@@ -684,94 +679,30 @@ function ZonePane({
       <Feedback a={a} />
       <div className="sections">
         <Section
-          title="Whole states"
-          count={zone.rules.filter((r) => r.kind === 'state').length}
-          aside={<span className="sub">Every PIN in the state, now and later</span>}
+          title="What's in this zone"
+          count={zone.rules.filter((r) => r.kind !== 'exclude').length}
         >
-          {chips('state')}
-          <div className="row">
-            <select value={st} onChange={(e) => setSt(e.target.value)} aria-label="State">
-              <option value="">Choose a state…</option>
-              {states.map((x) => (
-                <option key={x}>{x}</option>
-              ))}
-            </select>
-            <button
-              className="btn small"
-              disabled={!st || a.isPending}
-              onClick={() => add('state', [st], `${st} added`, () => setSt(''))}
-            >
-              Add state
-            </button>
+          <div className="chip-group">
+            <b>Whole states (every PIN, now and later)</b>
+            {chips('state')}
           </div>
-        </Section>
-        <Section
-          title="Whole districts"
-          count={zone.rules.filter((r) => r.kind === 'district').length}
-          aside={<span className="sub">Every PIN in the district</span>}
-        >
-          {chips('district', districtLabel)}
-          <div className="row">
-            <select
-              value={dSt}
-              onChange={(e) => {
-                setDSt(e.target.value);
-                setDist('');
-              }}
-              aria-label="State"
-            >
-              <option value="">State…</option>
-              {states.map((x) => (
-                <option key={x}>{x}</option>
-              ))}
-            </select>
-            <select
-              value={dist}
-              disabled={!dSt}
-              onChange={(e) => setDist(e.target.value)}
-              aria-label="District"
-            >
-              <option value="">District…</option>
-              {districts.map((x) => (
-                <option key={x}>{x}</option>
-              ))}
-            </select>
-            <button
-              className="btn small"
-              disabled={!dist || a.isPending}
-              onClick={() =>
-                add('district', [`${dist}|${dSt}`], `${dist} added`, () => setDist(''))
-              }
-            >
-              Add district
-            </button>
+          <div className="chip-group">
+            <b>Whole districts</b>
+            {chips('district', districtLabel)}
           </div>
-          <span className="sub">
-            Tip: on the PIN codes tab, filter by state and district, then “Add to a zone”.
-          </span>
-        </Section>
-        <Section
-          title="Single PIN codes"
-          count={zone.rules.filter((r) => r.kind === 'pincode').length}
-        >
-          <form
-            className="row"
-            onSubmit={(e) => {
-              e.preventDefault();
-              add('pincode', pins, 'PIN codes added', () => setPins(''));
-            }}
-          >
-            <input
-              className="grow"
-              value={pins}
-              onChange={(e) => setPins(e.target.value)}
-              placeholder="Paste PIN codes, e.g. 560001, 560038"
+          <div className="chip-group">
+            <b>Single PIN codes</b>
+            {chips('pincode')}
+          </div>
+          <div className="chip-group">
+            <b>Add places</b>
+            <PlacePicker
+              summary={summary.data ?? []}
+              busy={a.isPending}
+              taken={(kind, value) => zone.rules.some((r) => r.kind === kind && r.value === value)}
+              onAdd={(kind, values) => add(kind, values, `${values.length} added`)}
             />
-            <button className="btn small primary" disabled={!pins.trim() || a.isPending}>
-              Add
-            </button>
-          </form>
-          {chips('pincode')}
+          </div>
         </Section>
         <Section
           title="Left out"

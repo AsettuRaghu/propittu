@@ -19,6 +19,7 @@ import { date, rupees } from '../lib/format';
 import { useRequestList } from '../lib/lists';
 import { REQUEST_TONES } from '../ui/status';
 import { districtLabel, useCoverageSummary, useZones } from './Coverage';
+import { PlacePicker } from '../ui/PlacePicker';
 import { useCategories, useServices } from './Services';
 
 type Draft = {
@@ -393,6 +394,11 @@ function Editor({ service, nextOrder }: { service: StaffService | null; nextOrde
               ) : null}
             </div>
           </section>
+          {service ? (
+            <Where serviceId={service.id} />
+          ) : (
+            <span className="sub">After you add the service, choose where it's offered here.</span>
+          )}
         </div>
 
         <aside className="config-side">
@@ -422,11 +428,6 @@ function Editor({ service, nextOrder }: { service: StaffService | null; nextOrde
               {msg ? <span className={msg.ok ? 'note-ok' : 'error'}>{msg.text}</span> : null}
             </div>
           </section>
-          {service ? (
-            <Where serviceId={service.id} />
-          ) : (
-            <span className="sub">After you add the service, choose where it's offered here.</span>
-          )}
           <Preview d={d} />
           {service ? <Activity serviceId={service.id} /> : null}
         </aside>
@@ -478,10 +479,6 @@ function WhereEditor({
   onSave: (rules: Rule[]) => Promise<void>;
 }) {
   const [rules, setRules] = useState<Rule[]>(saved.rules);
-  const [st, setSt] = useState('');
-  const [dSt, setDSt] = useState('');
-  const [dist, setDist] = useState('');
-  const [pins, setPins] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const dirty = JSON.stringify(rules) !== JSON.stringify(saved.rules);
@@ -500,20 +497,34 @@ function WhereEditor({
         .filter((v) => !rs.some((r) => r.kind === kind && r.value === v))
         .map((value) => ({ kind, value })),
     ]);
+  const removeAll = (kind: Rule['kind']) => setRules((rs) => rs.filter((r) => r.kind !== kind));
   const everywhere = has('everywhere');
-  const states = [...new Set(summary.map((r) => r.state))].sort();
-  const districts = summary.filter((r) => r.state === dSt).map((r) => r.district);
-  const list = (kind: Rule['kind'], fmt: (v: string) => string = (v) => v) =>
-    rules
-      .filter((r) => r.kind === kind)
-      .map((r) => (
-        <span key={r.value} className="pin">
-          {fmt(r.value)}
-          <button aria-label={`Remove ${r.value}`} onClick={() => toggle(kind, r.value)}>
-            ×
+  const group = (kind: Rule['kind'], title: string, fmt: (v: string) => string = (v) => v) => {
+    const list = rules.filter((r) => r.kind === kind);
+    if (!list.length) return null;
+    return (
+      <div className="chip-group">
+        <div className="row between">
+          <b>
+            {title} ({list.length})
+          </b>
+          <button className="link" onClick={() => removeAll(kind)}>
+            Remove all
           </button>
-        </span>
-      ));
+        </div>
+        <div className="pins">
+          {list.map((r) => (
+            <span key={r.value} className="pin">
+              {fmt(r.value)}
+              <button aria-label={`Remove ${r.value}`} onClick={() => toggle(kind, r.value)}>
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  };
   const save = async () => {
     setBusy(true);
     setMsg(null);
@@ -530,126 +541,54 @@ function WhereEditor({
     <section className={`section ${dirty ? 'publish dirty' : ''}`}>
       <div className="section-head">
         <h2>Where it's offered</h2>
-        <Link to="/coverage">Coverage</Link>
-      </div>
-      <div className="section-body stack">
         <span className="sub">
           {saved.everywhere
-            ? 'Now: everywhere in India.'
-            : `Now: ${saved.pins.toLocaleString('en-IN')} PIN codes · ${saved.properties} customer properties.`}
+            ? 'Now: everywhere in India'
+            : `Now: ${saved.pins.toLocaleString('en-IN')} PIN codes · ${saved.properties} customer properties`}{' '}
+          · <Link to="/coverage">Coverage</Link>
         </span>
+      </div>
+      <div className="section-body stack">
         <label className="check">
           <input type="checkbox" checked={everywhere} onChange={() => toggle('everywhere')} />
-          Everywhere in India (no location needed)
+          Everywhere in India (no location needed, e.g. online help)
         </label>
         {!everywhere ? (
           <>
-            <div className="where-block">
+            <div className="chip-group">
               <b>Zones</b>
               {zones.length === 0 ? (
                 <span className="sub">No zones yet — make them under Coverage → Zones.</span>
-              ) : null}
-              {zones.map((z) => (
-                <label key={z.id} className="check">
-                  <input
-                    type="checkbox"
-                    checked={has('zone', z.id)}
-                    onChange={() => toggle('zone', z.id)}
-                  />
-                  {z.name}
-                  <span className="sub inline">
-                    {' '}
-                    · {z.pin_count} PINs{z.is_active ? '' : ' · paused'}
-                  </span>
-                </label>
-              ))}
-            </div>
-            <div className="where-block">
-              <b>Whole states</b>
-              <div className="pins">{list('state')}</div>
-              <div className="row">
-                <select value={st} onChange={(e) => setSt(e.target.value)} aria-label="State">
-                  <option value="">Choose a state…</option>
-                  {states.map((x) => (
-                    <option key={x}>{x}</option>
+              ) : (
+                <div className="checklist">
+                  {zones.map((z) => (
+                    <label key={z.id} className="check">
+                      <input
+                        type="checkbox"
+                        checked={has('zone', z.id)}
+                        onChange={() => toggle('zone', z.id)}
+                      />
+                      <span>
+                        {z.name}{' '}
+                        <small>
+                          {z.pin_count} PINs{z.is_active ? '' : ' · paused'}
+                        </small>
+                      </span>
+                    </label>
                   ))}
-                </select>
-                <button
-                  className="btn small"
-                  disabled={!st}
-                  onClick={() => {
-                    addMany('state', [st]);
-                    setSt('');
-                  }}
-                >
-                  Add
-                </button>
-              </div>
+                </div>
+              )}
             </div>
-            <div className="where-block">
-              <b>Whole districts</b>
-              <div className="pins">{list('district', districtLabel)}</div>
-              <div className="row">
-                <select
-                  value={dSt}
-                  onChange={(e) => {
-                    setDSt(e.target.value);
-                    setDist('');
-                  }}
-                  aria-label="State"
-                >
-                  <option value="">State…</option>
-                  {states.map((x) => (
-                    <option key={x}>{x}</option>
-                  ))}
-                </select>
-                <select
-                  value={dist}
-                  disabled={!dSt}
-                  onChange={(e) => setDist(e.target.value)}
-                  aria-label="District"
-                >
-                  <option value="">District…</option>
-                  {districts.map((x) => (
-                    <option key={x}>{x}</option>
-                  ))}
-                </select>
-                <button
-                  className="btn small"
-                  disabled={!dist}
-                  onClick={() => {
-                    addMany('district', [`${dist}|${dSt}`]);
-                    setDist('');
-                  }}
-                >
-                  Add
-                </button>
-              </div>
-            </div>
-            <div className="where-block">
-              <b>Single PIN codes</b>
-              <div className="pins">{list('pincode')}</div>
-              <form
-                className="row"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  addMany(
-                    'pincode',
-                    pins.split(/[\s,;]+/).filter((p) => /^[1-9][0-9]{5}$/.test(p)),
-                  );
-                  setPins('');
-                }}
-              >
-                <input
-                  className="grow"
-                  value={pins}
-                  onChange={(e) => setPins(e.target.value)}
-                  placeholder="Paste PIN codes"
-                />
-                <button className="btn small" disabled={!pins.trim()}>
-                  Add
-                </button>
-              </form>
+            {group('state', 'Whole states')}
+            {group('district', 'Whole districts', districtLabel)}
+            {group('pincode', 'Single PIN codes')}
+            <div className="chip-group">
+              <b>Add places</b>
+              <PlacePicker
+                summary={summary}
+                taken={(kind, value) => has(kind, value)}
+                onAdd={(kind, values) => addMany(kind, values)}
+              />
             </div>
           </>
         ) : null}
@@ -658,9 +597,12 @@ function WhereEditor({
             Save where it's offered
           </button>
           {dirty ? (
-            <button className="btn" onClick={() => setRules(saved.rules)}>
-              Undo
-            </button>
+            <>
+              <button className="btn" onClick={() => setRules(saved.rules)}>
+                Undo
+              </button>
+              <span className="warn-text">Not saved yet.</span>
+            </>
           ) : null}
         </div>
         {!everywhere && rules.length === 0 ? (
