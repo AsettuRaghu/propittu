@@ -58,6 +58,67 @@ const toVersionBody = (t: Terms) => ({
   } satisfies PlanBenefits,
 });
 
+type Change = { less: boolean; text: string };
+
+/** What a new version changes compared with the current one; "less" = takes something away. */
+function diffVersions(
+  cur: ReturnType<typeof toVersionBody>,
+  next: ReturnType<typeof toVersionBody>,
+  serviceName: (code: string) => string,
+): Change[] {
+  const out: Change[] = [];
+  if (next.price_paise !== cur.price_paise)
+    out.push({
+      less: next.price_paise > cur.price_paise,
+      text: `Price ${rupees(cur.price_paise)} → ${rupees(next.price_paise)}`,
+    });
+  if (next.billing_period !== cur.billing_period)
+    out.push({ less: false, text: `Billed ${cur.billing_period} → ${next.billing_period}` });
+  if (next.term_days !== cur.term_days)
+    out.push({
+      less: next.term_days < cur.term_days,
+      text: `Term ${cur.term_days} → ${next.term_days} days`,
+    });
+  for (const f of FEATURE_CODES) {
+    const had = cur.benefits.features.includes(f);
+    const has = next.benefits.features.includes(f);
+    if (had !== has)
+      out.push({ less: had, text: `${FEATURE_LABELS[f]}: ${has ? 'added' : 'removed'}` });
+  }
+  for (const l of LIMIT_CODES) {
+    const a = cur.benefits.limits[l];
+    const b = next.benefits.limits[l];
+    if (a === b) continue;
+    const show = (n: number | undefined) => (n === undefined ? 'no limit' : String(n));
+    out.push({
+      less: b !== undefined && (a === undefined || b < a),
+      text: `${LIMIT_LABELS[l]}: ${show(a)} → ${show(b)}`,
+    });
+  }
+  const before = new Map(cur.benefits.included.map((i) => [i.code, i]));
+  const after = new Map(next.benefits.included.map((i) => [i.code, i]));
+  for (const [code, i] of before) {
+    const n = after.get(code);
+    if (!n)
+      out.push({
+        less: true,
+        text: `Included ${serviceName(code)} (${i.quantity} per ${i.period}): removed`,
+      });
+    else if (n.quantity !== i.quantity || n.period !== i.period)
+      out.push({
+        less: n.quantity < i.quantity,
+        text: `Included ${serviceName(code)}: ${i.quantity} per ${i.period} → ${n.quantity} per ${n.period}`,
+      });
+  }
+  for (const [code, n] of after)
+    if (!before.has(code))
+      out.push({
+        less: false,
+        text: `Included ${serviceName(code)} (${n.quantity} per ${n.period}): added`,
+      });
+  return out.sort((a, b) => Number(b.less) - Number(a.less));
+}
+
 /** /plans/:id — the command centre for one plan (or a new one at /plans/new). */
 export function PlanPage() {
   const { id = 'new' } = useParams();
@@ -142,17 +203,13 @@ function Editor({ plan }: { plan: StaffPlan | null }) {
       void navigate(`/plans/${row.id}`, { replace: true });
     }, 'Plan created. It is not on sale until you put it on sale.');
 
+  const [reviewing, setReviewing] = useState(false);
+  const serviceName = (code: string) => services.data?.find((x) => x.code === code)?.name ?? code;
+  const changes = plan?.current
+    ? diffVersions(toVersionBody(toTerms(plan.current)), toVersionBody(terms), serviceName)
+    : [];
   const publish = () => {
     if (!plan) return;
-    const others = plan.current?.customers_now ?? 0;
-    const who = isTrial ? 'New trials' : 'New purchases and renewals';
-    if (
-      !window.confirm(
-        `Publish version ${(plan.versions[0]?.version ?? 0) + 1}?\n\n${who} use it from now. ` +
-          `${others} customer${others === 1 ? '' : 's'} on version ${plan.current?.version ?? '—'} keep what they have until their term ends.`,
-      )
-    )
-      return;
     void run(
       () =>
         api(`/backoffice/plans/${plan.id}/versions`, {
@@ -160,7 +217,7 @@ function Editor({ plan }: { plan: StaffPlan | null }) {
           body: toVersionBody(terms),
         }),
       'New version published. Customers see it in the app now.',
-    );
+    ).then(() => setReviewing(false));
   };
 
   const putT = <K extends keyof Terms>(k: K, v: Terms[K]) => {
@@ -459,18 +516,57 @@ function Editor({ plan }: { plan: StaffPlan | null }) {
                     <button
                       className="btn primary"
                       disabled={!termsDirty || busy}
-                      onClick={publish}
+                      onClick={() => setReviewing(true)}
                     >
-                      Publish new version
+                      Review and publish…
                     </button>
                     <button
                       className="btn"
                       disabled={!termsDirty || busy}
-                      onClick={() => setTerms(toTerms(plan.current))}
+                      onClick={() => {
+                        setTerms(toTerms(plan.current));
+                        setReviewing(false);
+                      }}
                     >
                       Undo changes
                     </button>
                   </div>
+                  {reviewing && termsDirty ? (
+                    <div className="review">
+                      <b>Version {(plan.versions[0]?.version ?? 0) + 1} changes</b>
+                      <ul>
+                        {changes.map((c) => (
+                          <li key={c.text} className={c.less ? 'less' : ''}>
+                            {c.less ? '▼ ' : '▲ '}
+                            {c.text}
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="impact">
+                        <b>Who is affected</b>
+                        <span>
+                          {isTrial ? 'Customers who start a trial' : 'Customers who buy'} from now
+                          on get this version.
+                        </span>
+                        <span>
+                          The {plan.current?.customers_now ?? 0} customer
+                          {plan.current?.customers_now === 1 ? '' : 's'} on version{' '}
+                          {plan.current?.version} keep everything they have now, including any
+                          included services removed here, until their term ends
+                          {isTrial ? '' : ' (also when the team adds time to their plan)'}.
+                        </span>
+                        {!isTrial ? <span>When they renew, they move to this version.</span> : null}
+                      </div>
+                      <div className="row">
+                        <button className="btn primary" disabled={busy} onClick={publish}>
+                          Confirm and publish
+                        </button>
+                        <button className="btn" onClick={() => setReviewing(false)}>
+                          Keep editing
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                 </>
               ) : (
                 <div className="row">

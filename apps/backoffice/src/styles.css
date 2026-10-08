@@ -1420,3 +1420,33 @@ td.bar-col {
   border-color: var(--bad);
   color: #fff;
 }
+.review {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--surface-muted);
+}
+.review ul {
+  margin: 0;
+  padding-left: 4px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.review li {
+  color: var(--good);
+}
+.review li.less {
+  color: var(--bad);
+  font-weight: 600;
+}
+.review .impact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}

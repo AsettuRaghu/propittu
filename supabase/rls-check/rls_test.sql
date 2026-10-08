@@ -1569,6 +1569,25 @@ select tst.ok((select v.price_paise = 199900 and v.version > 1 from public.plan_
 select tst.ok((select count(*) = 2 from public.plan_version_benefits b join public.plan_versions v on v.id = b.plan_version_id
                join public.plans p on p.id = v.plan_id where p.code = 'basic' and v.is_current),
   'the new version carries exactly the benefits given');
+
+-- Removing an included service from a plan must not touch current subscribers.
+reset role;
+insert into public.account_plans (account_id, plan_version_id, source, starts_at, ends_at)
+select 'acc0000a-0000-0000-0000-00000000000a', v.id, 'staff', now(), now() + interval '365 days'
+from public.plan_versions v join public.plans p on p.id = v.plan_id where p.code = 'plus' and v.is_current;
+set role authenticated;
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+select public.included_remaining('acc0000a-0000-0000-0000-00000000000a', 'property_visit') as visits_before \gset
+select tst.ok(:visits_before > 0, 'a Plus subscriber has included visits before the change');
+select public.staff_publish_plan_version(
+  (select id from public.plans where code = 'plus'), 499900, 'year', 365,
+  '[{"kind":"feature","code":"property_profile","value":null,"period":null}]');
+select tst.ok(public.included_remaining('acc0000a-0000-0000-0000-00000000000a', 'property_visit') = :visits_before,
+  'after visits are removed from Plus, the existing subscriber keeps every included visit');
+select tst.ok((select count(*) = 0 from public.plan_version_benefits b join public.plan_versions v on v.id = b.plan_version_id
+               join public.plans p on p.id = v.plan_id
+               where p.code = 'plus' and v.is_current and b.kind = 'included_service'),
+  'new Plus buyers get the new version (no included visits)');
 reset role;
 
 \echo
