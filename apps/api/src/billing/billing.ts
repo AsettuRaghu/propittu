@@ -15,6 +15,41 @@ import { razorpay } from './razorpay.js';
 /** The active provider. Adding one = a new adapter + selecting it here. */
 export const provider: PaymentProvider = razorpay;
 
+/**
+ * Before an order is replaced, cancel the payment links of the open orders
+ * it replaces, so an old link can't be paid later. Best effort: a link that
+ * can't be cancelled (e.g. paid this second) is caught when the payment is
+ * recorded — it then grants nothing and is flagged for a refund.
+ */
+export async function cancelOpenLinks(
+  filter: { kind: 'plan'; accountId: string } | { kind: 'extra_service'; requestId: string },
+): Promise<void> {
+  if (!serviceClient) return;
+  let q = serviceClient
+    .from('orders')
+    .select('id, payments(provider_checkout_ref, status)')
+    .eq('kind', filter.kind)
+    .eq('status', 'pending');
+  q =
+    filter.kind === 'plan'
+      ? q.eq('account_id', filter.accountId)
+      : q.eq('service_request_id', filter.requestId);
+  const { data } = await q;
+  const refs = (
+    (data ?? []) as { payments: { provider_checkout_ref: string | null; status: string }[] }[]
+  )
+    .flatMap((o) => o.payments)
+    .filter((p) => p.status === 'created' && p.provider_checkout_ref)
+    .map((p) => p.provider_checkout_ref as string);
+  await Promise.all(
+    refs.map((ref) =>
+      provider.cancelCheckout(ref).catch((err) => {
+        logger.warn({ ref, err: String(err) }, 'could not cancel a replaced payment link');
+      }),
+    ),
+  );
+}
+
 export function paymentsReady(): boolean {
   return provider.configured && serviceClient !== null;
 }
@@ -86,6 +121,10 @@ export async function recordPaymentEvent(
   }
   if (outcome === 'amount_mismatch' || outcome === 'unknown_order') {
     logger.error({ eventId, outcome }, 'payment event needs staff attention');
+  }
+  if (outcome === 'refund_needed' || outcome === 'already_paid') {
+    // Money arrived for something already paid or no longer valid: refund it.
+    logger.error({ eventId, outcome }, 'payment needs a refund — nothing was granted twice');
   }
   return outcome;
 }

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { cancelOpenLinks } from '../billing/billing.js';
 import { Router, type RequestHandler } from 'express';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
@@ -866,6 +867,8 @@ backofficeRouter.post('/requests/:id/price', allow('requests.manage'), async (re
   const id = uuidParam(req.params.id, 'Service request');
   const { price_paise } = requestPriceSchema.parse(req.body);
   const current = await loadRequestRow(ctx.db, id);
+  // A new price replaces any open order: its payment link must not stay payable.
+  await cancelOpenLinks({ kind: 'extra_service', requestId: id });
   const { error } = await ctx.db.rpc('staff_set_request_price', {
     p_request: id,
     p_price_paise: price_paise,

@@ -24,6 +24,7 @@ import { assertOwnsProperty } from '../ownership.js';
 import { enforceLimit, planOf, requireFeature } from '../plan.js';
 import { removeProperty } from '../propertyRemoval.js';
 import { signDownloads } from '../storage.js';
+import { fillEmptyFromDeed } from '../deedFill.js';
 import { loadInsights, type PropertyInsight } from '../insights.js';
 import { loadReach } from '../reach.js';
 import {
@@ -313,15 +314,23 @@ propertiesRouter.get('/properties/:id', async (req, res) => {
     (d) => d.document_type,
   );
 
-  const property = toProperty(row);
+  let property = toProperty(row);
   // Pin vs PIN code: the stored check, redone after the response when out of date.
-  const [deed, insight, deedReading] = await Promise.all([
+  // eslint-disable-next-line prefer-const -- insight is reloaded after a deed fill
+  let [deed, insight, deedReading] = await Promise.all([
     loadDeedPlaces(db, [id]).then((m) => m.get(id) ?? null),
     loadInsights(db, [property], new Map([[id, documentTypes]])).then(
       (m) => m.get(id) ?? NO_INSIGHT,
     ),
     loadDeedReading(db, id),
   ]);
+  // Whatever the deed has that the property doesn't is saved straight away.
+  const filled = await fillEmptyFromDeed(db, property, insight.facts, PROPERTY_COLUMNS);
+  if (filled) {
+    property = toProperty(filled as PropertyRow);
+    insight =
+      (await loadInsights(db, [property], new Map([[id, documentTypes]]))).get(id) ?? NO_INSIGHT;
+  }
   const check = storedIssue(row.location_check, property, deedKey(deed));
   if (check.stale) waitUntil(refreshLocationCheck(id, property, deed, check.confirmed));
   const [photos, videos, reach] = await Promise.all([
@@ -511,6 +520,7 @@ const NO_INSIGHT: PropertyInsight = {
   due: [],
   gaps: [],
   deed: 'none',
+  facts: [],
 };
 
 const toNum = (v: unknown) => (v === null || v === undefined ? null : Number(v));

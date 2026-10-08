@@ -227,3 +227,31 @@ test('deed gaps: what the saved property says differently from the deed', () => 
   );
   assert.deepEqual(deedGaps([], { pincode: '560064' }), [], 'no deed reading, no gaps');
 });
+
+test('deed fill: empty fields take the deed’s values; typed ones and the name are kept', async () => {
+  const { deedFill } = await import('../src/deedFill.js');
+  const f = (key: string, value: unknown) => ({ key, value }) as never;
+  const facts = [
+    f('pincode', '562106'),
+    f('khata_number', '123/4'),
+    f('sale_consideration_inr', 4200000),
+    f('area_value', 1200),
+    f('area_unit', 'sqft'),
+    f('project_name', 'Prasanthi Green Park'),
+  ];
+  const property = {
+    name: 'My plot',
+    pincode: '560064',
+    khata_number: null,
+    purchase_price_inr: null,
+    area_value: null,
+    area_unit: null,
+  } as never;
+  assert.deepEqual(deedFill(property, facts), {
+    address_line: 'Prasanthi Green Park',
+    khata_number: '123/4',
+    purchase_price_inr: 4200000,
+    area_value: 1200,
+    area_unit: 'sqft',
+  });
+});

@@ -21,6 +21,8 @@ export interface PropertyInsight {
   due: { service_name: string; date: string }[];
   gaps: DeedGap[];
   deed: HealthInput['deed'];
+  /** The deed's facts as Pittu read them (latest reading wins). */
+  facts: { key: string; value: FactValue }[];
 }
 
 export async function loadInsights(
@@ -91,6 +93,7 @@ export async function loadInsights(
           date: d.next_due_date,
         })),
       gaps,
+      facts: mine,
       deed:
         mine.length > 0
           ? gaps.some((g) => g.yours !== null)

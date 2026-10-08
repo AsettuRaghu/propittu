@@ -11,6 +11,7 @@ import { auth, type AuthContext } from '../auth.js';
 import { audit } from '../audit.js';
 import {
   assertPaymentsReady,
+  cancelOpenLinks,
   paymentsReady,
   provider,
   recordPaymentEvent,
@@ -104,6 +105,7 @@ billingRouter.post('/billing/checkout', async (req, res) => {
   assertPaymentsReady();
   const q = await quote(ctx, plan_code);
   if (q.blocked_reason) throw new HttpError(409, 'CONFLICT', q.blocked_reason);
+  await cancelOpenLinks({ kind: 'plan', accountId: ctx.accountId });
   const orderId = must<string>(await ctx.db.rpc('create_plan_order', { p_plan_code: plan_code }));
   ok(res, await startCheckout(ctx, orderId), 201);
 });
@@ -113,6 +115,7 @@ billingRouter.post('/billing/service-requests/:id/checkout', async (req, res) =>
   const ctx = auth(req);
   const requestId = uuidParam(req.params.id, 'Service request');
   assertPaymentsReady();
+  await cancelOpenLinks({ kind: 'extra_service', requestId });
   const orderId = must<string>(await ctx.db.rpc('create_service_order', { p_request: requestId }));
   ok(res, await startCheckout(ctx, orderId), 201);
 });

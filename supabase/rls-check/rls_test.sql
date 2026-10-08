@@ -786,6 +786,45 @@ select tst.ok((select count(*) from public.payment_events) = 5, 'staff can read 
 select tst.ok((select count(*) from public.orders) = 3, 'staff can see all orders');
 reset role;
 
+-- Never twice: a payment for an order that no longer stands grants nothing;
+-- the money is recorded and flagged for a refund.
+set role service_role;
+insert into public.orders (account_id, user_id, kind, plan_version_id, description, amount_paise, status)
+select account_id, user_id, 'plan', plan_version_id, 'Stale Plus order', amount_paise, 'cancelled'
+from public.orders where account_id = 'acc0000b-0000-0000-0000-00000000000b' and status = 'paid' limit 1;
+select tst.ok(public.record_payment_event('razorpay', 'evt_stale1', 'payment.captured',
+  (select id from public.orders where description = 'Stale Plus order'), 'pay_stale1', 499900, 'INR') = 'refund_needed',
+  'a payment on a replaced (cancelled) order grants nothing');
+insert into public.orders (account_id, user_id, kind, plan_version_id, description, amount_paise, status)
+select account_id, user_id, 'plan', plan_version_id, 'Second Plus order', amount_paise, 'pending'
+from public.orders where account_id = 'acc0000b-0000-0000-0000-00000000000b' and status = 'paid' limit 1;
+select tst.ok(public.record_payment_event('razorpay', 'evt_stale2', 'payment.captured',
+  (select id from public.orders where description = 'Second Plus order'), 'pay_stale2', 499900, 'INR') = 'refund_needed',
+  'a plan order whose terms no longer hold (the year is already bought) grants nothing');
+select tst.ok((select count(*) from public.account_plans
+               where account_id = 'acc0000b-0000-0000-0000-00000000000b' and source = 'payment') = 1,
+  'B still has exactly one paid term');
+select tst.ok((select count(*) from public.payments
+               where provider_payment_ref in ('pay_stale1', 'pay_stale2') and status = 'captured') = 2,
+  'the money is still recorded, for a refund');
+select tst.ok(public.record_payment_event('razorpay', 'evt_x1', 'payment.captured',
+  (select id from public.orders where kind = 'extra_service' and status = 'pending'), 'pay_x1', 149900, 'INR') = 'paid',
+  'the Extra Service is paid once');
+insert into public.orders (account_id, user_id, kind, service_request_id, description, amount_paise, status)
+select account_id, user_id, 'extra_service', service_request_id, 'Duplicate extra order', amount_paise, 'pending'
+from public.orders where kind = 'extra_service' and status = 'paid' limit 1;
+select tst.ok(public.record_payment_event('razorpay', 'evt_x2', 'payment.captured',
+  (select id from public.orders where description = 'Duplicate extra order'), 'pay_x2', 149900, 'INR') = 'refund_needed',
+  'a second payment for an already-paid request grants nothing');
+insert into public.orders (account_id, user_id, kind, plan_version_id, description, amount_paise, status)
+select account_id, user_id, 'plan', plan_version_id, 'Open order 1', amount_paise, 'pending'
+from public.orders where account_id = 'acc0000b-0000-0000-0000-00000000000b' and status = 'paid' limit 1;
+select tst.rejects($$insert into public.orders (account_id, user_id, kind, plan_version_id, description, amount_paise, status)
+                     select account_id, user_id, 'plan', plan_version_id, 'Open order 2', amount_paise, 'pending'
+                     from public.orders where description = 'Open order 1'$$,
+  'only one open plan order per account at a time');
+reset role;
+
 -- =====================================================================
 \echo
 \echo '== Plan changes: trial carry-over, proration, staff add days =='
