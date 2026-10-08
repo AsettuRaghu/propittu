@@ -12,7 +12,9 @@ import { date, dateTime, rupees } from '../lib/format';
 import { useUrlState } from '../lib/params';
 import { DataTable, type Column } from '../ui/DataTable';
 import { ORDER_TONES } from '../ui/status';
+import { PanelControls, useSplitClass } from '../ui/PanelControls';
 import { Tiles } from '../ui/Tiles';
+import { useEscape } from '../ui/useEscape';
 
 const PERIODS = [
   { value: '7', label: 'Last 7 days' },
@@ -29,6 +31,9 @@ export function Payments() {
   const view = params.get('view') ?? 'paid';
   const period = params.get('period') ?? '30';
   const kind = params.get('kind') ?? '';
+  const method = params.get('method') ?? '';
+  const selected = params.get('id');
+  const splitClass = useSplitClass(selected);
   const [now] = useState(() => Date.now());
   const { data, error, isPending } = useQuery({
     queryKey: ['bo-payments'],
@@ -62,7 +67,15 @@ export function Payments() {
       o.display_status === 'failed' || o.display_status === 'processing',
     all: () => true,
   };
-  const rows = data ? inPeriod.filter(views[view as keyof typeof views] ?? views.all) : undefined;
+  const methods = [
+    ...new Set(data?.flatMap((o) => (o.payment?.method ? [o.payment.method] : []))),
+  ].sort();
+  const rows = data
+    ? inPeriod
+        .filter(views[view as keyof typeof views] ?? views.all)
+        .filter((o) => !method || o.payment?.method === method)
+    : undefined;
+  const open = data?.find((o) => o.id === selected);
 
   const columns: Column<BackofficeOrder>[] = [
     {
@@ -218,20 +231,54 @@ export function Payments() {
           { value: 'all', label: 'Everything', count: data ? inPeriod.length : '–' },
         ]}
       />
-      <DataTable
-        rows={rows}
-        columns={columns}
-        rowKey={(o) => o.id}
-        searchText={(o) =>
-          `${o.reference} ${o.description} ${o.customer_phone ?? ''} ${o.payment?.provider_payment_ref ?? ''}`
-        }
-        searchPlaceholder="Search reference, customer, payment id"
-        defaultSort={{ key: 'date', dir: 'desc' }}
-        exportName="payments"
-        loading={isPending}
-        error={error ? errorText(error) : null}
-        empty="No payments in this period."
-      />
+      <div className={splitClass}>
+        <DataTable
+          rows={rows}
+          columns={columns}
+          rowKey={(o) => o.id}
+          selected={selected}
+          onRowClick={(o) => set({ id: o.id })}
+          compact={(o) => (
+            <>
+              <span className="c-main">
+                {o.description}
+                <span className={`badge ${ORDER_TONES[o.display_status]}`}>
+                  {ORDER_DISPLAY_LABELS[o.display_status]}
+                </span>
+              </span>
+              <span className="c-sub">
+                {rupees(o.amount_paise)} ·{' '}
+                {o.customer_phone ? formatIndianMobile(o.customer_phone) : 'Customer'}
+              </span>
+              <span className="c-sub mono">
+                {o.reference} · {date(o.paid_at ?? o.created_at)}
+              </span>
+            </>
+          )}
+          toolbar={
+            <select
+              value={method}
+              onChange={(e) => set({ method: e.target.value || null })}
+              aria-label="Method"
+            >
+              <option value="">Any method</option>
+              {methods.map((m) => (
+                <option key={m}>{m}</option>
+              ))}
+            </select>
+          }
+          searchText={(o) =>
+            `${o.reference} ${o.description} ${o.customer_phone ?? ''} ${o.payment?.provider_payment_ref ?? ''} ${o.payment?.method ?? ''} ${ORDER_DISPLAY_LABELS[o.display_status]}`
+          }
+          searchPlaceholder="Search anything: reference, what for, customer, payment id"
+          defaultSort={{ key: 'date', dir: 'desc' }}
+          exportName="payments"
+          loading={isPending}
+          error={error ? errorText(error) : null}
+          empty="No payments in this period."
+        />
+        {open ? <PaymentPanel o={open} onClose={() => set({ id: null, full: null })} /> : null}
+      </div>
       {plans.data ? (
         <section className="section">
           <div className="section-head">
@@ -266,5 +313,99 @@ export function Payments() {
         </section>
       ) : null}
     </div>
+  );
+}
+
+/** One payment beside the list: every figure, the provider reference, and where it came from. */
+function PaymentPanel({ o, onClose }: { o: BackofficeOrder; onClose: () => void }) {
+  useEscape(onClose);
+  return (
+    <aside className="panel" aria-label="Payment">
+      <div className="panel-head">
+        <div>
+          <h2>{o.description}</h2>
+          <span className="mono">{o.reference}</span>
+        </div>
+        <div className="row">
+          <span className={`badge ${ORDER_TONES[o.display_status]}`}>
+            {ORDER_DISPLAY_LABELS[o.display_status]}
+          </span>
+          <PanelControls onClose={onClose} />
+        </div>
+      </div>
+      <div className="panel-body">
+        <div className="block">
+          <h3>Amount</h3>
+          <dl className="kv">
+            <dt>Charged</dt>
+            <dd>{rupees(o.amount_paise)}</dd>
+            {o.list_price_paise !== o.amount_paise ? (
+              <>
+                <dt>List price</dt>
+                <dd>{rupees(o.list_price_paise)}</dd>
+              </>
+            ) : null}
+            {o.credit_paise > 0 ? (
+              <>
+                <dt>Upgrade credit</dt>
+                <dd>{rupees(o.credit_paise)}</dd>
+              </>
+            ) : null}
+            <dt>Refunded</dt>
+            <dd>{o.refunded_paise ? rupees(o.refunded_paise) : '—'}</dd>
+            <dt>Kept</dt>
+            <dd>{rupees(net(o))}</dd>
+          </dl>
+        </div>
+        <div className="block">
+          <h3>Payment</h3>
+          <dl className="kv">
+            <dt>Provider</dt>
+            <dd>{o.payment?.provider ?? '—'}</dd>
+            <dt>Method</dt>
+            <dd>{o.payment?.method ?? '—'}</dd>
+            <dt>Attempt</dt>
+            <dd>{o.payment?.status ?? 'Not started'}</dd>
+            <dt>Payment id</dt>
+            <dd className="mono">{o.payment?.provider_payment_ref ?? '—'}</dd>
+            <dt>Started</dt>
+            <dd>{dateTime(o.created_at)}</dd>
+            <dt>Paid</dt>
+            <dd>{o.paid_at ? dateTime(o.paid_at) : '—'}</dd>
+          </dl>
+        </div>
+        <div className="block">
+          <h3>For</h3>
+          <dl className="kv">
+            <dt>Kind</dt>
+            <dd>{o.kind === 'plan' ? 'Plan' : 'Extra service'}</dd>
+            {o.period ? (
+              <>
+                <dt>Period</dt>
+                <dd>
+                  {date(o.period.starts_at)} – {date(o.period.ends_at)}
+                </dd>
+              </>
+            ) : null}
+            <dt>Customer</dt>
+            <dd>
+              <Link to={`/customers?id=${o.account_id}`}>
+                {o.customer_phone ? formatIndianMobile(o.customer_phone) : 'Open customer'}
+              </Link>
+            </dd>
+            {o.service_request_id ? (
+              <>
+                <dt>Request</dt>
+                <dd>
+                  <Link to={`/requests?status=all&id=${o.service_request_id}`}>
+                    Open the service request
+                  </Link>
+                </dd>
+              </>
+            ) : null}
+          </dl>
+        </div>
+      </div>
+    </aside>
   );
 }

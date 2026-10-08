@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router';
 import {
   TICKET_CATEGORIES,
   TICKET_CATEGORY_LABELS,
@@ -16,8 +17,11 @@ import { useTicketList } from '../lib/lists';
 import { useLive } from '../lib/live';
 import { useUrlState } from '../lib/params';
 import { DataTable, type Column } from '../ui/DataTable';
+import { Age } from '../ui/Age';
+import { useSplitClass } from '../ui/PanelControls';
 import { TICKET_TONES } from '../ui/status';
 import { Tiles } from '../ui/Tiles';
+import { PanelControls } from '../ui/PanelControls';
 import { useEscape } from '../ui/useEscape';
 
 const onUs = (t: BackofficeTicket) => t.status === 'open' || t.status === 'in_progress';
@@ -30,6 +34,8 @@ export function Support() {
   const selected = params.get('id');
   const { data, error, isPending } = useTicketList();
   const { unseen } = useLive();
+  const [now] = useState(() => Date.now());
+  const splitClass = useSplitClass(selected);
 
   const views = {
     on_us: onUs,
@@ -101,7 +107,8 @@ export function Support() {
       key: 'last',
       header: 'Last message',
       sort: (t) => t.last_message_at,
-      render: (t) => relative(t.last_message_at),
+      render: (t) =>
+        onUs(t) ? <Age since={t.last_message_at} now={now} /> : relative(t.last_message_at),
       csv: (t) => t.last_message_at,
     },
   ];
@@ -111,7 +118,7 @@ export function Support() {
       <div className="page-head">
         <div>
           <h1>Support</h1>
-          <p>Live: new tickets and replies appear here as they arrive.</p>
+          <p>Live: new tickets and replies appear as they arrive. Waiting on us by default.</p>
         </div>
       </div>
       <Tiles
@@ -134,7 +141,7 @@ export function Support() {
           { value: 'all', label: 'Everything', count: data?.length ?? '–' },
         ]}
       />
-      <div className={`split ${selected ? '' : 'closed'}`}>
+      <div className={splitClass}>
         <DataTable
           rows={rows}
           columns={columns}
@@ -142,14 +149,37 @@ export function Support() {
           selected={selected}
           onRowClick={(t) => set({ id: t.id })}
           searchText={(t) =>
-            `${t.reference} ${t.subject} ${t.customer_name ?? ''} ${t.customer_phone ?? ''}`
+            `${t.reference} ${t.subject} ${t.customer_name ?? ''} ${t.customer_phone ?? ''} ${TICKET_CATEGORY_LABELS[t.category]} ${t.property?.name ?? ''} ${t.service_request?.service?.name ?? ''}`
           }
-          searchPlaceholder="Search reference, subject, customer"
+          searchPlaceholder="Search anything: reference, subject, customer, phone, topic"
           defaultSort={{ key: 'last', dir: 'desc' }}
           exportName="tickets"
           loading={isPending}
           error={error ? errorText(error) : null}
           empty="No tickets here."
+          compact={(t) => (
+            <>
+              <span className="c-main">
+                {t.subject}
+                {unseen.has(t.id) ? (
+                  <span className="badge bad">New</span>
+                ) : (
+                  <span className={`badge ${TICKET_TONES[t.status]}`}>
+                    {TICKET_STATUS_LABELS[t.status]}
+                  </span>
+                )}
+              </span>
+              <span className="c-sub">{t.customer_name || t.customer_phone || 'Customer'}</span>
+              <span className="c-sub mono">
+                {t.reference} ·{' '}
+                {onUs(t) ? (
+                  <Age since={t.last_message_at} now={now} />
+                ) : (
+                  relative(t.last_message_at)
+                )}
+              </span>
+            </>
+          )}
           toolbar={
             <select
               value={category}
@@ -165,7 +195,9 @@ export function Support() {
             </select>
           }
         />
-        {selected ? <TicketPanel id={selected} onClose={() => set({ id: null })} /> : null}
+        {selected ? (
+          <TicketPanel id={selected} onClose={() => set({ id: null, full: null })} />
+        ) : null}
       </div>
     </div>
   );
@@ -216,81 +248,95 @@ function TicketPanel({ id, onClose }: { id: string; onClose: () => void }) {
           <h2>{t?.subject ?? 'Ticket'}</h2>
           {t ? <span className="mono">{t.reference}</span> : null}
         </div>
-        <button className="link" onClick={onClose}>
-          Close
-        </button>
+        <PanelControls onClose={onClose} />
       </div>
       {isPending ? <div className="empty">Loading…</div> : null}
       {error ? <div className="empty error">{errorText(error)}</div> : null}
       {t ? (
-        <div className="panel-body">
-          <dl className="kv">
-            <dt>Customer</dt>
-            <dd>
-              {t.customer_name || '—'} <span className="mono">{t.customer_phone ?? ''}</span>
-            </dd>
-            <dt>Category</dt>
-            <dd>{TICKET_CATEGORY_LABELS[t.category]}</dd>
-            {t.property ? (
-              <>
-                <dt>Property</dt>
-                <dd>{t.property.name}</dd>
-              </>
-            ) : null}
-            {t.service_request ? (
-              <>
-                <dt>Request</dt>
-                <dd>
-                  {t.service_request.service?.name}{' '}
-                  <span className="mono">{t.service_request.reference}</span>
-                </dd>
-              </>
-            ) : null}
-            <dt>Status</dt>
-            <dd>
-              <select
-                id="ticket-status"
-                value={t.status}
-                disabled={setStatus.isPending}
-                onChange={(e) => setStatus.mutate(e.target.value as TicketStatus)}
-              >
-                {TICKET_STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {TICKET_STATUS_LABELS[s]}
-                  </option>
-                ))}
-              </select>
-            </dd>
-          </dl>
-          <div className="thread">
-            {t.messages.map((m) => (
-              <div key={m.id} className={`msg ${m.author_type === 'staff' ? 'staff' : ''}`}>
-                {m.body}
-                {m.attachments.length ? <small>{m.attachments.length} attachment(s)</small> : null}
-                <small>
-                  {m.author_type === 'staff' ? 'Propittu' : 'Customer'} · {dateTime(m.created_at)}
-                </small>
-              </div>
-            ))}
+        <div className="panel-body chat">
+          <div className="chat-side">
+            <dl className="kv">
+              <dt>Customer</dt>
+              <dd>
+                <Link to={`/customers?id=${t.account_id}`}>
+                  {t.customer_name || 'Open customer'}
+                </Link>
+                <br />
+                <span className="mono">
+                  {t.customer_phone ? formatIndianMobile(t.customer_phone) : ''}
+                </span>
+              </dd>
+              <dt>Opened</dt>
+              <dd>{dateTime(t.created_at)}</dd>
+              <dt>Category</dt>
+              <dd>{TICKET_CATEGORY_LABELS[t.category]}</dd>
+              {t.property ? (
+                <>
+                  <dt>Property</dt>
+                  <dd>{t.property.name}</dd>
+                </>
+              ) : null}
+              {t.service_request ? (
+                <>
+                  <dt>Request</dt>
+                  <dd>
+                    <Link to={`/requests?status=all&id=${t.service_request.id}`}>
+                      {t.service_request.service?.name ?? 'Service request'}
+                    </Link>{' '}
+                    <span className="mono">{t.service_request.reference}</span>
+                  </dd>
+                </>
+              ) : null}
+              <dt>Status</dt>
+              <dd>
+                <select
+                  id="ticket-status"
+                  value={t.status}
+                  disabled={setStatus.isPending}
+                  onChange={(e) => setStatus.mutate(e.target.value as TicketStatus)}
+                >
+                  {TICKET_STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {TICKET_STATUS_LABELS[s]}
+                    </option>
+                  ))}
+                </select>
+              </dd>
+            </dl>
           </div>
-          <div className="block">
-            <textarea
-              id="reply"
-              placeholder="Write a reply…"
-              value={reply}
-              onChange={(e) => setReply(e.target.value)}
-            />
-            <div className="row">
-              <button
-                className="btn primary"
-                disabled={!reply.trim() || send.isPending}
-                onClick={() => send.mutate()}
-              >
-                {send.isPending ? 'Sending…' : 'Send reply'}
-              </button>
+          <div className="chat-main">
+            <div className="thread">
+              {t.messages.map((m) => (
+                <div key={m.id} className={`msg ${m.author_type === 'staff' ? 'staff' : ''}`}>
+                  {m.body}
+                  {m.attachments.length ? (
+                    <small>{m.attachments.length} attachment(s)</small>
+                  ) : null}
+                  <small>
+                    {m.author_type === 'staff' ? 'Propittu' : 'Customer'} · {dateTime(m.created_at)}
+                  </small>
+                </div>
+              ))}
             </div>
-            {send.error ? <div className="error">{errorText(send.error)}</div> : null}
-            {setStatus.error ? <div className="error">{errorText(setStatus.error)}</div> : null}
+            <div className="block">
+              <textarea
+                id="reply"
+                placeholder="Write a reply…"
+                value={reply}
+                onChange={(e) => setReply(e.target.value)}
+              />
+              <div className="row">
+                <button
+                  className="btn primary"
+                  disabled={!reply.trim() || send.isPending}
+                  onClick={() => send.mutate()}
+                >
+                  {send.isPending ? 'Sending…' : 'Send reply'}
+                </button>
+              </div>
+              {send.error ? <div className="error">{errorText(send.error)}</div> : null}
+              {setStatus.error ? <div className="error">{errorText(setStatus.error)}</div> : null}
+            </div>
           </div>
         </div>
       ) : null}

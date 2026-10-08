@@ -15,6 +15,7 @@ import { api, errorText } from '../lib/api';
 import { date, dateTime, rupees } from '../lib/format';
 import { Feedback, useAction } from '../ui/action';
 import { REQUEST_TONES } from '../ui/status';
+import { PanelControls } from '../ui/PanelControls';
 import { useEscape } from '../ui/useEscape';
 
 const ACTION_LABELS: Partial<Record<ServiceRequestStatus, string>> = {
@@ -56,9 +57,7 @@ export function RequestPanel({ id, onClose }: { id: string; onClose: () => void 
               {requestStatusLabel(r.status, r.fulfilment)}
             </span>
           ) : null}
-          <button className="link" onClick={onClose} aria-label="Close">
-            Close
-          </button>
+          <PanelControls onClose={onClose} />
         </div>
       </div>
       {isPending ? <div className="empty">Loading…</div> : null}

@@ -46,7 +46,7 @@ export function Shell() {
         <nav className="nav" aria-label="Sections">
           <Item to="/" end label="Dashboard" />
           <div className="nav-label">Work</div>
-          <Item to="/requests" label="Requests" count={data?.requests.requested} />
+          <Item to="/requests" label="Service requests" count={data?.requests.requested} />
           <Item to="/support" label="Support" count={unseen.size || data?.tickets_waiting} />
           <div className="nav-label">Customers</div>
           <Item to="/customers" label="Customers" />

@@ -2,65 +2,78 @@ import { useQuery } from '@tanstack/react-query';
 import {
   TICKET_CATEGORY_LABELS,
   type BackofficeReport,
-  type ReportMonth,
+  type ReportBucket,
   type TicketCategory,
 } from '@propittu/shared';
 import { api, errorText } from '../lib/api';
 import { rupees } from '../lib/format';
 import { useUrlState } from '../lib/params';
 import { DataTable, type Column } from '../ui/DataTable';
+import { RangeTabs, asRange } from '../ui/RangeTabs';
 
-const monthName = (m: string) =>
-  new Date(`${m}-01T00:00:00Z`).toLocaleDateString('en-IN', {
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
-const revenue = (m: ReportMonth) => m.plan_revenue_paise + m.extra_revenue_paise - m.refunds_paise;
+const revenue = (b: ReportBucket) => b.plan_revenue_paise + b.extra_revenue_paise - b.refunds_paise;
+type Num = Exclude<keyof ReportBucket, 'key' | 'label'>;
 
-/** How the business is doing, month by month (India time): growth, work done, money, support. */
+/** The numbers behind the Dashboard charts, as tables to sort and export (India time). */
 export function Reports() {
   const [params, set] = useUrlState();
-  const months = params.get('months') ?? '6';
+  const range = asRange(params.get('range'), '6m');
   const { data, error, isPending } = useQuery({
-    queryKey: ['bo-reports', months],
-    queryFn: () => api<BackofficeReport>(`/backoffice/reports?months=${months}`),
+    queryKey: ['bo-reports', range],
+    queryFn: () => api<BackofficeReport>(`/backoffice/reports?range=${range}`),
   });
 
-  const total = (k: keyof Omit<ReportMonth, 'month'>) =>
-    data?.months.reduce((n, m) => n + m[k], 0) ?? 0;
-  const best = Math.max(1, ...(data?.months.map(revenue) ?? [0]));
-  const n = (k: keyof Omit<ReportMonth, 'month'>, label: string): Column<ReportMonth> => ({
+  const total = (k: Num) => data?.series.reduce((n, b) => n + b[k], 0) ?? 0;
+  const best = Math.max(1, ...(data?.series.map(revenue) ?? [0]));
+  const n = (k: Num, label: string): Column<ReportBucket> => ({
     key: k,
     header: label,
     align: 'right',
-    sort: (m) => m[k],
-    render: (m) => m[k] || <span className="sub">0</span>,
+    sort: (b) => b[k],
+    render: (b) => b[k] || <span className="sub">0</span>,
   });
 
-  const monthCols: Column<ReportMonth>[] = [
-    { key: 'month', header: 'Month', sort: (m) => m.month, render: (m) => monthName(m.month) },
+  const stepName = { hour: 'Hour', day: 'Day', week: 'Week', month: 'Month' }[
+    data?.step ?? 'month'
+  ];
+  const cols: Column<ReportBucket>[] = [
+    {
+      key: 'key',
+      header: stepName,
+      sort: (b) => b.key,
+      render: (b) => b.label,
+      csv: (b) => b.label,
+    },
     n('new_customers', 'New customers'),
-    n('properties_added', 'Properties added'),
+    n('properties_added', 'Properties'),
     n('requests_created', 'Requests'),
     n('requests_completed', 'Completed'),
     n('requests_cancelled', 'Cancelled'),
     n('tickets_opened', 'Tickets'),
     n('tickets_resolved', 'Resolved'),
     {
+      key: 'ai',
+      header: 'AI cost',
+      align: 'right',
+      sort: (b) => b.ai_cost_usd,
+      render: (b) =>
+        b.ai_cost_usd ? `$${b.ai_cost_usd.toFixed(2)}` : <span className="sub">0</span>,
+      csv: (b) => b.ai_cost_usd,
+    },
+    {
       key: 'revenue',
       header: 'Revenue (after refunds)',
       align: 'right',
       sort: revenue,
-      render: (m) => (
+      render: (b) => (
         <div className="bar-cell">
           <div className="bar">
-            <span style={{ width: `${Math.round((Math.max(0, revenue(m)) / best) * 100)}%` }} />
+            <span style={{ width: `${Math.round((Math.max(0, revenue(b)) / best) * 100)}%` }} />
           </div>
-          {rupees(revenue(m))}
+          {rupees(revenue(b))}
         </div>
       ),
-      csv: (m) => revenue(m) / 100,
+      csv: (b) => revenue(b) / 100,
     },
   ];
 
@@ -142,15 +155,9 @@ export function Reports() {
       <div className="page-head">
         <div>
           <h1>Reports</h1>
-          <p>Month by month, India time. Every table can be sorted and exported.</p>
+          <p>India time. Every table can be sorted and exported.</p>
         </div>
-        <div className="tabs" role="group" aria-label="Period">
-          {['3', '6', '12'].map((m) => (
-            <button key={m} aria-pressed={months === m} onClick={() => set({ months: m })}>
-              Last {m} months
-            </button>
-          ))}
-        </div>
+        <RangeTabs value={range} onChange={(v) => set({ range: v })} />
       </div>
       {isPending ? <div className="empty">Loading…</div> : null}
       {error ? <div className="error">{errorText(error)}</div> : null}
@@ -180,7 +187,7 @@ export function Reports() {
               <span>Requests completed</span>
               <b>{total('requests_completed')}</b>
               <span>
-                of {total('requests_created')} requested · {total('requests_cancelled')} cancelled
+                of {total('requests_created')} made · {total('requests_cancelled')} cancelled
               </span>
             </div>
             <div className="stat">
@@ -189,13 +196,13 @@ export function Reports() {
               <span>{total('tickets_resolved')} resolved</span>
             </div>
           </div>
-          <div className="section-title">By month</div>
+          <div className="section-title">Timeline</div>
           <DataTable
-            rows={data.months}
-            columns={monthCols}
-            rowKey={(m) => m.month}
-            defaultSort={{ key: 'month', dir: 'desc' }}
-            exportName="report-by-month"
+            rows={data.series}
+            columns={cols}
+            rowKey={(b) => b.key}
+            defaultSort={{ key: 'key', dir: 'desc' }}
+            exportName={`report-${range}`}
           />
           <div className="two-col">
             <div>

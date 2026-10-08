@@ -25,10 +25,23 @@ export interface BackofficeDashboard {
   ai_spend_month_usd: number;
 }
 
-/** One calendar month (India time) in the Backoffice report. */
-export interface ReportMonth {
-  /** "2026-10" */
-  month: string;
+export const REPORT_RANGES = ['today', 'month', 'quarter', '6m', '1y', 'all'] as const;
+export type ReportRange = (typeof REPORT_RANGES)[number];
+export const REPORT_RANGE_LABELS: Record<ReportRange, string> = {
+  today: 'Today',
+  month: 'This month',
+  quarter: 'This quarter',
+  '6m': 'Last 6 months',
+  '1y': 'Last 12 months',
+  all: 'All time',
+};
+
+/** One step on the report timeline (an hour, day, week or month, India time). */
+export interface ReportBucket {
+  /** Sortable key, e.g. "2026-10", "2026-10-08" or "2026-10-08T14". */
+  key: string;
+  /** Short label for charts and tables, e.g. "Oct 2026", "8 Oct", "2 pm". */
+  label: string;
   new_customers: number;
   properties_added: number;
   requests_created: number;
@@ -39,11 +52,17 @@ export interface ReportMonth {
   plan_revenue_paise: number;
   extra_revenue_paise: number;
   refunds_paise: number;
+  ai_cost_usd: number;
 }
 
-/** GET /backoffice/reports?months=3|6|12 — monthly totals and a per-service view. */
+/** GET /backoffice/reports?range=… — a timeline plus per-service and support views. */
 export interface BackofficeReport {
-  months: ReportMonth[];
+  range: ReportRange;
+  from: string;
+  step: 'hour' | 'day' | 'week' | 'month';
+  series: ReportBucket[];
+  /** Average hours from a request being made to our team accepting it. */
+  avg_hours_to_accept: number | null;
   services: {
     service: string;
     requested: number;

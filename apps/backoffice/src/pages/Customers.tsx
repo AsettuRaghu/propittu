@@ -5,6 +5,7 @@ import { api, errorText } from '../lib/api';
 import { date, relative } from '../lib/format';
 import { useUrlState } from '../lib/params';
 import { DataTable, type Column } from '../ui/DataTable';
+import { useSplitClass } from '../ui/PanelControls';
 import { Tiles } from '../ui/Tiles';
 import { CustomerPanel } from './CustomerPanel';
 
@@ -36,7 +37,12 @@ export function Customers() {
     suspended: (a: BackofficeAccount) => a.status !== 'active',
   };
   const count = (k: keyof typeof views) => data?.filter(views[k]).length ?? '–';
-  const rows = data?.filter(views[view as keyof typeof views] ?? views.all);
+  const plans = [...new Set(data?.flatMap((a) => (a.plan_name ? [a.plan_name] : [])))].sort();
+  const plan = params.get('plan') ?? '';
+  const rows = data
+    ?.filter(views[view as keyof typeof views] ?? views.all)
+    .filter((a) => !plan || a.plan_name === plan);
+  const splitClass = useSplitClass(selected);
 
   const columns: Column<BackofficeAccount>[] = [
     {
@@ -130,27 +136,53 @@ export function Customers() {
           { value: 'suspended', label: 'Suspended', count: count('suspended'), tone: 'bad' },
         ]}
       />
-      <div className={`split ${selected ? '' : 'closed'}`}>
+      <div className={splitClass}>
         <DataTable
           rows={rows}
           columns={columns}
           rowKey={(a) => a.id}
           selected={selected}
           onRowClick={(a) => set({ id: a.id, property: null })}
-          searchText={(a) => `${a.full_name ?? ''} ${a.phone ?? ''} ${a.id}`}
-          searchPlaceholder="Search name, phone or account id"
+          searchText={(a) => `${a.full_name ?? ''} ${a.phone ?? ''} ${a.id} ${a.plan_name ?? ''}`}
+          searchPlaceholder="Search anything: name, phone, plan, account id"
           defaultSort={{ key: 'joined', dir: 'desc' }}
           exportName="customers"
           loading={isPending}
           error={error ? errorText(error) : null}
           empty="No customers here."
+          compact={(a) => (
+            <>
+              <span className="c-main">
+                {a.full_name || (a.phone ? formatIndianMobile(a.phone) : 'Customer')}
+                {a.status !== 'active' ? <span className="badge bad">{a.status}</span> : null}
+              </span>
+              <span className="c-sub">
+                {a.phone ? formatIndianMobile(a.phone) : ''} · {a.plan_name ?? 'No plan'}
+              </span>
+              <span className="c-sub">
+                {a.property_count} properties · {a.open_request_count} open requests
+              </span>
+            </>
+          )}
+          toolbar={
+            <select
+              value={plan}
+              onChange={(e) => set({ plan: e.target.value || null })}
+              aria-label="Plan"
+            >
+              <option value="">All plans</option>
+              {plans.map((p) => (
+                <option key={p}>{p}</option>
+              ))}
+            </select>
+          }
         />
         {selected ? (
           <CustomerPanel
             id={selected}
             propertyId={params.get('property')}
             openProperty={(property) => set({ property })}
-            onClose={() => set({ id: null, property: null })}
+            onClose={() => set({ id: null, property: null, full: null })}
           />
         ) : null}
       </div>

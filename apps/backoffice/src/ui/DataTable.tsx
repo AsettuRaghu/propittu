@@ -29,6 +29,8 @@ type Props<T> = {
   error?: string | null;
   empty?: string;
   pageSize?: number;
+  /** While a row is open beside the list, show this short version of each row instead. */
+  compact?: (row: T) => ReactNode;
 };
 
 /**
@@ -51,7 +53,9 @@ export function DataTable<T>({
   error,
   empty = 'Nothing here.',
   pageSize = 50,
+  compact,
 }: Props<T>) {
+  const narrow = !!compact && !!selected;
   const [q, setQ] = useState('');
   const [sort, setSort] = useState(defaultSort ?? null);
   const [limit, setLimit] = useState(pageSize);
@@ -115,7 +119,7 @@ export function DataTable<T>({
             aria-label={searchPlaceholder}
           />
         ) : null}
-        {toolbar}
+        {narrow ? null : toolbar}
         <span className="toolbar-end">
           {rows ? (
             <span className="sub">
@@ -124,7 +128,7 @@ export function DataTable<T>({
                 : `${shown.length} of ${rows.length}`}
             </span>
           ) : null}
-          {exportName && shown.length > 0 ? (
+          {exportName && shown.length > 0 && !narrow ? (
             <button className="btn small" onClick={exportCsv}>
               Export CSV
             </button>
@@ -134,7 +138,24 @@ export function DataTable<T>({
       {loading ? <div className="empty">Loading…</div> : null}
       {error ? <div className="empty error">{error}</div> : null}
       {rows && shown.length === 0 ? <div className="empty">{q ? 'No matches.' : empty}</div> : null}
-      {shown.length > 0 ? (
+      {narrow && shown.length > 0 ? (
+        <ul className="compact-list">
+          {shown.slice(0, limit).map((r) => {
+            const k = rowKey(r);
+            return (
+              <li key={k}>
+                <button
+                  className={selected === k ? 'selected' : ''}
+                  onClick={onRowClick ? () => onRowClick(r) : undefined}
+                >
+                  {compact(r)}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      {!narrow && shown.length > 0 ? (
         <div className="table-wrap">
           <table className={onRowClick ? 'clickable' : ''}>
             <thead>

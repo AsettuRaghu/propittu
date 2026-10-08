@@ -17,6 +17,7 @@ import { api, errorText } from '../lib/api';
 import { date, dateTime, rupees } from '../lib/format';
 import { Feedback, useAction } from '../ui/action';
 import { ORDER_TONES, REQUEST_TONES } from '../ui/status';
+import { PanelControls } from '../ui/PanelControls';
 import { useEscape } from '../ui/useEscape';
 import { PropertyView } from './PropertyView';
 
@@ -58,9 +59,7 @@ export function CustomerPanel({
           {a ? (
             <span className={`badge ${a.status === 'active' ? 'good' : 'bad'}`}>{a.status}</span>
           ) : null}
-          <button className="link" onClick={onClose}>
-            Close
-          </button>
+          <PanelControls onClose={onClose} />
         </div>
       </div>
       {isPending ? <div className="empty">Loading…</div> : null}

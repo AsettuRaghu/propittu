@@ -364,7 +364,7 @@ td .sub {
 /* Side panel */
 .split {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(420px, 36vw, 620px);
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
@@ -832,4 +832,327 @@ td.num .sub {
 }
 .bar-cell .bar {
   width: 90px;
+}
+
+/* List + detail. With a row open, the list narrows to a short column and the
+   detail takes the rest of the page; "Full page" hides the list. */
+.split.open {
+  grid-template-columns: 340px minmax(0, 1fr);
+}
+.split.full {
+  grid-template-columns: minmax(0, 1fr);
+}
+.split.full > .section {
+  display: none;
+}
+@media (max-width: 1000px) {
+  .split.open {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .split.open > .section {
+    display: none;
+  }
+}
+.split.open > .section .toolbar .search {
+  flex: 1;
+  min-width: 0;
+}
+.compact-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: calc(100vh - 300px);
+  overflow: auto;
+}
+.compact-list button {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+.compact-list button:hover {
+  background: var(--surface-muted);
+}
+.compact-list button.selected {
+  background: var(--brand-soft);
+  box-shadow: inset 3px 0 0 var(--brand);
+}
+.c-main {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 600;
+}
+.c-sub {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.split.open .panel,
+.split.full .panel {
+  max-height: calc(100vh - 32px);
+}
+/* Wide detail: blocks flow into two columns when there is room. */
+.split.open .panel-body:not(.chat),
+.split.full .panel-body:not(.chat) {
+  display: block;
+  columns: 2 380px;
+  column-gap: 28px;
+}
+.split.open .panel-body:not(.chat) > *,
+.split.full .panel-body:not(.chat) > * {
+  break-inside: avoid;
+  margin-bottom: 18px;
+}
+.panel-body.chat {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(0, 2fr);
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 1200px) {
+  .panel-body.chat {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.chat-main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.chat-main .thread {
+  max-height: calc(100vh - 330px);
+  overflow: auto;
+  padding-right: 4px;
+}
+
+/* Dashboard health */
+.health {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--good);
+  border-radius: var(--radius);
+}
+.health.warn {
+  border-left-color: var(--warn);
+}
+.health.bad {
+  border-left-color: var(--bad);
+}
+.health-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  font-size: 15px;
+}
+.checks {
+  list-style: none;
+  margin: 0;
+  padding: 6px 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+}
+.checks li {
+  display: flex;
+  gap: 10px;
+  padding: 8px 16px;
+  align-items: flex-start;
+}
+.checks li div {
+  display: flex;
+  flex-direction: column;
+}
+.checks a {
+  font-weight: 600;
+  text-decoration: none;
+}
+.checks li.good a,
+.checks li.good b {
+  color: var(--ink);
+  font-weight: 500;
+}
+.dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-top: 5px;
+  flex: none;
+  background: var(--subtle);
+}
+.dot.good {
+  background: var(--good);
+}
+.dot.warn {
+  background: var(--warn);
+}
+.dot.bad {
+  background: var(--bad);
+}
+.dot.brand {
+  background: var(--brand);
+}
+.dot.muted {
+  background: var(--subtle);
+}
+.age {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  font-family: var(--font);
+}
+.age.good {
+  background: var(--good-soft);
+  color: var(--good);
+}
+.age.warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.age.bad {
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+.legend {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* Charts */
+.charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 12px;
+}
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.chart-legend .dot {
+  margin-top: 0;
+}
+.chart-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  border-bottom: 1px solid var(--line);
+}
+.chart-col {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+}
+.chart-col:hover {
+  background: var(--surface-muted);
+}
+.chart-stack {
+  flex: 1;
+  max-width: 40px;
+  display: flex;
+  flex-direction: column-reverse;
+  border-radius: 3px 3px 0 0;
+  overflow: hidden;
+  min-height: 0;
+}
+.chart-stack > span {
+  display: block;
+  min-height: 2px;
+}
+.chart-stack.brand,
+.chart-stack > .brand {
+  background: var(--brand);
+}
+.chart-stack.good,
+.chart-stack > .good {
+  background: var(--good);
+}
+.chart-stack.warn,
+.chart-stack > .warn {
+  background: var(--warn);
+}
+.chart-stack.bad,
+.chart-stack > .bad {
+  background: var(--bad);
+}
+.chart-stack.muted,
+.chart-stack > .muted {
+  background: var(--subtle);
+}
+.chart-axis {
+  display: flex;
+  gap: 3px;
+  margin-top: 6px;
+}
+.chart-axis span {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--subtle);
+  white-space: nowrap;
+  overflow: visible;
+}
+.chart-empty {
+  display: grid;
+  place-items: center;
+  color: var(--subtle);
+  border-bottom: 1px solid var(--line);
+}
+
+/* Service configuration page */
+.config {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .config {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.config-main,
+.config-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.config-side {
+  position: sticky;
+  top: 16px;
+}
+label.field small {
+  color: var(--subtle);
+  font-size: 12px;
+}
+input.grow {
+  flex: 1;
+}
+.preview ul {
+  margin: 0;
+  padding-left: 18px;
 }
