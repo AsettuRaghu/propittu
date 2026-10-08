@@ -1728,5 +1728,31 @@ select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
 select tst.rows('select * from public.legal_checks', 0, 'another customer never sees it');
 reset role;
 
+-- =====================================================================
+\echo
+\echo '== Pittu Watch: places and news =='
+-- =====================================================================
+reset role;
+update public.properties set pincode = '500032' where id = 'a1a1a1a1-0000-0000-0000-0000000000e1';
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rejects($$select public.staff_sync_watch_places()$$, 'customers cannot create watch places');
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+select tst.ok(public.staff_sync_watch_places() >= 1, 'staff create places from customers'' PIN codes');
+select tst.ok((select query like '"Gachibowli"%Hyderabad' from public.watch_places where name = 'Gachibowli'),
+  'the search query names the locality and the city');
+select tst.ok(public.staff_sync_watch_places() = 0, 'syncing again adds nothing new');
+insert into public.watch_items (place_id, source, url, title, review)
+select id, 'gdelt', 'https://example.com/a', 'New metro line to Gachibowli', 'approved' from public.watch_places where name = 'Gachibowli';
+insert into public.watch_items (place_id, source, url, title)
+select id, 'gdelt', 'https://example.com/b', 'Unreviewed item' from public.watch_places where name = 'Gachibowli';
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rows('select * from public.watch_items', 1, 'an owner sees only approved news for their property''s place');
+select tst.rows('select * from public.watch_places', 0, 'owners do not read the places list');
+select tst.rows($$update public.watch_items set review = 'approved'$$, 0, 'owners cannot approve news');
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.rows('select * from public.watch_items', 0, 'other customers do not see it');
+reset role;
+
 \echo
 \echo 'ALL RLS CHECKS PASSED'

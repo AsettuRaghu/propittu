@@ -474,3 +474,69 @@ export interface StaffDocumentReading {
   /** The reading itself when ready (shape depends on the task). */
   result: unknown;
 }
+
+/* ------------------------------------------------------------------ *
+ * Pittu Watch — local news
+ * ------------------------------------------------------------------ */
+
+export const WATCH_CATEGORIES = [
+  'roads_transport',
+  'metro_rail',
+  'water_power',
+  'flooding_environment',
+  'schools_hospitals',
+  'commercial_jobs',
+  'real_estate',
+  'civic_government',
+  'safety',
+  'other',
+] as const;
+export type WatchCategory = (typeof WATCH_CATEGORIES)[number];
+export const WATCH_CATEGORY_LABELS: Record<WatchCategory, string> = {
+  roads_transport: 'Roads and transport',
+  metro_rail: 'Metro and rail',
+  water_power: 'Water and power',
+  flooding_environment: 'Flooding and environment',
+  schools_hospitals: 'Schools and hospitals',
+  commercial_jobs: 'Shops, offices and jobs',
+  real_estate: 'Property market',
+  civic_government: 'Civic and government',
+  safety: 'Safety',
+  other: 'Other',
+};
+
+/** GET /backoffice/watch/places */
+export interface WatchPlace {
+  id: string;
+  name: string;
+  district: string;
+  state: string;
+  pincodes: string[];
+  query: string;
+  is_active: boolean;
+  last_collected_at: string | null;
+  items_pending: number;
+  items_approved: number;
+  properties: number;
+}
+
+/** GET /backoffice/watch/items, and (approved only) GET /properties/:id/watch */
+export interface WatchItem {
+  id: string;
+  place_id: string;
+  place_name: string | null;
+  url: string;
+  title: string;
+  /** The publisher's own short description (from its feed), if any. */
+  snippet: string | null;
+  domain: string | null;
+  published_at: string | null;
+  ai_status: 'new' | 'read' | 'failed';
+  relevant: boolean | null;
+  category: WatchCategory | null;
+  impact: 'positive' | 'negative' | 'neutral' | null;
+  summary: string | null;
+  ai_confidence: 'high' | 'medium' | 'low' | null;
+  review: 'pending' | 'approved' | 'rejected';
+  reviewed_at: string | null;
+}

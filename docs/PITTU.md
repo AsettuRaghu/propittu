@@ -9,7 +9,7 @@ facts and findings; the **application layer** decides what they mean.
 |---|---|---|
 | **Pittu Read** | Reads documents: sale deed (customers) and Encumbrance Certificate (staff, `encumbrance.extract` ec-v1, unscored); tax receipt, Khata, approvals next | Sale deed live; EC first version |
 | **Pittu Ask** | Questions and the care plan after a reading | Live (rules in `packages/shared/src/pittu.ts`) |
-| **Pittu Watch** | News and government alerts around properties | Planned |
+| **Pittu Watch** | Local news per place (city RSS feeds + GDELT open news index → Pittu reads with Haiku → team approves → owners); government notices next on the same pipeline | News first version |
 | **Pittu Value** | Value then and now, "Ready to sell", verified property pack | Planned |
 | **Pittu Legal** | EC check (upload-first: rules in `apps/api/src/legal/ecRules.ts`, staff review, shareable report); later Check before you buy, Guard, grounded answers | EC check first version |
 
@@ -23,6 +23,9 @@ apps/api/src/pittu/
                     run.ts — runTask(): budget → model → validation → cost log by capability
   read/             Pittu Read: tasks/ (saleDeed.ts, encumbrance.ts) and jobs.ts (queue, claim, retry,
                     "never read twice" fingerprint) with ReadHooks for the app layer
+apps/api/src/pittu/watch/  Pittu Watch's AI task (tasks/news.ts — headlines only, never adds facts)
+apps/api/src/watch/ Pittu Watch's application layer: rss.ts and gdelt.ts (collect, no AI), watch.ts
+                    (collect → read → filter → queue), daily at 7 am IST via /cron/watch
 apps/api/src/legal/ Pittu Legal's application layer: ecRules.ts (EC vs deed → green/amber/red
                     findings, unit-tested), checks.ts (create, review, share)
 apps/api/src/deeds/ the application layer for sale deeds: reuse an earlier reading of the

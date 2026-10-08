@@ -1,7 +1,9 @@
+import { waitUntil } from '@vercel/functions';
 import { Router } from 'express';
 import { env } from '../env.js';
 import { HttpError, ok, unauthenticated } from '../errors.js';
-import { authServerClient } from '../supabase.js';
+import { authServerClient, serviceClient } from '../supabase.js';
+import { runWatch } from '../watch/watch.js';
 
 /**
  * GET /cron/keepalive — called once a day by Vercel Cron.
@@ -24,4 +26,17 @@ cronRouter.get('/cron/keepalive', async (req, res) => {
   }
 
   ok(res, { status: 'ok', database_time: data as string });
+});
+
+/**
+ * GET /cron/watch — Pittu Watch, once a day (Vercel Cron, 01:30 UTC = 7 am
+ * IST): collect new headlines for places due and have Pittu read them. Runs
+ * after answering; bounded to a few places per run.
+ */
+cronRouter.get('/cron/watch', (req, res) => {
+  if (env.CRON_SECRET && req.get('authorization') !== `Bearer ${env.CRON_SECRET}`) {
+    throw unauthenticated('Not allowed');
+  }
+  if (serviceClient) waitUntil(runWatch(serviceClient).then(() => undefined));
+  ok(res, { started: !!serviceClient });
 });

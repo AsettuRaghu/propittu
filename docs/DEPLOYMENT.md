@@ -35,6 +35,7 @@ Run workflow**. A full run takes about 2–3 minutes.
 | Region | **`bom1` (Mumbai)** | Same region as the Supabase database. |
 | Vercel project settings | No Git connection, no Root Directory, Framework "Other", Node 22 | Vercel never builds anything itself; it only receives the prebuilt bundle. |
 | Daily cron | `GET /cron/keepalive` at 03:00 UTC | Touches the database so the Supabase free plan never pauses the project for inactivity. Requires `CRON_SECRET`. |
+| Daily cron | `GET /cron/watch` at 01:30 UTC (7 am IST) | Pittu Watch: collects news for watched places and has Pittu read it (a few places per run). Requires `CRON_SECRET`. |
 
 **GitHub settings used by the workflow** (repo → Settings → Secrets and
 variables → Actions):

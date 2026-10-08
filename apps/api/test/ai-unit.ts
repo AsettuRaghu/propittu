@@ -5,6 +5,8 @@ import { test } from 'node:test';
 import { estimateCostUsd } from '../src/pittu/core/pricing.js';
 import { scrub } from '../src/pittu/core/privacy.js';
 import { encumbranceTask } from '../src/pittu/read/tasks/encumbrance.js';
+import { newsPrompt, newsTask } from '../src/pittu/watch/tasks/news.js';
+import { mentions, parseFeed } from '../src/watch/rss.js';
 import { SALE_DEED_FIELDS, saleDeedTask } from '../src/pittu/read/tasks/saleDeed.js';
 import { AiOutputError } from '../src/pittu/core/types.js';
 
@@ -319,4 +321,62 @@ test('EC: bad dates are dropped and identifiers in names are removed', () => {
   assert.equal(r.entries[0]?.registration_date, null);
   assert.ok(!r.entries[0]?.from_parties[0]?.includes('ABCDE1234F'));
   assert.ok(r.privacy_removed > 0);
+});
+
+/* ---------- Pittu Watch: news ---------- */
+
+test('Watch: the prompt numbers headlines with source and date', () => {
+  const p = newsPrompt({ name: 'Whitefield', district: 'Bangalore', state: 'Karnataka' }, [
+    {
+      title: 'Metro reaches Whitefield',
+      domain: 'thehindu.com',
+      published_at: '2026-10-02T04:00:00Z',
+    },
+  ]);
+  assert.ok(p.includes('Locality: Whitefield, Bangalore, Karnataka'));
+  assert.ok(p.includes('1. Metro reaches Whitefield — thehindu.com, 2026-10-02'));
+});
+
+test('Watch: irrelevant items get no summary; summaries are filtered for identifiers', () => {
+  const r = newsTask.parse({
+    items: [
+      {
+        n: 1,
+        relevant: true,
+        category: 'metro_rail',
+        impact: 'positive',
+        summary: 'Call 9876543210 for metro news.',
+        confidence: 'high',
+      },
+      {
+        n: 2,
+        relevant: false,
+        category: 'other',
+        impact: 'neutral',
+        summary: 'Something',
+        confidence: 'medium',
+      },
+    ],
+  });
+  assert.ok(!r[0]?.summary?.includes('9876543210'));
+  assert.equal(r[1]?.summary, null);
+});
+
+test('Watch: RSS items parse (CDATA, entities, dates) and match localities by whole word', () => {
+  const xml = `<rss><channel>
+    <item><title><![CDATA[Metro to reach Whitefield by June &amp; more]]></title>
+      <link>https://example.com/a</link><description><![CDATA[<p>BMRCL says the line will open.</p>]]></description>
+      <pubDate>Thu, 02 Oct 2026 04:00:00 GMT</pubDate></item>
+    <item><title>Whitefieldish news</title><link>https://example.com/b</link></item>
+    <item><title>No link</title></item>
+  </channel></rss>`;
+  const items = parseFeed(xml, 'https://www.thehindu.com/feed');
+  assert.equal(items.length, 2);
+  assert.equal(items[0]?.title, 'Metro to reach Whitefield by June & more');
+  assert.equal(items[0]?.snippet, 'BMRCL says the line will open.');
+  assert.equal(items[0]?.domain, 'thehindu.com');
+  assert.equal(items[0]?.published_at, '2026-10-02T04:00:00.000Z');
+  assert.ok(mentions(items[0]!, 'Whitefield'));
+  assert.ok(!mentions(items[1]!, 'Whitefield'));
+  assert.ok(!mentions(items[0]!, 'KR'));
 });

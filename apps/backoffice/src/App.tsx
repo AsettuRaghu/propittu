@@ -6,6 +6,7 @@ import { Shell } from './layout/Shell';
 import { Coverage } from './pages/Coverage';
 import { Customers } from './pages/Customers';
 import { Legal } from './pages/Legal';
+import { Watch } from './pages/Watch';
 import { LegalReport } from './pages/LegalReport';
 import { Dashboard } from './pages/Dashboard';
 import { Payments } from './pages/Payments';
@@ -48,6 +49,7 @@ export function App() {
               <Route path="pittu" element={<Pittu />} />
               <Route path="reports" element={<Reports />} />
               <Route path="legal" element={<Legal />} />
+              <Route path="watch" element={<Watch />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
             {/* Printable report: no sidebar. */}

@@ -68,7 +68,10 @@ await writeFile(
       version: 3,
       routes: [{ src: '/(.*)', dest: '/index' }],
       // Daily DB touch so the Supabase free plan never pauses for inactivity.
-      crons: [{ path: '/cron/keepalive', schedule: '0 3 * * *' }],
+      crons: [
+        { path: '/cron/keepalive', schedule: '0 3 * * *' },
+        { path: '/cron/watch', schedule: '30 1 * * *' },
+      ],
     },
     null,
     2,
