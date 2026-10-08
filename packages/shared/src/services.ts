@@ -479,12 +479,11 @@ const serviceFields = {
         .max(120)
         .regex(/^[^<>]*$/),
     )
-    .max(10)
-    .default([]),
-  turnaround: z.string().trim().max(80).nullable().default(null),
-  payment_timing: z.enum(PAYMENT_TIMINGS).default('on_confirmation'),
-  cancel_policy: z.enum(CANCEL_POLICIES).default('until_confirmed'),
-  expected_days: z.number().int().min(1).max(365).nullable().default(null),
+    .max(10),
+  turnaround: z.string().trim().max(80).nullable(),
+  payment_timing: z.enum(PAYMENT_TIMINGS),
+  cancel_policy: z.enum(CANCEL_POLICIES),
+  expected_days: z.number().int().min(1).max(365).nullable(),
   sort_order: z.number().int().min(0).max(10_000),
 };
 
@@ -494,7 +493,13 @@ export const createServiceSchema = z.object({
     .regex(/^[a-z][a-z0-9_]*$/, 'Lowercase letters, digits and _ only')
     .max(50),
   ...serviceFields,
+  includes: serviceFields.includes.default([]),
+  turnaround: serviceFields.turnaround.default(null),
+  payment_timing: serviceFields.payment_timing.default('on_confirmation'),
+  cancel_policy: serviceFields.cancel_policy.default('until_confirmed'),
+  expected_days: serviceFields.expected_days.default(null),
 });
+/** No defaults here: a partial update must change only the fields it sends. */
 export const updateServiceSchema = z.object(serviceFields).partial();
 export type CreateServiceInput = z.input<typeof createServiceSchema>;
 export type UpdateServiceInput = z.input<typeof updateServiceSchema>;

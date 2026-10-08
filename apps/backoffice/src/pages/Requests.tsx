@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useSearchParams } from 'react-router';
 import {
   requestExpectedBy,
   requestStatusLabel,
@@ -8,6 +7,7 @@ import {
   type ServiceRequestStatus,
 } from '@propittu/shared';
 import { api, errorText } from '../lib/api';
+import { useUrlState } from '../lib/params';
 import { date, relative } from '../lib/format';
 import { REQUEST_TONES } from '../ui/status';
 import { RequestPanel } from './RequestPanel';
@@ -26,7 +26,7 @@ const FILTERS: { value: 'open' | 'all' | ServiceRequestStatus; label: string }[]
 
 /** Every service request: filter by status, pick one to act on it beside the list. */
 export function Requests() {
-  const [params, setParams] = useSearchParams();
+  const [params, set] = useUrlState();
   const status = params.get('status') ?? 'open';
   const selected = params.get('id');
   const [now] = useState(() => Date.now());
@@ -34,14 +34,6 @@ export function Requests() {
     queryKey: ['bo-requests', status],
     queryFn: () => api<BackofficeRequest[]>(`/backoffice/requests?status=${status}`),
   });
-  const set = (patch: Record<string, string | null>) => {
-    const next = new URLSearchParams(params);
-    for (const [k, v] of Object.entries(patch)) {
-      if (v === null) next.delete(k);
-      else next.set(k, v);
-    }
-    setParams(next);
-  };
 
   return (
     <div className="page">

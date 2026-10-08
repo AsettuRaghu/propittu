@@ -1,4 +1,4 @@
-import type { ServiceRequestStatus, TicketStatus } from '@propittu/shared';
+import type { OrderDisplayStatus, ServiceRequestStatus, TicketStatus } from '@propittu/shared';
 
 export type Tone = '' | 'info' | 'good' | 'warn' | 'bad';
 
@@ -18,4 +18,11 @@ export const TICKET_TONES: Record<TicketStatus, Tone> = {
   waiting_on_customer: '',
   resolved: 'good',
   closed: '',
+};
+
+export const ORDER_TONES: Record<OrderDisplayStatus, Tone> = {
+  paid: 'good',
+  refunded: '',
+  processing: 'warn',
+  failed: 'bad',
 };

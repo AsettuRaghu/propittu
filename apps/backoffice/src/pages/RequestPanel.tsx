@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import {
   PREFERRED_SLOT_LABELS,
@@ -13,6 +13,7 @@ import {
 } from '@propittu/shared';
 import { api, errorText } from '../lib/api';
 import { date, dateTime, rupees } from '../lib/format';
+import { Feedback, useAction } from '../ui/action';
 import { REQUEST_TONES } from '../ui/status';
 
 const ACTION_LABELS: Partial<Record<ServiceRequestStatus, string>> = {
@@ -139,25 +140,6 @@ function Body({ r, onChanged }: { r: BackofficeRequestDetail; onChanged: () => v
       )}
     </div>
   );
-}
-
-function useAction(onChanged: () => void) {
-  const [done, setDone] = useState<string | null>(null);
-  const m = useMutation({
-    mutationFn: (v: { path: string; method?: string; body: unknown; ok: string }) =>
-      api(v.path, { method: v.method ?? 'POST', body: v.body }).then(() => v.ok),
-    onSuccess: (ok) => {
-      setDone(ok);
-      onChanged();
-    },
-  });
-  return { ...m, done };
-}
-
-function Feedback({ a }: { a: ReturnType<typeof useAction> }) {
-  if (a.error) return <div className="error">{errorText(a.error)}</div>;
-  if (a.done) return <div className="note-ok">{a.done}</div>;
-  return null;
 }
 
 function StatusActions({ r, onChanged }: { r: BackofficeRequestDetail; onChanged: () => void }) {

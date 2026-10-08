@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useSearchParams } from 'react-router';
 import {
   TICKET_CATEGORY_LABELS,
   TICKET_STATUSES,
@@ -10,6 +9,7 @@ import {
   type TicketStatus,
 } from '@propittu/shared';
 import { api, errorText } from '../lib/api';
+import { useUrlState } from '../lib/params';
 import { dateTime, relative } from '../lib/format';
 import { TICKET_TONES } from '../ui/status';
 
@@ -22,21 +22,13 @@ const FILTERS: { value: 'open' | 'all' | TicketStatus; label: string }[] = [
 
 /** The support inbox: newest activity first; pick a ticket to reply beside the list. */
 export function Support() {
-  const [params, setParams] = useSearchParams();
+  const [params, set] = useUrlState();
   const status = params.get('status') ?? 'open';
   const selected = params.get('id');
   const { data, error, isPending } = useQuery({
     queryKey: ['bo-tickets', status],
     queryFn: () => api<BackofficeTicket[]>(`/backoffice/tickets?status=${status}`),
   });
-  const set = (patch: Record<string, string | null>) => {
-    const next = new URLSearchParams(params);
-    for (const [k, v] of Object.entries(patch)) {
-      if (v === null) next.delete(k);
-      else next.set(k, v);
-    }
-    setParams(next);
-  };
 
   return (
     <div className="page">

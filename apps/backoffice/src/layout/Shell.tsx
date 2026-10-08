@@ -1,8 +1,6 @@
 import { NavLink, Outlet } from 'react-router';
 import { useStaff } from '../auth/Session';
 
-const SOON = ['Customers', 'Services & coverage', 'Plans & payments', 'Pittu'];
-
 /** Sidebar + page: the Backoffice frame on a laptop screen. */
 export function Shell() {
   const { me, signOut } = useStaff();
@@ -22,12 +20,10 @@ export function Shell() {
           </NavLink>
           <NavLink to="/requests">Requests</NavLink>
           <NavLink to="/support">Support</NavLink>
-          <div className="nav-label">Coming next</div>
-          {SOON.map((s) => (
-            <div key={s} className="soon">
-              {s} <small>soon</small>
-            </div>
-          ))}
+          <NavLink to="/customers">Customers</NavLink>
+          <NavLink to="/payments">Plans &amp; payments</NavLink>
+          <NavLink to="/services">Services &amp; coverage</NavLink>
+          <NavLink to="/pittu">Pittu</NavLink>
         </nav>
         <div className="sidebar-foot">
           <span>{me.full_name || 'Admin'}</span>
