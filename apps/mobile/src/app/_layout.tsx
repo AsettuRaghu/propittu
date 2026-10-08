@@ -1,3 +1,4 @@
+import '@/lib/quietExpoGo';
 import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';

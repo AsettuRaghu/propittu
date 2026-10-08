@@ -163,6 +163,18 @@ export function Pittu() {
         </div>
       </div>
       {summary.error ? <div className="error">{errorText(summary.error)}</div> : null}
+      <details className="more explain">
+        <summary>How these numbers are worked out</summary>
+        <p className="sub">
+          Pittu reads a deed with Anthropic's Claude. Each reading the app makes is logged with the
+          customer, the property, the model and the tokens Claude reports back; the cost is tokens ×
+          Anthropic's published price (Claude Sonnet 5.5: $2 per million tokens in, $10 out). That
+          is how cost per customer and per property is known. The month runs on UTC dates, like the
+          budget cap. The Anthropic Console bill is the authority: it also includes calls made
+          outside the app with the same key (for example our test runs on sample deeds), so it can
+          be higher than this page.
+        </p>
+      </details>
 
       {s ? (
         <>
