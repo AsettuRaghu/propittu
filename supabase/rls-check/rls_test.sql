@@ -1754,5 +1754,23 @@ select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
 select tst.rows('select * from public.watch_items', 0, 'other customers do not see it');
 reset role;
 
+-- =====================================================================
+\echo
+\echo '== Pittu Value: government rates =='
+-- =====================================================================
+set role authenticated;
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+insert into public.value_rates (state, district, locality, kind, rate_inr, unit, status)
+values ('Karnataka', 'Bangalore', 'Marasur', 'site', 2500, 'sqft', 'published');
+select tst.rows('select * from public.value_rates', 1, 'staff add and read rates');
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rows('select * from public.value_rates', 0, 'customers do not read the rates table directly');
+select tst.rejects($$insert into public.value_rates (state, district, locality, kind, rate_inr, unit)
+                     values ('Karnataka', 'Bangalore', 'Mine', 'site', 99999, 'sqft')$$,
+  'customers cannot add rates');
+select tst.rejects($$insert into public.value_sources (state, district, title) values ('Karnataka', 'Bangalore', 'x')$$,
+  'customers cannot add rate documents');
+reset role;
+
 \echo
 \echo 'ALL RLS CHECKS PASSED'

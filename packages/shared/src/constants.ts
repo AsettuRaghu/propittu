@@ -293,6 +293,8 @@ export const STORAGE_BUCKETS = {
   photos: 'property-photos',
   documents: 'property-documents',
   videos: 'property-videos',
+  /** Staff-only reference documents (e.g. government rate tables). */
+  reference: 'reference-documents',
 } as const;
 
 export function formatFileSize(bytes: number): string {

@@ -10,7 +10,7 @@ facts and findings; the **application layer** decides what they mean.
 | **Pittu Read** | Reads documents: sale deed (customers) and Encumbrance Certificate (staff, `encumbrance.extract` ec-v1, unscored); tax receipt, Khata, approvals next | Sale deed live; EC first version |
 | **Pittu Ask** | Questions and the care plan after a reading | Live (rules in `packages/shared/src/pittu.ts`) |
 | **Pittu Watch** | Local news per place (city RSS feeds + GDELT open news index → Pittu reads with Haiku → team approves → owners); government notices next on the same pipeline | News first version |
-| **Pittu Value** | Value then and now, "Ready to sell", verified property pack | Planned |
+| **Pittu Value** | Government value: official rates (rate PDFs read by Pittu `value.rates.read` and reviewed, or added by hand) × the property's area, against the price paid; later "Ready to sell" and the verified pack | Government value first version |
 | **Pittu Legal** | EC check (upload-first: rules in `apps/api/src/legal/ecRules.ts`, staff review, shareable report); later Check before you buy, Guard, grounded answers | EC check first version |
 
 ## Layout
@@ -26,6 +26,9 @@ apps/api/src/pittu/
 apps/api/src/pittu/watch/  Pittu Watch's AI task (tasks/news.ts — headlines only, never adds facts)
 apps/api/src/watch/ Pittu Watch's application layer: rss.ts and gdelt.ts (collect, no AI), watch.ts
                     (collect → read → filter → queue), daily at 7 am IST via /cron/watch
+apps/api/src/pittu/value/  Pittu Value's AI task (tasks/rates.ts — copies rate tables, never calculates)
+apps/api/src/value/ Pittu Value's application layer: match.ts (property → rate, area × rate; unit-tested),
+                    sources.ts (rate documents: upload, read, publish), value.ts (a property's value)
 apps/api/src/legal/ Pittu Legal's application layer: ecRules.ts (EC vs deed → green/amber/red
                     findings, unit-tested), checks.ts (create, review, share)
 apps/api/src/deeds/ the application layer for sale deeds: reuse an earlier reading of the

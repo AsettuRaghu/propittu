@@ -4,6 +4,7 @@ import { catalogueRouter } from './backofficeCatalogue.js';
 import { coverageRouter } from './backofficeCoverage.js';
 import { legalChecksRouter } from './backofficeLegal.js';
 import { watchRouter } from './backofficeWatch.js';
+import { valueRouter } from './backofficeValue.js';
 import { plansConsoleRouter } from './backofficePlans.js';
 import { reportsRouter } from './backofficeReports.js';
 import { cancelOpenLinks } from '../billing/billing.js';
@@ -150,6 +151,7 @@ backofficeRouter.use(catalogueRouter);
 backofficeRouter.use(coverageRouter);
 backofficeRouter.use(legalChecksRouter);
 backofficeRouter.use(watchRouter);
+backofficeRouter.use(valueRouter);
 
 const staffAudit = (
   ctx: AuthContext,

@@ -54,6 +54,7 @@ export function Shell() {
           />
           <Item to="/legal" label="Pittu Legal" />
           <Item to="/watch" label="Pittu Watch" />
+          <Item to="/value" label="Pittu Value" />
           <div className="nav-label">Customers</div>
           <Item to="/customers" label="Customers" />
           <Item to="/payments" label="Payments" count={data?.refunds_needed.length} />

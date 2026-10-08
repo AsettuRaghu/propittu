@@ -1,12 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import {
-  overallLevel,
-  type EcReading,
-  type FactValue,
-  type LegalCheck,
-  type LegalFinding,
-} from '@propittu/shared';
+import { overallLevel, type EcReading, type LegalCheck, type LegalFinding } from '@propittu/shared';
 import { HttpError, must, notFound } from '../errors.js';
+import { deedFactValues, factList, factText } from '../deeds/facts.js';
 import { checkEc, RULES_VERSION, type DeedFacts } from './ecRules.js';
 
 /**
@@ -24,52 +19,21 @@ type Row = Omit<LegalCheck, 'property_name' | 'customer_name' | 'customer_phone'
   property: { name: string } | null;
 };
 
-/** Facts from the property's latest sale-deed reading: what the customer kept, never what they rejected. */
+/** What the EC check needs from the sale deed. */
 async function deedFacts(
   db: SupabaseClient,
   propertyId: string,
 ): Promise<{ facts: DeedFacts; documentId: string | null }> {
-  const analysis = must<{ id: string; document_id: string } | null>(
-    await db
-      .from('document_analyses')
-      .select('id, document_id')
-      .eq('property_id', propertyId)
-      .eq('task', 'sale_deed.extract')
-      .eq('status', 'ready')
-      .order('finished_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  );
-  const rows = analysis
-    ? must<{ key: string; value: FactValue; final_value: FactValue | null; status: string }[]>(
-        await db
-          .from('property_facts')
-          .select('key, value, final_value, status')
-          .eq('analysis_id', analysis.id)
-          .neq('status', 'rejected'),
-      )
-    : [];
-  const get = (k: string) => {
-    const r = rows.find((x) => x.key === k);
-    return r ? (r.final_value ?? r.value) : null;
-  };
-  const list = (k: string) => {
-    const v = get(k);
-    return Array.isArray(v) ? v.map(String) : typeof v === 'string' && v ? [v] : [];
-  };
-  const str = (k: string) => {
-    const v = get(k);
-    return typeof v === 'string' && v.trim() ? v.trim() : null;
-  };
+  const { values, documentId } = await deedFactValues(db, propertyId);
   return {
-    documentId: analysis?.document_id ?? null,
+    documentId,
     facts: {
-      buyers: list('buyers'),
-      sellers: list('sellers'),
-      registration_number: str('registration_number'),
-      registration_date: str('registration_date'),
-      survey_numbers: list('survey_numbers'),
-      village: str('village'),
+      buyers: factList(values.get('buyers')),
+      sellers: factList(values.get('sellers')),
+      registration_number: factText(values.get('registration_number')),
+      registration_date: factText(values.get('registration_date')),
+      survey_numbers: factList(values.get('survey_numbers')),
+      village: factText(values.get('village')),
     },
   };
 }

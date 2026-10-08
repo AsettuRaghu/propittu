@@ -14,3 +14,4 @@ export * from './reach';
 export * from './weather';
 export * from './dashboard';
 export * from './legal';
+export * from './value';

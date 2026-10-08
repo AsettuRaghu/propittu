@@ -15,6 +15,7 @@ import {
   type EcEntry,
   type EcReading,
   type LegalCheck,
+  type PropertyValue,
   type StaffDocumentReading,
   type PittuQuestionId,
 } from '@propittu/shared';
@@ -140,6 +141,7 @@ function Body({ p, onChanged }: { p: BackofficeProperty; onChanged: () => void }
           </div>
         </div>
       ) : null}
+      <ValueBlock propertyId={p.property.id} />
       <LegalChecks p={p} />
       <Pittu p={p} onChanged={onChanged} />
     </>
@@ -543,6 +545,46 @@ function LegalChecks({ p }: { p: BackofficeProperty }) {
           ))}
         </ul>
       ) : null}
+    </div>
+  );
+}
+
+/** Pittu Value on this property: price paid against the government value today. */
+function ValueBlock({ propertyId }: { propertyId: string }) {
+  const { data } = useQuery({
+    queryKey: ['bo-value', propertyId],
+    queryFn: () => api<PropertyValue>(`/backoffice/properties/${propertyId}/value`),
+  });
+  if (!data) return null;
+  const inr = (n: number | null) =>
+    n === null ? '—' : `₹${Math.round(n).toLocaleString('en-IN')}`;
+  return (
+    <div className="block">
+      <h3>Value (Pittu Value)</h3>
+      <dl className="kv">
+        <dt>Paid</dt>
+        <dd>
+          {inr(data.paid_inr)}
+          {data.purchase_date ? ` on ${date(data.purchase_date)}` : ''}
+          {data.paid_per_sqft ? (
+            <span className="sub">{inr(data.paid_per_sqft)} per sq ft</span>
+          ) : null}
+        </dd>
+        <dt>Government rate</dt>
+        <dd>
+          {data.rate ? `${inr(data.rate.per_sqft)} per sq ft (${data.rate.locality})` : '—'}
+          {data.rate?.effective_from ? (
+            <span className="sub">from {date(data.rate.effective_from)}</span>
+          ) : null}
+        </dd>
+        <dt>Government value</dt>
+        <dd>{data.government_value_inr ? <b>{inr(data.government_value_inr)}</b> : '—'}</dd>
+      </dl>
+      {data.missing.map((m) => (
+        <span key={m} className="sub">
+          {m}
+        </span>
+      ))}
     </div>
   );
 }

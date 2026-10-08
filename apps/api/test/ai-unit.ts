@@ -7,6 +7,7 @@ import { scrub } from '../src/pittu/core/privacy.js';
 import { encumbranceTask } from '../src/pittu/read/tasks/encumbrance.js';
 import { newsPrompt, newsTask } from '../src/pittu/watch/tasks/news.js';
 import { mentions, parseFeed } from '../src/watch/rss.js';
+import { ratesTask } from '../src/pittu/value/tasks/rates.js';
 import { SALE_DEED_FIELDS, saleDeedTask } from '../src/pittu/read/tasks/saleDeed.js';
 import { AiOutputError } from '../src/pittu/core/types.js';
 
@@ -379,4 +380,27 @@ test('Watch: RSS items parse (CDATA, entities, dates) and match localities by wh
   assert.ok(mentions(items[0]!, 'Whitefield'));
   assert.ok(!mentions(items[1]!, 'Whitefield'));
   assert.ok(!mentions(items[0]!, 'KR'));
+});
+
+/* ---------- Pittu Value: rate tables ---------- */
+
+test('Value: rate rows parse; amounts become numbers; rows without a rate are dropped', () => {
+  const raw = JSON.parse(JSON.stringify(ratesTask.fixture)) as { rows: Record<string, unknown>[] };
+  raw.rows.push({
+    locality: 'Blank',
+    survey_numbers: [],
+    kind: 'site',
+    rate_inr: '',
+    unit: 'sqm',
+    page: 4,
+  });
+  const r = ratesTask.parse(raw);
+  assert.equal(r.office, 'Anekal');
+  assert.equal(r.effective_from, '2023-10-01');
+  assert.equal(r.rows.length, 2);
+  assert.equal(r.rows[0]?.rate_inr, 28000);
+  assert.throws(
+    () => ratesTask.parse({ ...raw, is_rate_table: false }),
+    (e: unknown) => e instanceof AiOutputError && e.code === 'not_a_rate_table',
+  );
 });
