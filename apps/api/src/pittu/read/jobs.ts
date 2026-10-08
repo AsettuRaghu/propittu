@@ -9,11 +9,12 @@ import {
 import { createHash } from 'node:crypto';
 import type { AuthContext } from '../../auth.js';
 import { audit } from '../../audit.js';
-import { invalid, must, notFound } from '../../errors.js';
+import { HttpError, invalid, must, notFound } from '../../errors.js';
 import { logger } from '../../logger.js';
 import { serviceClient } from '../../supabase.js';
 import {
   aiAvailableFor,
+  aiConfigured,
   assertAiAvailable,
   budgetLeft,
   enforceDailyLimit,
@@ -21,6 +22,7 @@ import {
 } from '../core/limits.js';
 import { runTask } from '../core/run.js';
 import { AiOutputError, AiProviderError, type AiTask, type ExtractedFact } from '../core/types.js';
+import { encumbranceTask } from './tasks/encumbrance.js';
 import { saleDeedTask } from './tasks/saleDeed.js';
 
 /**
@@ -41,6 +43,7 @@ import { saleDeedTask } from './tasks/saleDeed.js';
 
 const TASKS: Partial<Record<DocumentType, AiTask<unknown>>> = {
   sale_deed: saleDeedTask as AiTask<unknown>,
+  encumbrance_certificate: encumbranceTask as AiTask<unknown>,
 };
 
 /** Bigger PDFs need page rendering first (planned); until then they go to staff. */
@@ -210,6 +213,95 @@ export async function requestAnalysis(ctx: AuthContext, documentId: string): Pro
   return row;
 }
 
+/**
+ * Staff start a reading of a customer's document (Backoffice portal), e.g.
+ * an EC for Pittu Legal. Not limited by the customer's pilot list or daily
+ * cap; the monthly budget is still checked when the job runs. Returns the
+ * job (the cached one if this document was read with this task version).
+ */
+export async function requestStaffReading(
+  documentId: string,
+  staffUserId: string,
+): Promise<AnalysisRow> {
+  if (!aiConfigured())
+    throw new HttpError(503, 'AI_UNAVAILABLE', 'Pittu is not available right now.');
+  const db = server();
+  const doc = must<DocRow | null>(
+    await db
+      .from('property_documents')
+      .select(
+        'id, account_id, property_id, document_type, storage_path, mime_type, file_size, upload_status',
+      )
+      .eq('id', documentId)
+      .maybeSingle(),
+  );
+  if (!doc) throw notFound('Document');
+  if (doc.upload_status !== 'ready') throw invalid('The upload has not finished yet');
+  const task = TASKS[doc.document_type];
+  if (!task) throw invalid('Pittu can read sale deeds and ECs for now');
+  if (doc.mime_type !== 'application/pdf') throw invalid('Pittu reads PDF documents');
+  const existing = must<AnalysisRow | null>(
+    await db
+      .from('document_analyses')
+      .select(ANALYSIS_COLUMNS)
+      .eq('document_id', doc.id)
+      .eq('task', task.name)
+      .eq('task_version', task.version)
+      .maybeSingle(),
+  );
+  if (existing) {
+    if (existing.status !== 'failed' || !RETRYABLE_FAILURES.has(existing.error_code ?? ''))
+      return existing;
+    return must<AnalysisRow>(
+      await db
+        .from('document_analyses')
+        .update({
+          status: 'queued',
+          attempts: 0,
+          error_code: null,
+          finished_at: null,
+          started_at: null,
+        })
+        .eq('id', existing.id)
+        .select(ANALYSIS_COLUMNS)
+        .single(),
+    );
+  }
+  const tooLarge = doc.file_size > MAX_DIRECT_PDF_BYTES;
+  return must<AnalysisRow>(
+    await db
+      .from('document_analyses')
+      .insert({
+        account_id: doc.account_id,
+        property_id: doc.property_id,
+        document_id: doc.id,
+        task: task.name,
+        task_version: task.version,
+        status: tooLarge ? 'failed' : 'queued',
+        error_code: tooLarge ? 'too_large' : null,
+        finished_at: tooLarge ? new Date().toISOString() : null,
+        requested_by: staffUserId,
+      })
+      .select(ANALYSIS_COLUMNS)
+      .single(),
+  );
+}
+
+/** The latest reading of a document, for staff (any task). */
+export async function loadStaffReading(
+  documentId: string,
+): Promise<(AnalysisRow & { result: unknown }) | null> {
+  const rows = must<(AnalysisRow & { result: unknown })[]>(
+    await server()
+      .from('document_analyses')
+      .select(`${ANALYSIS_COLUMNS}, result`)
+      .eq('document_id', documentId)
+      .order('created_at', { ascending: false })
+      .limit(1),
+  );
+  return rows[0] ?? null;
+}
+
 /** Can staff start this failed reading again? (others are final for the document) */
 export const isRetryableFailure = (errorCode: string | null) =>
   RETRYABLE_FAILURES.has(errorCode ?? '');
@@ -340,7 +432,7 @@ export async function processAnalysis(analysisId: string, hooks: ReadHooks = {})
       if (err instanceof AiOutputError) {
         await finish({
           status: 'failed',
-          error_code: err.code === 'not_a_sale_deed' ? 'not_a_sale_deed' : 'failed',
+          error_code: ['not_a_sale_deed', 'not_an_ec'].includes(err.code) ? err.code : 'failed',
         });
         log.warn({ code: err.code }, 'AI answer rejected by validation');
         return;

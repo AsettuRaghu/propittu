@@ -16,6 +16,7 @@ import {
   releaseSlotSchema,
   requestPriceSchema,
   reachExceptionSchema,
+  type StaffDocumentReading,
   type StaffPropertyReach,
   reviewDecisionSchema,
   grantPlanSchema,
@@ -68,8 +69,14 @@ import {
   type VisitMedia,
 } from '@propittu/shared';
 import { waitUntil } from '@vercel/functions';
-import { readDeed } from '../deeds/reading.js';
-import { isRetryableFailure, requeueFailedAnalysis } from '../pittu/index.js';
+import { readDocument } from '../deeds/reading.js';
+import {
+  isRetryableFailure,
+  loadStaffReading,
+  needsRun,
+  requestStaffReading,
+  requeueFailedAnalysis,
+} from '../pittu/index.js';
 import { auth, type AuthContext } from '../auth.js';
 import { loadReach } from '../reach.js';
 import { audit } from '../audit.js';
@@ -1189,6 +1196,40 @@ backofficeRouter.get('/documents/:id/download', async (req, res) => {
   ok(res, data);
 });
 
+/* POST /backoffice/documents/:id/read — Pittu Read on a customer's document (sale deed or EC) */
+backofficeRouter.post('/documents/:id/read', allow('documents.review'), async (req, res) => {
+  const ctx = auth(req);
+  const id = uuidParam(req.params.id, 'Document');
+  const job = await requestStaffReading(id, ctx.userId);
+  if (needsRun(job)) waitUntil(readDocument(job.id));
+  await staffAudit(
+    ctx,
+    'staff.document.read_requested',
+    job.account_id,
+    { type: 'document', id },
+    {
+      task: job.task,
+    },
+  );
+  ok(res, { status: job.status, error_code: job.error_code }, 201);
+});
+
+/* GET /backoffice/documents/:id/reading — the latest reading of a document */
+backofficeRouter.get('/documents/:id/reading', async (req, res) => {
+  auth(req);
+  const row = await loadStaffReading(uuidParam(req.params.id, 'Document'));
+  if (!row) throw notFound('Reading');
+  if (needsRun(row)) waitUntil(readDocument(row.id));
+  const data: StaffDocumentReading = {
+    status: row.status,
+    error_code: row.error_code,
+    task: row.task,
+    finished_at: row.finished_at,
+    result: row.status === 'ready' ? row.result : null,
+  };
+  ok(res, data);
+});
+
 /* POST /backoffice/documents/:id/status {status} — document review (M3) */
 backofficeRouter.post('/documents/:id/status', allow('documents.review'), async (req, res) => {
   const ctx = auth(req);
@@ -1621,7 +1662,7 @@ backofficeRouter.post('/ai/analyses/:id/retry', allow('documents.review'), async
   if (!(await requeueFailedAnalysis(id))) {
     throw new HttpError(409, 'CONFLICT', 'This reading cannot be started again.');
   }
-  waitUntil(readDeed(id));
+  waitUntil(readDocument(id));
   await staffAudit(ctx, 'staff.ai.reading_retried', reading.account_id, {
     type: 'document',
     id: reading.document_id,

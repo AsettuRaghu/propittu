@@ -7,7 +7,7 @@ facts and findings; the **application layer** decides what they mean.
 
 | Name | What it does | Status |
 |---|---|---|
-| **Pittu Read** | Reads documents: sale deed today; EC, tax receipt, Khata, approvals next | Sale deed live |
+| **Pittu Read** | Reads documents: sale deed (customers) and Encumbrance Certificate (staff, `encumbrance.extract` ec-v1, unscored); tax receipt, Khata, approvals next | Sale deed live; EC first version |
 | **Pittu Ask** | Questions and the care plan after a reading | Live (rules in `packages/shared/src/pittu.ts`) |
 | **Pittu Watch** | News and government alerts around properties | Planned |
 | **Pittu Value** | Value then and now, "Ready to sell", verified property pack | Planned |
@@ -21,7 +21,7 @@ apps/api/src/pittu/
   core/             providers, task contracts (types.ts), pricing, privacy filter,
                     limits.ts (switch, pilot, daily cap, monthly budget),
                     run.ts — runTask(): budget → model → validation → cost log by capability
-  read/             Pittu Read: tasks/ (saleDeed.ts) and jobs.ts (queue, claim, retry,
+  read/             Pittu Read: tasks/ (saleDeed.ts, encumbrance.ts) and jobs.ts (queue, claim, retry,
                     "never read twice" fingerprint) with ReadHooks for the app layer
 apps/api/src/deeds/ the application layer for sale deeds: reuse an earlier reading of the
                     same file, mark duplicates, clear an abandoned draft

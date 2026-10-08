@@ -77,6 +77,13 @@ Read it and note:
 
 ---
 
+## Trying Pittu on the ECs (optional, as you go)
+
+For our own test properties: upload the EC in the app under Documents → *Encumbrance Certificate (EC)*
+(after the next app update), then in the Backoffice portal open the property → the EC → **Read with
+Pittu** → **Show what Pittu read**, and compare its list of entries with the PDF. Note anything it
+missed or got wrong — that is exactly what we need to improve it.
+
 ## At the end of the pilot (send me this)
 
 1. The table of results (one row per property: green/amber/red, the finding, time taken per step).

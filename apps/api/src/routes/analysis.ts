@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { auth } from '../auth.js';
 import { notFound, ok, uuidParam } from '../errors.js';
 import { assertAiAvailable, loadAnalysis, needsRun, requestAnalysis } from '../pittu/index.js';
-import { readDeed } from '../deeds/reading.js';
+import { readDocument } from '../deeds/reading.js';
 
 /**
  * Pittu document reading (AI). Off unless AI_ENABLED and the account is in
@@ -17,7 +17,7 @@ import { readDeed } from '../deeds/reading.js';
  */
 export const analysisRouter = Router();
 
-const kick = (id: string) => waitUntil(readDeed(id));
+const kick = (id: string) => waitUntil(readDocument(id));
 
 analysisRouter.post('/documents/:id/analysis', async (req, res) => {
   const ctx = auth(req);

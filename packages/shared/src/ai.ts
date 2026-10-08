@@ -398,3 +398,79 @@ export interface AiSummary {
   by_account: AiAccountSpend[];
   failures: AiFailure[];
 }
+
+/* ------------------------------------------------------------------ *
+ * Pittu Read — Encumbrance Certificate (EC)
+ * ------------------------------------------------------------------ */
+
+export const EC_ENTRY_KINDS = [
+  'sale',
+  'mortgage',
+  'release',
+  'gift',
+  'partition',
+  'settlement',
+  'lease',
+  'agreement',
+  'power_of_attorney',
+  'court_order',
+  'rectification',
+  'other',
+] as const;
+export type EcEntryKind = (typeof EC_ENTRY_KINDS)[number];
+export const EC_ENTRY_KIND_LABELS: Record<EcEntryKind, string> = {
+  sale: 'Sale',
+  mortgage: 'Mortgage',
+  release: 'Release of mortgage',
+  gift: 'Gift',
+  partition: 'Partition',
+  settlement: 'Settlement',
+  lease: 'Lease',
+  agreement: 'Agreement (e.g. to sell)',
+  power_of_attorney: 'Power of attorney',
+  court_order: 'Court order / attachment',
+  rectification: 'Rectification',
+  other: 'Other',
+};
+
+/** One registered transaction listed on an EC. */
+export interface EcEntry {
+  registration_date: string | null;
+  document_number: string | null;
+  kind: EcEntryKind;
+  /** The nature of the document exactly as written on the EC. */
+  kind_as_written: string | null;
+  /** Executants: who gave / sold / mortgaged. */
+  from_parties: string[];
+  /** Claimants: who received / bought / lent. */
+  to_parties: string[];
+  consideration_inr: number | null;
+  property_as_written: string | null;
+  pages: number[];
+  confidence: 'high' | 'medium' | 'low' | null;
+}
+
+/** What Pittu Read found on an EC (document_analyses.result, task "encumbrance.extract"). */
+export interface EcReading {
+  state: string | null;
+  issuing_office: string | null;
+  period_from: string | null;
+  period_to: string | null;
+  village: string | null;
+  survey_numbers: string[];
+  property_as_written: string | null;
+  /** The EC says no transactions were found for the period (e.g. Karnataka Form 16). */
+  nil_encumbrance: boolean;
+  entries: EcEntry[];
+  privacy_removed: number;
+}
+
+/** GET /backoffice/documents/:id/reading */
+export interface StaffDocumentReading {
+  status: 'queued' | 'reading' | 'ready' | 'failed';
+  error_code: string | null;
+  task: string;
+  finished_at: string | null;
+  /** The reading itself when ready (shape depends on the task). */
+  result: unknown;
+}

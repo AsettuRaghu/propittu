@@ -5,20 +5,24 @@ import { removeProperty } from '../propertyRemoval.js';
 import { findSameFile, findSameRegistration } from './duplicates.js';
 
 /**
- * Sale deeds — the application layer's side of Pittu Read. Pittu reads the
- * deed and returns facts; here we decide what they mean for the locker:
+ * Document readings — the application layer's side of Pittu Read. Pittu
+ * reads and returns facts; here we decide what a SALE DEED reading means for
+ * the locker (other documents, e.g. an EC, have no such rules here):
  *
  *   reuse      the same file is already in the account → copy that reading
  *              (no AI cost) and say which property it belongs to
  *   afterRead  the same registration number is already confirmed for another
  *              property → mark the reading as a duplicate of it
  */
+const SALE_DEED = 'sale_deed.extract';
 const deedHooks: ReadHooks = {
   async reuse(db, job, file, task, finish) {
+    if (task.name !== SALE_DEED) return false;
     const twin = await findSameFile(db, job.account_id, job.document_id, file.size, file.hash);
     return twin ? reuseReading(db, job, twin, task, finish) : false;
   },
   async afterRead(db, job, facts) {
+    if (job.task !== SALE_DEED) return {};
     const registration = facts.find((f) => f.key === 'registration_number')?.value;
     return {
       duplicate_of: await findSameRegistration(db, job.account_id, job.property_id, registration),
@@ -26,8 +30,8 @@ const deedHooks: ReadHooks = {
   },
 };
 
-/** Run a queued sale-deed reading (safe to call more than once). */
-export const readDeed = (analysisId: string) => processAnalysis(analysisId, deedHooks);
+/** Run a queued reading (safe to call more than once); sale-deed rules apply to deeds only. */
+export const readDocument = (analysisId: string) => processAnalysis(analysisId, deedHooks);
 
 /**
  * The same file was read before (or belongs to a property already in the

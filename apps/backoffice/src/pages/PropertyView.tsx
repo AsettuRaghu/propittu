@@ -4,12 +4,16 @@ import {
   DOCUMENT_STATUSES,
   DOCUMENT_STATUS_LABELS,
   DOCUMENT_TYPE_LABELS,
+  EC_ENTRY_KIND_LABELS,
   FACT_LABELS,
   PITTU_QUESTION_LABELS,
   PROPERTY_TYPE_LABELS,
   REVIEW_REASON_LABELS,
   type BackofficeProperty,
   type DocumentStatus,
+  type EcEntry,
+  type EcReading,
+  type StaffDocumentReading,
   type PittuQuestionId,
 } from '@propittu/shared';
 import { api, errorText } from '../lib/api';
@@ -243,6 +247,9 @@ function Documents({ p, onChanged }: { p: BackofficeProperty; onChanged: () => v
                 </option>
               ))}
             </select>
+            {d.document_type === 'encumbrance_certificate' || d.document_type === 'sale_deed' ? (
+              <DocReading documentId={d.id} kind={d.document_type} />
+            ) : null}
           </li>
         ))}
       </ul>
@@ -312,6 +319,162 @@ function Pittu({ p, onChanged }: { p: BackofficeProperty; onChanged: () => void 
           defaultSort={{ key: 'field', dir: 'asc' }}
         />
       ) : null}
+    </div>
+  );
+}
+
+/** Pittu Read on one document: start it, follow it, and (for an EC) show what it found. */
+function DocReading({
+  documentId,
+  kind,
+}: {
+  documentId: string;
+  kind: 'encumbrance_certificate' | 'sale_deed';
+}) {
+  const qc = useQueryClient();
+  const [err, setErr] = useState<string | null>(null);
+  const key = ['bo-reading', documentId];
+  const { data } = useQuery({
+    queryKey: key,
+    queryFn: () =>
+      api<StaffDocumentReading>(`/backoffice/documents/${documentId}/reading`).catch(() => null),
+    refetchInterval: (q) => {
+      const st = q.state.data?.status;
+      return st === 'queued' || st === 'reading' ? 4000 : false;
+    },
+  });
+  const [open, setOpen] = useState(false);
+  const start = async () => {
+    setErr(null);
+    try {
+      await api(`/backoffice/documents/${documentId}/read`, { method: 'POST' });
+      await qc.invalidateQueries({ queryKey: key });
+      setOpen(true);
+    } catch (e) {
+      setErr(errorText(e));
+    }
+  };
+  const label = kind === 'encumbrance_certificate' ? 'EC' : 'deed';
+  return (
+    <div className="doc-reading">
+      {!data ? (
+        <button className="btn small" onClick={() => void start()}>
+          Read with Pittu
+        </button>
+      ) : data.status === 'queued' || data.status === 'reading' ? (
+        <span className="sub">Pittu is reading the {label}…</span>
+      ) : data.status === 'failed' ? (
+        <span className="error">
+          Pittu couldn't read it ({data.error_code ?? 'failed'}).{' '}
+          {data.error_code === 'failed' || data.error_code === 'unavailable' ? (
+            <button className="link" onClick={() => void start()}>
+              Try again
+            </button>
+          ) : null}
+        </span>
+      ) : kind === 'encumbrance_certificate' ? (
+        <button className="link" onClick={() => setOpen((v) => !v)}>
+          {open ? 'Hide' : 'Show'} what Pittu read
+        </button>
+      ) : (
+        <span className="sub">Read — see “What Pittu read” below.</span>
+      )}
+      {err ? <span className="error">{err}</span> : null}
+      {open && data?.status === 'ready' && kind === 'encumbrance_certificate' ? (
+        <EcView ec={data.result as EcReading} />
+      ) : null}
+    </div>
+  );
+}
+
+const EC_COLUMNS: Column<EcEntry>[] = [
+  {
+    key: 'date',
+    header: 'Registered',
+    sort: (e) => e.registration_date,
+    render: (e) => e.registration_date ?? '—',
+  },
+  {
+    key: 'kind',
+    header: 'Type',
+    sort: (e) => e.kind,
+    render: (e) => (
+      <>
+        <span
+          className={`badge ${e.kind === 'mortgage' || e.kind === 'court_order' ? 'warn' : e.kind === 'release' ? 'good' : ''}`}
+        >
+          {EC_ENTRY_KIND_LABELS[e.kind]}
+        </span>
+        <span className="sub">{e.kind_as_written ?? ''}</span>
+      </>
+    ),
+  },
+  {
+    key: 'doc',
+    header: 'Document no.',
+    sort: (e) => e.document_number,
+    render: (e) => <span className="mono">{e.document_number ?? '—'}</span>,
+  },
+  {
+    key: 'parties',
+    header: 'From → to',
+    sort: (e) => e.from_parties.join(', '),
+    render: (e) => (
+      <>
+        {e.from_parties.join(', ') || '—'} → {e.to_parties.join(', ') || '—'}
+      </>
+    ),
+    csv: (e) => `${e.from_parties.join('; ')} -> ${e.to_parties.join('; ')}`,
+  },
+  {
+    key: 'amount',
+    header: 'Amount',
+    align: 'right',
+    sort: (e) => e.consideration_inr,
+    render: (e) => (e.consideration_inr ? `₹${e.consideration_inr.toLocaleString('en-IN')}` : '—'),
+  },
+  {
+    key: 'conf',
+    header: 'Sure?',
+    sort: (e) => e.confidence,
+    render: (e) => (
+      <span className={e.confidence === 'low' ? 'warn-text' : 'sub'}>{e.confidence ?? '—'}</span>
+    ),
+  },
+];
+
+function EcView({ ec }: { ec: EcReading }) {
+  return (
+    <div className="ec-view">
+      <dl className="kv">
+        <dt>Issued by</dt>
+        <dd>{ec.issuing_office ?? '—'}</dd>
+        <dt>Period</dt>
+        <dd>
+          {ec.period_from ?? '?'} to {ec.period_to ?? '?'}
+        </dd>
+        <dt>Property</dt>
+        <dd>
+          {ec.property_as_written ?? '—'}
+          <span className="sub">
+            {[ec.village, ec.survey_numbers.join(', ')].filter(Boolean).join(' · ')}
+          </span>
+        </dd>
+      </dl>
+      {ec.nil_encumbrance ? (
+        <span className="badge good">No transactions found for this period</span>
+      ) : (
+        <DataTable
+          rows={ec.entries}
+          columns={EC_COLUMNS}
+          rowKey={(e) => `${e.document_number}-${e.registration_date}-${e.kind}`}
+          defaultSort={{ key: 'date', dir: 'asc' }}
+          exportName="ec-entries"
+        />
+      )}
+      <span className="sub">
+        Pittu Read lists what the EC says; it doesn't judge risk. Check anything marked “low”.
+      </span>
     </div>
   );
 }

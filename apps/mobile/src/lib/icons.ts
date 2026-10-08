@@ -77,6 +77,7 @@ export const DOCUMENT_TYPE_VISUALS: Record<DocumentType, { icon: IconName; accen
   registration: { icon: 'verified', accent: 'indigo' },
   property_tax: { icon: 'receipt', accent: 'teal' },
   khata: { icon: 'government', accent: 'sky' },
+  encumbrance_certificate: { icon: 'document-check', accent: 'violet' },
   other: { icon: 'document', accent: 'slate' },
 };
 

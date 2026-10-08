@@ -162,6 +162,7 @@ export const DOCUMENT_TYPES = [
   'registration',
   'property_tax',
   'khata',
+  'encumbrance_certificate',
   'other',
 ] as const;
 
@@ -172,6 +173,7 @@ export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   registration: 'Registration',
   property_tax: 'Property Tax',
   khata: 'Khata',
+  encumbrance_certificate: 'Encumbrance Certificate (EC)',
   other: 'Other',
 };
 
@@ -253,7 +255,11 @@ export type UploadStatus = (typeof UPLOAD_STATUSES)[number];
 export const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024; // 10 MB
 /** Sale deeds and registration documents can be long scans (real deeds reach ~55 MB). */
 export const MAX_LONG_DOCUMENT_BYTES = 50 * 1024 * 1024; // 50 MB (Supabase Free per-file maximum)
-export const LONG_DOCUMENT_TYPES = ['sale_deed', 'registration'] as const;
+export const LONG_DOCUMENT_TYPES = [
+  'sale_deed',
+  'registration',
+  'encumbrance_certificate',
+] as const;
 export const maxDocumentBytes = (type: string): number =>
   (LONG_DOCUMENT_TYPES as readonly string[]).includes(type)
     ? MAX_LONG_DOCUMENT_BYTES

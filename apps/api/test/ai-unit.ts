@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { estimateCostUsd } from '../src/pittu/core/pricing.js';
 import { scrub } from '../src/pittu/core/privacy.js';
+import { encumbranceTask } from '../src/pittu/read/tasks/encumbrance.js';
 import { SALE_DEED_FIELDS, saleDeedTask } from '../src/pittu/read/tasks/saleDeed.js';
 import { AiOutputError } from '../src/pittu/core/types.js';
 
@@ -274,4 +275,48 @@ test('deed fill: a difference read with high confidence takes the deed’s value
   assert.equal(patch.pincode, '562106', 'high confidence: applied');
   assert.equal(patch.khata_number, undefined, 'medium confidence: left for the owner');
   assert.equal(patch.city, undefined, 'same value in different case: nothing to change');
+});
+
+/* ---------- Pittu Read: Encumbrance Certificate ---------- */
+
+const ecFixture = () =>
+  JSON.parse(JSON.stringify(encumbranceTask.fixture)) as Record<string, unknown>;
+
+test('EC: the fixture parses into entries; amounts become numbers; no deed facts', () => {
+  const r = encumbranceTask.parse(ecFixture());
+  assert.equal(r.issuing_office, 'Anekal');
+  assert.equal(r.entries.length, 2);
+  assert.equal(r.entries[0]?.kind, 'sale');
+  assert.equal(r.entries[0]?.consideration_inr, 850000);
+  assert.deepEqual(r.entries[1]?.to_parties, ['State Bank of India']);
+  assert.equal(r.nil_encumbrance, false);
+  assert.deepEqual(encumbranceTask.facts(r), []);
+});
+
+test('EC: a nil EC has no entries; "nil" with entries is not trusted as nil', () => {
+  const nil = { ...ecFixture(), nil_encumbrance: true, entries: [] };
+  assert.equal(encumbranceTask.parse(nil).nil_encumbrance, true);
+  const contradictory = { ...ecFixture(), nil_encumbrance: true };
+  assert.equal(encumbranceTask.parse(contradictory).nil_encumbrance, false);
+});
+
+test('EC: a document that is not an EC is refused', () => {
+  assert.throws(
+    () => encumbranceTask.parse({ ...ecFixture(), document_type: 'sale_deed' }),
+    (e: unknown) => e instanceof AiOutputError && e.code === 'not_an_ec',
+  );
+});
+
+test('EC: bad dates are dropped and identifiers in names are removed', () => {
+  const raw = ecFixture();
+  const entries = raw.entries as Record<string, unknown>[];
+  entries[0] = {
+    ...entries[0],
+    registration_date: '17/08/2005',
+    from_parties: ['Ravi Kumar ABCDE1234F'],
+  };
+  const r = encumbranceTask.parse(raw);
+  assert.equal(r.entries[0]?.registration_date, null);
+  assert.ok(!r.entries[0]?.from_parties[0]?.includes('ABCDE1234F'));
+  assert.ok(r.privacy_removed > 0);
 });
