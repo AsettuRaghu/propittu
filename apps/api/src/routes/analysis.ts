@@ -2,13 +2,8 @@ import { waitUntil } from '@vercel/functions';
 import { Router } from 'express';
 import { auth } from '../auth.js';
 import { notFound, ok, uuidParam } from '../errors.js';
-import {
-  assertAiAvailable,
-  loadAnalysis,
-  needsRun,
-  processAnalysis,
-  requestAnalysis,
-} from '../ai/jobs.js';
+import { assertAiAvailable, loadAnalysis, needsRun, requestAnalysis } from '../pittu/index.js';
+import { readDeed } from '../deeds/reading.js';
 
 /**
  * Pittu document reading (AI). Off unless AI_ENABLED and the account is in
@@ -22,7 +17,7 @@ import {
  */
 export const analysisRouter = Router();
 
-const kick = (id: string) => waitUntil(processAnalysis(id));
+const kick = (id: string) => waitUntil(readDeed(id));
 
 analysisRouter.post('/documents/:id/analysis', async (req, res) => {
   const ctx = auth(req);

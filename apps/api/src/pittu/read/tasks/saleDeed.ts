@@ -1,6 +1,11 @@
 import { z } from 'zod';
-import { scrub } from '../privacy.js';
-import { AiOutputError, type AiTask, type ExtractedFact, type FactValue } from '../types.js';
+import { scrub } from '../../core/privacy.js';
+import {
+  AiOutputError,
+  type AiTask,
+  type ExtractedFact,
+  type FactValue,
+} from '../../core/types.js';
 
 /**
  * Sale Deed extraction — task "sale_deed.extract".

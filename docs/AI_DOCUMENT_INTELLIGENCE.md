@@ -235,16 +235,16 @@ OCR for English deeds, same-project templates, cached instructions.
 
 ---
 
-## 8b. How the AI layer is built (AI-1, in `apps/api/src/ai/`)
+## 8b. How the AI layer is built (Pittu core + Pittu Read, in `apps/api/src/pittu/` — see docs/PITTU.md)
 
 | Piece | File | Rule |
 |---|---|---|
-| **Task** | `tasks/saleDeed.ts` | Instructions + schema + validation, with a `version`. Any change → bump the version → score with `scripts/ai-eval.ts` first. Old results keep their version. |
-| **Provider** | `anthropic.ts` (+ `provider.ts`) | The only code that knows a vendor. Another provider = another adapter; tasks don't change. `AI_PROVIDER=fake` for tests. |
-| **Our rules** | `privacy.ts`, task `conventions()` | Privacy filter and naming conventions run in code after the model — deterministic, unit-tested, never in the prompt alone. |
-| **Jobs** | `jobs.ts`, `routes/analysis.ts` | One reading per document per task version (cache). Background via `waitUntil`; a status check restarts queued/stuck jobs. Max 3 attempts. Results written with the server key only after validation. |
-| **Cost** | `pricing.ts`, `ai_operations` | Every call logged (task, version, model, tokens, ₹/$, time, outcome). Hard monthly cap `AI_MONTHLY_BUDGET_USD`; per-account daily limit `AI_DAILY_READS_PER_ACCOUNT`. |
-| **Switches** | `env.ts` | `AI_ENABLED` (off by default), `AI_PILOT_ACCOUNTS` (only these accounts while piloting). |
+| **Task** | `read/tasks/saleDeed.ts` | Instructions + schema + validation, with a `version`. Any change → bump the version → score with `scripts/ai-eval.ts` first. Old results keep their version. |
+| **Provider** | `core/anthropic.ts` (+ `core/provider.ts`) | The only code that knows a vendor. Another provider = another adapter; tasks don't change. `AI_PROVIDER=fake` for tests. |
+| **Our rules** | `core/privacy.ts`, task `conventions()` | Privacy filter and naming conventions run in code after the model — deterministic, unit-tested, never in the prompt alone. |
+| **Jobs** | `read/jobs.ts` (+ `src/deeds/reading.ts` for what a deed reading means), `routes/analysis.ts` | One reading per document per task version (cache). Background via `waitUntil`; a status check restarts queued/stuck jobs. Max 3 attempts. Results written with the server key only after validation. |
+| **Cost** | `core/run.ts`, `core/pricing.ts`, `ai_operations` | Every call goes through `runTask()` and is logged (capability, task, version, model, tokens, ₹/$, time, outcome). Hard monthly cap `AI_MONTHLY_BUDGET_USD`; per-account daily limit `AI_DAILY_READS_PER_ACCOUNT`. |
+| **Switches** | `env.ts`, `core/limits.ts` | `AI_ENABLED` (off by default), `AI_PILOT_ACCOUNTS` (only these accounts while piloting). |
 | **Improvement loop** | `property_facts.final_value` | Every customer edit is kept next to what the AI said — the material for the next task version. |
 | **Tests** | `test/ai-unit.ts` (CI), `scripts/ai-eval.ts` (by hand), RLS suite | Unit tests cost nothing; the eval spends ~$0.35 per full run on the private test set. |
 

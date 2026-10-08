@@ -15,6 +15,13 @@ import { Feedback, useAction } from '../ui/action';
 import { DataTable, type Column } from '../ui/DataTable';
 
 const usd = (n: number | null) => (n === null ? '—' : `$${n.toFixed(2)}`);
+const CAPABILITY_NAMES: Record<string, string> = {
+  read: 'Pittu Read (documents)',
+  ask: 'Pittu Ask',
+  watch: 'Pittu Watch',
+  value: 'Pittu Value',
+  legal: 'Pittu Legal',
+};
 const phone = (p: string | null) => (p ? formatIndianMobile(p) : 'Customer');
 
 /** Pittu, the deed reader: this month's cost and accuracy, failed readings, and reviews. */
@@ -249,6 +256,39 @@ export function Pittu() {
         error={list.error ? errorText(list.error) : null}
         empty="Nothing here."
       />
+
+      {s && s.by_capability.length > 0 ? (
+        <>
+          <div className="section-title">Cost by capability this month</div>
+          <DataTable
+            rows={s.by_capability}
+            columns={[
+              {
+                key: 'capability',
+                header: 'Capability',
+                sort: (r) => r.capability,
+                render: (r) => CAPABILITY_NAMES[r.capability] ?? r.capability,
+              },
+              {
+                key: 'calls',
+                header: 'AI calls',
+                align: 'right',
+                sort: (r) => r.calls,
+                render: (r) => r.calls,
+              },
+              {
+                key: 'cost',
+                header: 'Cost',
+                align: 'right',
+                sort: (r) => r.cost_usd,
+                render: (r) => usd(r.cost_usd),
+              },
+            ]}
+            rowKey={(r) => r.capability}
+            defaultSort={{ key: 'cost', dir: 'desc' }}
+          />
+        </>
+      ) : null}
 
       {s && s.by_account.length > 0 ? (
         <>

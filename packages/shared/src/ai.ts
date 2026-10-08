@@ -393,6 +393,8 @@ export interface AiSummary {
   /** What customers did with the values Pittu read (the accuracy signal). */
   facts: { confirmed: number; edited: number; rejected: number };
   review_open: number;
+  /** Pittu's capabilities this month: read, ask, watch, value, legal. */
+  by_capability: { capability: string; calls: number; cost_usd: number }[];
   by_account: AiAccountSpend[];
   failures: AiFailure[];
 }

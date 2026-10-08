@@ -11,7 +11,7 @@ import { audit } from '../audit.js';
 import { HttpError, must, ok } from '../errors.js';
 import { logger } from '../logger.js';
 import { serviceClient } from '../supabase.js';
-import { canStartReading } from '../ai/jobs.js';
+import { canStartReading } from '../pittu/index.js';
 import { loadPlanState, planSummary } from '../plan.js';
 
 /** GET /me — Profile screen (§25) plus Account (M1) and staff status (M9). */

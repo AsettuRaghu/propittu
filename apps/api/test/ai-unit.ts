@@ -2,10 +2,10 @@
 //   npm run test:ai --workspace @propittu/api
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { estimateCostUsd } from '../src/ai/pricing.js';
-import { scrub } from '../src/ai/privacy.js';
-import { SALE_DEED_FIELDS, saleDeedTask } from '../src/ai/tasks/saleDeed.js';
-import { AiOutputError } from '../src/ai/types.js';
+import { estimateCostUsd } from '../src/pittu/core/pricing.js';
+import { scrub } from '../src/pittu/core/privacy.js';
+import { SALE_DEED_FIELDS, saleDeedTask } from '../src/pittu/read/tasks/saleDeed.js';
+import { AiOutputError } from '../src/pittu/core/types.js';
 
 const blank = () => ({
   document_type: 'sale_deed',

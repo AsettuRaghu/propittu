@@ -1,4 +1,4 @@
-import { env } from '../env.js';
+import { env } from '../../env.js';
 import { anthropicProvider } from './anthropic.js';
 import { AiProviderError, type AiProvider, type AiTask, type ProviderRequest } from './types.js';
 

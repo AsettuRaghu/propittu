@@ -15,7 +15,7 @@ import {
   type PropertyPrefill,
   type ValueSource,
 } from '@propittu/shared';
-import { assertAiAvailable, isRetryableFailure } from '../ai/jobs.js';
+import { assertAiAvailable, isRetryableFailure } from '../pittu/index.js';
 import { audit } from '../audit.js';
 import { auth } from '../auth.js';
 import { HttpError, must, notFound, ok, uuidParam } from '../errors.js';

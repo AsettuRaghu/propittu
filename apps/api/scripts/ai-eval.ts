@@ -12,9 +12,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { anthropicProvider } from '../src/ai/anthropic.js';
-import { estimateCostUsd } from '../src/ai/pricing.js';
-import { saleDeedTask, type SaleDeedResult } from '../src/ai/tasks/saleDeed.js';
+import { anthropicProvider } from '../src/pittu/core/anthropic.js';
+import { estimateCostUsd } from '../src/pittu/core/pricing.js';
+import { saleDeedTask, type SaleDeedResult } from '../src/pittu/read/tasks/saleDeed.js';
 
 const EVAL_DIR =
   process.env.AI_EVAL_DIR ?? path.join(os.homedir(), 'Downloads', 'propittu-ai-test');

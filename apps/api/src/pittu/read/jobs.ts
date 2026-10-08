@@ -6,21 +6,26 @@ import {
   type DocumentType,
   type PropertyFact,
 } from '@propittu/shared';
-import type { AuthContext } from '../auth.js';
-import { audit } from '../audit.js';
-import { env } from '../env.js';
-import { HttpError, invalid, must, notFound } from '../errors.js';
-import { logger } from '../logger.js';
-import { serviceClient } from '../supabase.js';
-import { estimateCostUsd } from './pricing.js';
-import { removeProperty } from '../propertyRemoval.js';
-import { findSameFile, findSameRegistration, sha256 } from './duplicates.js';
-import { provider } from './provider.js';
+import { createHash } from 'node:crypto';
+import type { AuthContext } from '../../auth.js';
+import { audit } from '../../audit.js';
+import { invalid, must, notFound } from '../../errors.js';
+import { logger } from '../../logger.js';
+import { serviceClient } from '../../supabase.js';
+import {
+  aiAvailableFor,
+  assertAiAvailable,
+  budgetLeft,
+  enforceDailyLimit,
+  server,
+} from '../core/limits.js';
+import { runTask } from '../core/run.js';
+import { AiOutputError, AiProviderError, type AiTask, type ExtractedFact } from '../core/types.js';
 import { saleDeedTask } from './tasks/saleDeed.js';
-import { AiOutputError, AiProviderError, type AiTask } from './types.js';
 
 /**
- * Document readings as background jobs (docs/AI_DOCUMENT_INTELLIGENCE.md §5).
+ * Pittu Read — document readings as background jobs
+ * (docs/PITTU.md, docs/AI_DOCUMENT_INTELLIGENCE.md §5).
  *
  *   requestAnalysis()  checks, then records a QUEUED job (or returns the
  *                      cached one: one reading per document per task version)
@@ -29,7 +34,9 @@ import { AiOutputError, AiProviderError, type AiTask } from './types.js';
  *
  * The API runs processAnalysis right after answering (waitUntil); a status
  * check re-runs any job that is queued or stuck, so nothing needs a scheduler.
- * Results are written with the server key only after validation.
+ * Results are written with the server key only after validation. What a
+ * reading MEANS for the business (a deed already in the locker, a draft to
+ * clear) is decided by the application layer through ReadHooks.
  */
 
 const TASKS: Partial<Record<DocumentType, AiTask<unknown>>> = {
@@ -43,7 +50,34 @@ const STUCK_AFTER_MS = 3 * 60_000;
 /** Codes the customer can retry; the rest are final for this document. */
 const RETRYABLE_FAILURES = new Set(['failed', 'unavailable']);
 
-interface AnalysisRow {
+/** Fingerprint of a file (the "never read twice" cache). */
+export const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
+
+/**
+ * The application layer's say in a reading. Pittu Read reads and returns
+ * facts; these hooks decide what that means.
+ */
+export interface ReadHooks {
+  /**
+   * Before any AI call: may an earlier reading of the same file be reused?
+   * Return true when the hook has finished the job itself (no AI call).
+   */
+  reuse?(
+    db: SupabaseClient,
+    job: AnalysisRow,
+    file: { hash: string; size: number },
+    task: AiTask<unknown>,
+    finish: (fields: Record<string, unknown>) => PromiseLike<unknown>,
+  ): Promise<boolean>;
+  /** After a reading is saved: extra fields for the job (e.g. duplicate_of). */
+  afterRead?(
+    db: SupabaseClient,
+    job: AnalysisRow,
+    facts: ExtractedFact[],
+  ): Promise<Record<string, unknown>>;
+}
+
+export interface AnalysisRow {
   id: string;
   account_id: string;
   property_id: string;
@@ -74,19 +108,6 @@ interface DocRow {
   upload_status: 'pending' | 'ready';
 }
 
-function server(): SupabaseClient {
-  if (!serviceClient)
-    throw new HttpError(503, 'AI_UNAVAILABLE', 'Pittu is not available right now.');
-  return serviceClient;
-}
-
-/** Is AI switched on for this account? (kill switch + pilot list + configuration) */
-function aiAvailableFor(accountId: string): boolean {
-  if (!env.AI_ENABLED || !serviceClient) return false;
-  if (env.AI_PROVIDER === 'anthropic' && !env.ANTHROPIC_API_KEY) return false;
-  return env.AI_PILOT_ACCOUNTS.length === 0 || env.AI_PILOT_ACCOUNTS.includes(accountId);
-}
-
 /**
  * Can this account start a reading right now? Switched on, in the pilot,
  * daily readings left and the monthly budget not used up. Used by GET /me so
@@ -99,14 +120,7 @@ export async function canStartReading(accountId: string): Promise<boolean> {
   } catch {
     return false;
   }
-  const spend = Number((await serviceClient.rpc('ai_month_spend_usd')).data ?? 0);
-  return spend < env.AI_MONTHLY_BUDGET_USD;
-}
-
-export function assertAiAvailable(accountId: string): void {
-  if (!aiAvailableFor(accountId)) {
-    throw new HttpError(503, 'AI_UNAVAILABLE', 'Pittu is not available yet.');
-  }
+  return budgetLeft(serviceClient);
 }
 
 /* ------------------------------------------------------------------ */
@@ -196,25 +210,6 @@ export async function requestAnalysis(ctx: AuthContext, documentId: string): Pro
   return row;
 }
 
-async function enforceDailyLimit(db: SupabaseClient, accountId: string): Promise<void> {
-  const since = new Date(Date.now() - 24 * 3600_000).toISOString();
-  const res = await db
-    .from('document_analyses')
-    .select('id', { count: 'exact', head: true })
-    .eq('account_id', accountId)
-    .gte('updated_at', since)
-    // (neq alone would drop rows whose error_code is NULL)
-    .or('error_code.is.null,error_code.neq.too_large');
-  must(res);
-  if ((res.count ?? 0) >= env.AI_DAILY_READS_PER_ACCOUNT) {
-    throw new HttpError(
-      429,
-      'AI_LIMIT_REACHED',
-      'Pittu has read several documents today. Please try again tomorrow.',
-    );
-  }
-}
-
 /** Can staff start this failed reading again? (others are final for the document) */
 export const isRetryableFailure = (errorCode: string | null) =>
   RETRYABLE_FAILURES.has(errorCode ?? '');
@@ -266,7 +261,7 @@ export function needsRun(row: Pick<AnalysisRow, 'status' | 'started_at' | 'attem
 /* ------------------------------------------------------------------ */
 
 /** Runs one job end to end. Safe to call concurrently: only one caller claims it. */
-export async function processAnalysis(analysisId: string): Promise<void> {
+export async function processAnalysis(analysisId: string, hooks: ReadHooks = {}): Promise<void> {
   const db = serviceClient;
   if (!db) return;
   const stuckBefore = new Date(Date.now() - STUCK_AFTER_MS).toISOString();
@@ -303,30 +298,6 @@ export async function processAnalysis(analysisId: string): Promise<void> {
     return;
   }
 
-  const recordOp = (o: {
-    model: string;
-    providerName: string;
-    inputTokens: number;
-    outputTokens: number;
-    durationMs: number;
-    outcome: 'ok' | 'invalid_output' | 'provider_error' | 'rejected';
-    errorCode?: string;
-  }) =>
-    db.from('ai_operations').insert({
-      account_id: job.account_id,
-      analysis_id: job.id,
-      task: task.name,
-      task_version: task.version,
-      provider: o.providerName,
-      model: o.model,
-      input_tokens: o.inputTokens,
-      output_tokens: o.outputTokens,
-      cost_usd: estimateCostUsd(o.model, o.inputTokens, o.outputTokens),
-      duration_ms: o.durationMs,
-      outcome: o.outcome,
-      error_code: o.errorCode ?? null,
-    });
-
   try {
     const { data: doc } = await db
       .from('property_documents')
@@ -344,56 +315,41 @@ export async function processAnalysis(analysisId: string): Promise<void> {
       throw new AiProviderError('download_failed', true, 'Could not fetch the document');
     const bytes = new Uint8Array(await file.arrayBuffer());
 
-    // Seen this exact file before? Reuse that reading — no AI call, no tokens.
+    // Fingerprint once; the application may reuse an earlier reading of the same file.
     const hash = sha256(bytes);
     await db.from('property_documents').update({ content_sha256: hash }).eq('id', job.document_id);
-    const twin = await findSameFile(db, job.account_id, job.document_id, doc.file_size, hash);
-    if (twin && (await reuseReading(db, job, twin, task, finish))) {
-      log.info('same deed seen before — reading reused, no AI call');
+    if (hooks.reuse && (await hooks.reuse(db, job, { hash, size: doc.file_size }, task, finish))) {
+      log.info('same file seen before — reading reused, no AI call');
       return;
     }
-
-    // Hard monthly budget: stop before spending, and tell staff via the log.
-    const spend = Number((await db.rpc('ai_month_spend_usd')).data ?? 0);
-    if (spend >= env.AI_MONTHLY_BUDGET_USD) {
-      await finish({ status: 'failed', error_code: 'unavailable' });
-      log.error(
-        { spendUsd: spend, budgetUsd: env.AI_MONTHLY_BUDGET_USD },
-        'AI monthly budget reached — reading paused',
-      );
-      return;
-    }
-
-    const p = provider(task);
-    const answer = await p.run({
-      model: task.model,
-      system: task.system,
-      documents: [{ kind: 'pdf', bytes }],
-      text: task.userText,
-      schema: task.schema,
-      maxOutputTokens: task.maxOutputTokens,
-    });
-    const base = {
-      model: answer.model,
-      providerName: p.name,
-      inputTokens: answer.inputTokens,
-      outputTokens: answer.outputTokens,
-      durationMs: answer.durationMs,
-    };
 
     let result: unknown;
+    let model: string;
     try {
-      result = task.parse(answer.json);
+      ({ result, model } = await runTask(
+        db,
+        task,
+        { documents: [{ kind: 'pdf', bytes }] },
+        {
+          capability: 'read',
+          accountId: job.account_id,
+          analysisId: job.id,
+        },
+      ));
     } catch (err) {
-      const code = err instanceof AiOutputError ? err.code : 'invalid_output';
-      await recordOp({ ...base, outcome: 'invalid_output', errorCode: code });
-      await finish({
-        status: 'failed',
-        error_code: code === 'not_a_sale_deed' ? 'not_a_sale_deed' : 'failed',
-        model: answer.model,
-      });
-      log.warn({ code }, 'AI answer rejected by validation');
-      return;
+      if (err instanceof AiOutputError) {
+        await finish({
+          status: 'failed',
+          error_code: err.code === 'not_a_sale_deed' ? 'not_a_sale_deed' : 'failed',
+        });
+        log.warn({ code: err.code }, 'AI answer rejected by validation');
+        return;
+      }
+      if (err instanceof AiProviderError && err.code === 'budget_reached') {
+        await finish({ status: 'failed', error_code: 'unavailable' });
+        return;
+      }
+      throw err;
     }
 
     const facts = task.facts(result);
@@ -413,44 +369,12 @@ export async function processAnalysis(analysisId: string): Promise<void> {
       );
       if (error) throw new AiProviderError('save_failed', true, error.message);
     }
-    await recordOp({ ...base, outcome: 'ok' });
-    const registration = facts.find((f) => f.key === 'registration_number')?.value;
-    const duplicateOf = await findSameRegistration(
-      db,
-      job.account_id,
-      job.property_id,
-      registration,
-    );
-    await finish({
-      status: 'ready',
-      error_code: null,
-      model: answer.model,
-      result,
-      duplicate_of: duplicateOf,
-    });
-    log.info(
-      {
-        facts: facts.length,
-        inputTokens: answer.inputTokens,
-        outputTokens: answer.outputTokens,
-        ms: answer.durationMs,
-      },
-      'document analysis ready',
-    );
+    const extra = hooks.afterRead ? await hooks.afterRead(db, job, facts) : {};
+    await finish({ status: 'ready', error_code: null, model, result, ...extra });
+    log.info({ facts: facts.length }, 'document reading ready');
   } catch (err) {
     const e =
       err instanceof AiProviderError ? err : new AiProviderError('unexpected', true, String(err));
-    if (e.usage) {
-      await recordOp({
-        model: task.model,
-        providerName: 'anthropic',
-        inputTokens: e.usage.inputTokens,
-        outputTokens: e.usage.outputTokens,
-        durationMs: e.usage.durationMs,
-        outcome: 'provider_error',
-        errorCode: e.code,
-      });
-    }
     const attempts = job.attempts + 1;
     const giveUp = !e.retryable || attempts >= MAX_ATTEMPTS;
     await db
@@ -461,72 +385,8 @@ export async function processAnalysis(analysisId: string): Promise<void> {
           : { status: 'queued', error_code: null },
       )
       .eq('id', job.id);
-    log.error({ code: e.code, retryable: e.retryable, attempts }, 'document analysis error');
+    log.error({ code: e.code, retryable: e.retryable, attempts }, 'document reading error');
   }
-}
-
-/* ------------------------------------------------------------------ */
-
-/**
- * The same file was read before (or belongs to a property already in the
- * locker): copy that reading instead of paying for a new one, and say whose
- * it is. An older unfinished attempt with the same deed is cleared away.
- */
-async function reuseReading(
-  db: SupabaseClient,
-  job: AnalysisRow,
-  twin: { id: string; property_id: string },
-  task: AiTask<unknown>,
-  finish: (fields: Record<string, unknown>) => PromiseLike<unknown>,
-): Promise<boolean> {
-  const { data: owner } = await db
-    .from('properties')
-    .select('id, is_draft')
-    .eq('id', twin.property_id)
-    .maybeSingle();
-  if (!owner || owner.id === job.property_id) return false;
-  const duplicateOf = owner.is_draft ? null : (owner.id as string);
-  const { data: prior } = await db
-    .from('document_analyses')
-    .select('id, result, model')
-    .eq('document_id', twin.id)
-    .eq('task', task.name)
-    .eq('task_version', task.version)
-    .eq('status', 'ready')
-    .maybeSingle();
-
-  if (prior) {
-    const { data: facts } = await db
-      .from('property_facts')
-      .select('key, value, pages, confidence')
-      .eq('analysis_id', prior.id);
-    await db.from('property_facts').delete().eq('analysis_id', job.id);
-    if (facts?.length) {
-      await db.from('property_facts').insert(
-        facts.map((f) => ({
-          ...f,
-          account_id: job.account_id,
-          property_id: job.property_id,
-          analysis_id: job.id,
-          document_id: job.document_id,
-        })),
-      );
-    }
-    await finish({
-      status: 'ready',
-      error_code: null,
-      result: prior.result,
-      model: prior.model,
-      duplicate_of: duplicateOf,
-    });
-  } else if (duplicateOf) {
-    // Already in the locker but never read: nothing to copy, nothing to spend.
-    await finish({ status: 'ready', error_code: null, duplicate_of: duplicateOf });
-  } else {
-    return false;
-  }
-  if (owner.is_draft) await removeProperty(db, job.account_id, owner.id as string);
-  return true;
 }
 
 /** What the customer sees (through their own client: RLS applies). */

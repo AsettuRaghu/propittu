@@ -68,7 +68,8 @@ import {
   type VisitMedia,
 } from '@propittu/shared';
 import { waitUntil } from '@vercel/functions';
-import { isRetryableFailure, processAnalysis, requeueFailedAnalysis } from '../ai/jobs.js';
+import { readDeed } from '../deeds/reading.js';
+import { isRetryableFailure, requeueFailedAnalysis } from '../pittu/index.js';
 import { auth, type AuthContext } from '../auth.js';
 import { loadReach } from '../reach.js';
 import { audit } from '../audit.js';
@@ -1486,7 +1487,9 @@ backofficeRouter.get('/ai/summary', async (req, res) => {
   const [ops, confirmed, edited, rejected, reviewOpen, failed] = await Promise.all([
     db
       .from('ai_operations')
-      .select('account_id, cost_usd, duration_ms, input_tokens, output_tokens, outcome, created_at')
+      .select(
+        'capability, account_id, cost_usd, duration_ms, input_tokens, output_tokens, outcome, created_at',
+      )
       .gte('created_at', monthStart)
       .limit(5000),
     factCount('confirmed'),
@@ -1506,6 +1509,7 @@ backofficeRouter.get('/ai/summary', async (req, res) => {
   ]);
   const rows = must<
     {
+      capability: string;
       account_id: string | null;
       cost_usd: number | string;
       duration_ms: number;
@@ -1566,6 +1570,16 @@ backofficeRouter.get('/ai/summary', async (req, res) => {
       rejected: rejected.count ?? 0,
     },
     review_open: reviewOpen.count ?? 0,
+    by_capability: [...new Set(rows.map((r) => r.capability))]
+      .map((capability) => {
+        const mine = rows.filter((r) => r.capability === capability);
+        return {
+          capability,
+          calls: mine.length,
+          cost_usd: round(mine.reduce((n, r) => n + Number(r.cost_usd), 0)),
+        };
+      })
+      .sort((x, y) => y.cost_usd - x.cost_usd),
     by_account: [...perAccount.entries()]
       .map(([id, a]) => ({
         account_id: id,
@@ -1607,7 +1621,7 @@ backofficeRouter.post('/ai/analyses/:id/retry', allow('documents.review'), async
   if (!(await requeueFailedAnalysis(id))) {
     throw new HttpError(409, 'CONFLICT', 'This reading cannot be started again.');
   }
-  waitUntil(processAnalysis(id));
+  waitUntil(readDeed(id));
   await staffAudit(ctx, 'staff.ai.reading_retried', reading.account_id, {
     type: 'document',
     id: reading.document_id,

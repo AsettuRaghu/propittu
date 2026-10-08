@@ -1,6 +1,6 @@
-import { createHash } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { STORAGE_BUCKETS } from '@propittu/shared';
+import { sha256 } from '../pittu/index.js';
 
 /**
  * Has this deed been seen before? Checked BEFORE any AI call, so the same
@@ -11,8 +11,6 @@ import { STORAGE_BUCKETS } from '@propittu/shared';
  *   2. Same deed, different scan — after a reading, its registration number
  *      is matched against facts already confirmed for other properties.
  */
-
-export const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 
 interface Doc {
   id: string;

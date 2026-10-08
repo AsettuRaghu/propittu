@@ -1,5 +1,5 @@
 /**
- * AI layer contracts (docs/AI_DOCUMENT_INTELLIGENCE.md).
+ * Pittu core contracts (docs/PITTU.md, docs/AI_DOCUMENT_INTELLIGENCE.md).
  *
  *   Task      WHAT we ask: instructions, output schema, validation, version.
  *   Provider  WHO answers: Anthropic today; any other model tomorrow.
@@ -86,3 +86,14 @@ export interface AiTask<Result> {
   /** Canned answer for the fake provider (tests). */
   readonly fixture: unknown;
 }
+
+/**
+ * Pittu's capabilities. Each has its own folder under src/pittu and its own
+ * line in the cost log; all of them run on this core.
+ *   read   documents (sale deed today; EC, tax receipt, Khata next)
+ *   ask    questions and the care plan
+ *   watch  news and government alerts around properties
+ *   value  what a property is worth, and how ready it is to sell
+ *   legal  legal health checks and protection
+ */
+export type Capability = 'read' | 'ask' | 'watch' | 'value' | 'legal';
