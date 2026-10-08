@@ -12,7 +12,6 @@ import { date, dateTime, rupees } from '../lib/format';
 import { useUrlState } from '../lib/params';
 import { DataTable, type Column } from '../ui/DataTable';
 import { ORDER_TONES } from '../ui/status';
-import { PanelControls, useSplitClass } from '../ui/PanelControls';
 import { Tiles } from '../ui/Tiles';
 import { useEscape } from '../ui/useEscape';
 
@@ -33,7 +32,6 @@ export function Payments() {
   const kind = params.get('kind') ?? '';
   const method = params.get('method') ?? '';
   const selected = params.get('id');
-  const splitClass = useSplitClass(selected);
   const [now] = useState(() => Date.now());
   const { data, error, isPending } = useQuery({
     queryKey: ['bo-payments'],
@@ -231,54 +229,39 @@ export function Payments() {
           { value: 'all', label: 'Everything', count: data ? inPeriod.length : '–' },
         ]}
       />
-      <div className={splitClass}>
-        <DataTable
-          rows={rows}
-          columns={columns}
-          rowKey={(o) => o.id}
-          selected={selected}
-          onRowClick={(o) => set({ id: o.id })}
-          compact={(o) => (
-            <>
-              <span className="c-main">
-                {o.description}
-                <span className={`badge ${ORDER_TONES[o.display_status]}`}>
-                  {ORDER_DISPLAY_LABELS[o.display_status]}
-                </span>
-              </span>
-              <span className="c-sub">
-                {rupees(o.amount_paise)} ·{' '}
-                {o.customer_phone ? formatIndianMobile(o.customer_phone) : 'Customer'}
-              </span>
-              <span className="c-sub mono">
-                {o.reference} · {date(o.paid_at ?? o.created_at)}
-              </span>
-            </>
-          )}
-          toolbar={
-            <select
-              value={method}
-              onChange={(e) => set({ method: e.target.value || null })}
-              aria-label="Method"
-            >
-              <option value="">Any method</option>
-              {methods.map((m) => (
-                <option key={m}>{m}</option>
-              ))}
-            </select>
-          }
-          searchText={(o) =>
-            `${o.reference} ${o.description} ${o.customer_phone ?? ''} ${o.payment?.provider_payment_ref ?? ''} ${o.payment?.method ?? ''} ${ORDER_DISPLAY_LABELS[o.display_status]}`
-          }
-          searchPlaceholder="Search anything: reference, what for, customer, payment id"
-          defaultSort={{ key: 'date', dir: 'desc' }}
-          exportName="payments"
-          loading={isPending}
-          error={error ? errorText(error) : null}
-          empty="No payments in this period."
-        />
-        {open ? <PaymentPanel o={open} onClose={() => set({ id: null, full: null })} /> : null}
-      </div>
+      <DataTable
+        rows={rows}
+        columns={columns}
+        rowKey={(o) => o.id}
+        selected={selected}
+        onRowClick={(o) => set({ id: o.id })}
+        onClose={() => set({ id: null, full: null })}
+        detail={
+          open ? <PaymentPanel o={open} onClose={() => set({ id: null, full: null })} /> : null
+        }
+        toolbar={
+          <select
+            value={method}
+            onChange={(e) => set({ method: e.target.value || null })}
+            aria-label="Method"
+          >
+            <option value="">Any method</option>
+            {methods.map((m) => (
+              <option key={m}>{m}</option>
+            ))}
+          </select>
+        }
+        searchText={(o) =>
+          `${o.reference} ${o.description} ${o.customer_phone ?? ''} ${o.payment?.provider_payment_ref ?? ''} ${o.payment?.method ?? ''} ${ORDER_DISPLAY_LABELS[o.display_status]}`
+        }
+        searchPlaceholder="Search anything: reference, what for, customer, payment id"
+        defaultSort={{ key: 'date', dir: 'desc' }}
+        exportName="payments"
+        loading={isPending}
+        error={error ? errorText(error) : null}
+        empty="No payments in this period."
+      />
+
       {plans.data ? (
         <section className="section">
           <div className="section-head">
@@ -330,7 +313,6 @@ function PaymentPanel({ o, onClose }: { o: BackofficeOrder; onClose: () => void 
           <span className={`badge ${ORDER_TONES[o.display_status]}`}>
             {ORDER_DISPLAY_LABELS[o.display_status]}
           </span>
-          <PanelControls onClose={onClose} />
         </div>
       </div>
       <div className="panel-body">

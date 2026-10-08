@@ -169,32 +169,40 @@ a {
 
 /* Cards and numbers */
 .grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  overflow-x: auto;
 }
 .stat {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 14px 16px;
+  padding: 8px 12px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 1px;
   text-decoration: none;
   color: inherit;
+  flex: 1 1 0;
+  min-width: 150px;
+}
+.stat > * {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 a.stat:hover {
   border-color: var(--brand);
 }
 .stat b {
-  font-size: 26px;
+  font-size: 18px;
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
 }
 .stat span {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
 }
 .stat.warn b {
   color: var(--warn);
@@ -361,21 +369,7 @@ td .sub {
   font-weight: 600;
 }
 
-/* Side panel */
-.split {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
-  align-items: start;
-}
-.split.closed {
-  grid-template-columns: minmax(0, 1fr);
-}
-@media (max-width: 1100px) {
-  .split {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
+/* Detail panel (shown inside the drawer) */
 .panel {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -663,29 +657,31 @@ label.check {
   margin-left: 8px;
 }
 
-/* Tiles: numbers that filter the table below */
+/* Tiles: one row of slim chips that filter the table below */
 .tiles {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 10px;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
 }
 .tile {
-  text-align: left;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
   border: 1px solid var(--line);
   background: var(--surface);
-  border-radius: var(--radius);
-  padding: 10px 14px;
+  border-radius: 999px;
+  padding: 5px 12px;
   cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  white-space: nowrap;
 }
 .tile:hover {
   border-color: var(--brand);
 }
 .tile b {
-  font-size: 22px;
-  line-height: 1.15;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
 .tile span {
@@ -695,6 +691,9 @@ label.check {
 .tile small {
   color: var(--subtle);
   font-size: 11.5px;
+}
+.tile small::before {
+  content: '· ';
 }
 .tile.warn b {
   color: var(--warn);
@@ -708,7 +707,9 @@ label.check {
 .tile[aria-pressed='true'] {
   border-color: var(--brand);
   background: var(--brand-soft);
-  box-shadow: inset 0 0 0 1px var(--brand);
+}
+.tile[aria-pressed='true'] span {
+  color: var(--brand);
 }
 
 /* Table toolbar */
@@ -834,84 +835,75 @@ td.num .sub {
   width: 90px;
 }
 
-/* List + detail. With a row open, the list narrows to a short column and the
-   detail takes the rest of the page; "Full page" hides the list. */
-.split.open {
-  grid-template-columns: 340px minmax(0, 1fr);
+/* Detail drawer: the open record slides in over the list, wide, with
+   Previous / Next (and the arrow keys) to move through the list. */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 18, 35, 0.28);
+  z-index: 20;
+  animation: fade 0.15s ease-out;
 }
-.split.full {
-  grid-template-columns: minmax(0, 1fr);
-}
-.split.full > .section {
-  display: none;
-}
-@media (max-width: 1000px) {
-  .split.open {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .split.open > .section {
-    display: none;
-  }
-}
-.split.open > .section .toolbar .search {
-  flex: 1;
-  min-width: 0;
-}
-.compact-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  max-height: calc(100vh - 300px);
-  overflow: auto;
-}
-.compact-list button {
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(1180px, calc(100vw - 300px));
+  min-width: min(100vw, 640px);
+  background: var(--bg);
+  border-left: 1px solid var(--line);
+  box-shadow: -12px 0 32px rgba(15, 18, 35, 0.14);
+  z-index: 21;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  width: 100%;
-  text-align: left;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  background: none;
-  padding: 10px 14px;
-  cursor: pointer;
+  animation: slide 0.18s ease-out;
 }
-.compact-list button:hover {
-  background: var(--surface-muted);
+.drawer.full {
+  width: calc(100vw - 232px);
 }
-.compact-list button.selected {
-  background: var(--brand-soft);
-  box-shadow: inset 3px 0 0 var(--brand);
+@keyframes slide {
+  from {
+    transform: translateX(40px);
+    opacity: 0;
+  }
 }
-.c-main {
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+.drawer-nav {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
   gap: 8px;
-  font-weight: 600;
+  padding: 10px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
 }
-.c-sub {
-  color: var(--muted);
-  font-size: 12.5px;
+.drawer-body {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
 }
-.split.open .panel,
-.split.full .panel {
-  max-height: calc(100vh - 32px);
+.drawer .panel {
+  position: static;
+  max-height: none;
+  overflow: visible;
 }
-/* Wide detail: blocks flow into two columns when there is room. */
-.split.open .panel-body:not(.chat),
-.split.full .panel-body:not(.chat) {
+/* In the drawer, details flow into two columns when there is room. */
+.drawer .panel-body:not(.chat) {
   display: block;
-  columns: 2 380px;
+  columns: 2 400px;
   column-gap: 28px;
 }
-.split.open .panel-body:not(.chat) > *,
-.split.full .panel-body:not(.chat) > * {
+.drawer .panel-body:not(.chat) > * {
   break-inside: avoid;
   margin-bottom: 18px;
 }
 .panel-body.chat {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) minmax(0, 2fr);
+  grid-template-columns: minmax(260px, 1fr) minmax(0, 2fr);
   gap: 24px;
   align-items: start;
 }
@@ -926,9 +918,15 @@ td.num .sub {
   gap: 14px;
 }
 .chat-main .thread {
-  max-height: calc(100vh - 330px);
+  max-height: calc(100vh - 300px);
   overflow: auto;
   padding-right: 4px;
+}
+.c-main {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 600;
 }
 
 /* Dashboard health */

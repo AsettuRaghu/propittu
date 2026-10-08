@@ -1,4 +1,5 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useUrlState } from '../lib/params';
 
 export type Column<T> = {
   key: string;
@@ -29,8 +30,9 @@ type Props<T> = {
   error?: string | null;
   empty?: string;
   pageSize?: number;
-  /** While a row is open beside the list, show this short version of each row instead. */
-  compact?: (row: T) => ReactNode;
+  /** The open row's detail, shown in a wide panel that slides over the list. */
+  detail?: ReactNode;
+  onClose?: () => void;
 };
 
 /**
@@ -53,9 +55,11 @@ export function DataTable<T>({
   error,
   empty = 'Nothing here.',
   pageSize = 50,
-  compact,
+  detail,
+  onClose,
 }: Props<T>) {
-  const narrow = !!compact && !!selected;
+  const [params, setUrl] = useUrlState();
+  const full = params.get('full') === '1';
   const [q, setQ] = useState('');
   const [sort, setSort] = useState(defaultSort ?? null);
   const [limit, setLimit] = useState(pageSize);
@@ -80,6 +84,24 @@ export function DataTable<T>({
     }
     return list;
   }, [rows, q, searchText, sort, columns]);
+
+  const at = selected ? shown.findIndex((r) => rowKey(r) === selected) : -1;
+  const go = (step: number) => {
+    const next = shown[at + step];
+    if (next && onRowClick) onRowClick(next);
+  };
+  // ↑ / ↓ move through the list while a row is open (not while typing).
+  useEffect(() => {
+    if (!detail) return;
+    const on = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLElement && e.target.closest('input, textarea, select')) return;
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      e.preventDefault();
+      go(e.key === 'ArrowDown' ? 1 : -1);
+    };
+    window.addEventListener('keydown', on);
+    return () => window.removeEventListener('keydown', on);
+  });
 
   const toggle = (key: string) =>
     setSort((s) =>
@@ -119,7 +141,7 @@ export function DataTable<T>({
             aria-label={searchPlaceholder}
           />
         ) : null}
-        {narrow ? null : toolbar}
+        {toolbar}
         <span className="toolbar-end">
           {rows ? (
             <span className="sub">
@@ -128,7 +150,7 @@ export function DataTable<T>({
                 : `${shown.length} of ${rows.length}`}
             </span>
           ) : null}
-          {exportName && shown.length > 0 && !narrow ? (
+          {exportName && shown.length > 0 ? (
             <button className="btn small" onClick={exportCsv}>
               Export CSV
             </button>
@@ -138,24 +160,7 @@ export function DataTable<T>({
       {loading ? <div className="empty">Loading…</div> : null}
       {error ? <div className="empty error">{error}</div> : null}
       {rows && shown.length === 0 ? <div className="empty">{q ? 'No matches.' : empty}</div> : null}
-      {narrow && shown.length > 0 ? (
-        <ul className="compact-list">
-          {shown.slice(0, limit).map((r) => {
-            const k = rowKey(r);
-            return (
-              <li key={k}>
-                <button
-                  className={selected === k ? 'selected' : ''}
-                  onClick={onRowClick ? () => onRowClick(r) : undefined}
-                >
-                  {compact(r)}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      ) : null}
-      {!narrow && shown.length > 0 ? (
+      {shown.length > 0 ? (
         <div className="table-wrap">
           <table className={onRowClick ? 'clickable' : ''}>
             <thead>
@@ -213,6 +218,40 @@ export function DataTable<T>({
             Show {Math.min(pageSize, shown.length - limit)} more
           </button>
         </div>
+      ) : null}
+      {detail ? (
+        <>
+          <div className="drawer-backdrop" onClick={onClose} aria-hidden />
+          <div className={`drawer ${full ? 'full' : ''}`} role="dialog" aria-modal="true">
+            <div className="drawer-nav">
+              <button className="btn small" disabled={at <= 0} onClick={() => go(-1)}>
+                ↑ Previous
+              </button>
+              <button
+                className="btn small"
+                disabled={at < 0 || at >= shown.length - 1}
+                onClick={() => go(1)}
+              >
+                ↓ Next
+              </button>
+              <span className="sub">
+                {at >= 0 ? `${at + 1} of ${shown.length}` : 'Not in this list'} · ↑ ↓ to move · Esc
+                to close
+              </span>
+              <span className="toolbar-end">
+                <button className="btn small" onClick={() => setUrl({ full: full ? null : '1' })}>
+                  {full ? 'Narrower' : 'Full width'}
+                </button>
+                {onClose ? (
+                  <button className="btn small" onClick={onClose}>
+                    Close
+                  </button>
+                ) : null}
+              </span>
+            </div>
+            <div className="drawer-body">{detail}</div>
+          </div>
+        </>
       ) : null}
     </section>
   );

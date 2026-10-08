@@ -14,7 +14,6 @@ import { useRequestList } from '../lib/lists';
 import { useUrlState } from '../lib/params';
 import { Age } from '../ui/Age';
 import { DataTable, type Column } from '../ui/DataTable';
-import { useSplitClass } from '../ui/PanelControls';
 import { REQUEST_TONES } from '../ui/status';
 import { Tiles } from '../ui/Tiles';
 import { RequestPanel } from './RequestPanel';
@@ -68,7 +67,6 @@ export function Requests() {
       (!city || r.property?.city === city) &&
       (!waited || now - Date.parse(r.created_at) > waited * 86_400_000),
   );
-  const splitClass = useSplitClass(selected);
 
   const columns: Column<BackofficeRequest>[] = [
     {
@@ -189,97 +187,80 @@ export function Requests() {
           { value: 'all', label: 'Everything', count: data?.length ?? '–' },
         ]}
       />
-      <div className={splitClass}>
-        <DataTable
-          rows={rows}
-          columns={columns}
-          rowKey={(r) => r.id}
-          selected={selected}
-          onRowClick={(r) => set({ id: r.id })}
-          searchText={(r) =>
-            `${r.reference} ${r.service.name} ${r.customer_name ?? ''} ${r.customer_phone ?? ''} ${r.property?.name ?? ''} ${r.property?.city ?? ''} ${requestStatusLabel(r.status, r.fulfilment)} ${r.description}`
-          }
-          searchPlaceholder="Search anything: reference, service, customer, phone, property, city"
-          defaultSort={{ key: 'created', dir: 'desc' }}
-          exportName="requests"
-          loading={isPending}
-          error={error ? errorText(error) : null}
-          empty="No requests here."
-          compact={(r) => (
-            <>
-              <span className="c-main">
-                {r.service.name}
-                <span className={`badge ${REQUEST_TONES[r.status]}`}>
-                  {requestStatusLabel(r.status, r.fulfilment)}
-                </span>
-              </span>
-              <span className="c-sub">
-                {r.customer_name || r.customer_phone || 'Customer'} ·{' '}
-                {r.property?.name ?? 'Property deleted'}
-              </span>
-              <span className="c-sub mono">
-                {r.reference} ·{' '}
-                {isOpen(r) ? <Age since={r.created_at} now={now} /> : date(r.created_at)}
-              </span>
-            </>
-          )}
-          toolbar={
-            <>
-              <select
-                value={service}
-                onChange={(e) => set({ service: e.target.value || null })}
-                aria-label="Service"
-              >
-                <option value="">All services</option>
-                {services.map((s) => (
-                  <option key={s}>{s}</option>
-                ))}
-              </select>
-              <select
-                value={kind}
-                onChange={(e) => set({ kind: e.target.value || null })}
-                aria-label="Kind"
-              >
-                <option value="">Visits and paperwork</option>
-                <option value="visit">{SERVICE_FULFILMENT_LABELS.visit}</option>
-                <option value="assistance">{SERVICE_FULFILMENT_LABELS.assistance}</option>
-              </select>
-              <select
-                value={coverage}
-                onChange={(e) => set({ coverage: e.target.value || null })}
-                aria-label="Paid how"
-              >
-                <option value="">In plan and extras</option>
-                <option value="included">In the plan</option>
-                <option value="extra">Paid extra</option>
-              </select>
-              <select
-                value={city}
-                onChange={(e) => set({ city: e.target.value || null })}
-                aria-label="City"
-              >
-                <option value="">All cities</option>
-                {cities.map((c) => (
-                  <option key={c}>{c}</option>
-                ))}
-              </select>
-              <select
-                value={waited ? String(waited) : ''}
-                onChange={(e) => set({ waited: e.target.value || null })}
-                aria-label="Waiting"
-              >
-                <option value="">Any age</option>
-                <option value="1">Older than 1 day</option>
-                <option value="3">Older than 3 days</option>
-                <option value="7">Older than a week</option>
-              </select>
-            </>
-          }
-        />
-        {selected ? (
-          <RequestPanel id={selected} onClose={() => set({ id: null, full: null })} />
-        ) : null}
-      </div>
+      <DataTable
+        rows={rows}
+        columns={columns}
+        rowKey={(r) => r.id}
+        selected={selected}
+        onRowClick={(r) => set({ id: r.id })}
+        onClose={() => set({ id: null, full: null })}
+        detail={
+          selected ? (
+            <RequestPanel id={selected} onClose={() => set({ id: null, full: null })} />
+          ) : null
+        }
+        searchText={(r) =>
+          `${r.reference} ${r.service.name} ${r.customer_name ?? ''} ${r.customer_phone ?? ''} ${r.property?.name ?? ''} ${r.property?.city ?? ''} ${requestStatusLabel(r.status, r.fulfilment)} ${r.description}`
+        }
+        searchPlaceholder="Search anything: reference, service, customer, phone, property, city"
+        defaultSort={{ key: 'created', dir: 'desc' }}
+        exportName="requests"
+        loading={isPending}
+        error={error ? errorText(error) : null}
+        empty="No requests here."
+        toolbar={
+          <>
+            <select
+              value={service}
+              onChange={(e) => set({ service: e.target.value || null })}
+              aria-label="Service"
+            >
+              <option value="">All services</option>
+              {services.map((s) => (
+                <option key={s}>{s}</option>
+              ))}
+            </select>
+            <select
+              value={kind}
+              onChange={(e) => set({ kind: e.target.value || null })}
+              aria-label="Kind"
+            >
+              <option value="">Visits and paperwork</option>
+              <option value="visit">{SERVICE_FULFILMENT_LABELS.visit}</option>
+              <option value="assistance">{SERVICE_FULFILMENT_LABELS.assistance}</option>
+            </select>
+            <select
+              value={coverage}
+              onChange={(e) => set({ coverage: e.target.value || null })}
+              aria-label="Paid how"
+            >
+              <option value="">In plan and extras</option>
+              <option value="included">In the plan</option>
+              <option value="extra">Paid extra</option>
+            </select>
+            <select
+              value={city}
+              onChange={(e) => set({ city: e.target.value || null })}
+              aria-label="City"
+            >
+              <option value="">All cities</option>
+              {cities.map((c) => (
+                <option key={c}>{c}</option>
+              ))}
+            </select>
+            <select
+              value={waited ? String(waited) : ''}
+              onChange={(e) => set({ waited: e.target.value || null })}
+              aria-label="Waiting"
+            >
+              <option value="">Any age</option>
+              <option value="1">Older than 1 day</option>
+              <option value="3">Older than 3 days</option>
+              <option value="7">Older than a week</option>
+            </select>
+          </>
+        }
+      />
     </div>
   );
 }

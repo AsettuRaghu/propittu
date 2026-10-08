@@ -18,10 +18,8 @@ import { useLive } from '../lib/live';
 import { useUrlState } from '../lib/params';
 import { DataTable, type Column } from '../ui/DataTable';
 import { Age } from '../ui/Age';
-import { useSplitClass } from '../ui/PanelControls';
 import { TICKET_TONES } from '../ui/status';
 import { Tiles } from '../ui/Tiles';
-import { PanelControls } from '../ui/PanelControls';
 import { useEscape } from '../ui/useEscape';
 
 const onUs = (t: BackofficeTicket) => t.status === 'open' || t.status === 'in_progress';
@@ -35,7 +33,6 @@ export function Support() {
   const { data, error, isPending } = useTicketList();
   const { unseen } = useLive();
   const [now] = useState(() => Date.now());
-  const splitClass = useSplitClass(selected);
 
   const views = {
     on_us: onUs,
@@ -141,64 +138,42 @@ export function Support() {
           { value: 'all', label: 'Everything', count: data?.length ?? '–' },
         ]}
       />
-      <div className={splitClass}>
-        <DataTable
-          rows={rows}
-          columns={columns}
-          rowKey={(t) => t.id}
-          selected={selected}
-          onRowClick={(t) => set({ id: t.id })}
-          searchText={(t) =>
-            `${t.reference} ${t.subject} ${t.customer_name ?? ''} ${t.customer_phone ?? ''} ${TICKET_CATEGORY_LABELS[t.category]} ${t.property?.name ?? ''} ${t.service_request?.service?.name ?? ''}`
-          }
-          searchPlaceholder="Search anything: reference, subject, customer, phone, topic"
-          defaultSort={{ key: 'last', dir: 'desc' }}
-          exportName="tickets"
-          loading={isPending}
-          error={error ? errorText(error) : null}
-          empty="No tickets here."
-          compact={(t) => (
-            <>
-              <span className="c-main">
-                {t.subject}
-                {unseen.has(t.id) ? (
-                  <span className="badge bad">New</span>
-                ) : (
-                  <span className={`badge ${TICKET_TONES[t.status]}`}>
-                    {TICKET_STATUS_LABELS[t.status]}
-                  </span>
-                )}
-              </span>
-              <span className="c-sub">{t.customer_name || t.customer_phone || 'Customer'}</span>
-              <span className="c-sub mono">
-                {t.reference} ·{' '}
-                {onUs(t) ? (
-                  <Age since={t.last_message_at} now={now} />
-                ) : (
-                  relative(t.last_message_at)
-                )}
-              </span>
-            </>
-          )}
-          toolbar={
-            <select
-              value={category}
-              onChange={(e) => set({ category: e.target.value || null })}
-              aria-label="Topic"
-            >
-              <option value="">All topics</option>
-              {TICKET_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {TICKET_CATEGORY_LABELS[c]}
-                </option>
-              ))}
-            </select>
-          }
-        />
-        {selected ? (
-          <TicketPanel id={selected} onClose={() => set({ id: null, full: null })} />
-        ) : null}
-      </div>
+      <DataTable
+        rows={rows}
+        columns={columns}
+        rowKey={(t) => t.id}
+        selected={selected}
+        onRowClick={(t) => set({ id: t.id })}
+        onClose={() => set({ id: null, full: null })}
+        detail={
+          selected ? (
+            <TicketPanel id={selected} onClose={() => set({ id: null, full: null })} />
+          ) : null
+        }
+        searchText={(t) =>
+          `${t.reference} ${t.subject} ${t.customer_name ?? ''} ${t.customer_phone ?? ''} ${TICKET_CATEGORY_LABELS[t.category]} ${t.property?.name ?? ''} ${t.service_request?.service?.name ?? ''}`
+        }
+        searchPlaceholder="Search anything: reference, subject, customer, phone, topic"
+        defaultSort={{ key: 'last', dir: 'desc' }}
+        exportName="tickets"
+        loading={isPending}
+        error={error ? errorText(error) : null}
+        empty="No tickets here."
+        toolbar={
+          <select
+            value={category}
+            onChange={(e) => set({ category: e.target.value || null })}
+            aria-label="Topic"
+          >
+            <option value="">All topics</option>
+            {TICKET_CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {TICKET_CATEGORY_LABELS[c]}
+              </option>
+            ))}
+          </select>
+        }
+      />
     </div>
   );
 }
@@ -248,7 +223,6 @@ function TicketPanel({ id, onClose }: { id: string; onClose: () => void }) {
           <h2>{t?.subject ?? 'Ticket'}</h2>
           {t ? <span className="mono">{t.reference}</span> : null}
         </div>
-        <PanelControls onClose={onClose} />
       </div>
       {isPending ? <div className="empty">Loading…</div> : null}
       {error ? <div className="empty error">{errorText(error)}</div> : null}
