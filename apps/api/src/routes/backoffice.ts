@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { dashboardRouter } from './backofficeDashboard.js';
 import { catalogueRouter } from './backofficeCatalogue.js';
+import { coverageRouter } from './backofficeCoverage.js';
 import { plansConsoleRouter } from './backofficePlans.js';
 import { reportsRouter } from './backofficeReports.js';
 import { cancelOpenLinks } from '../billing/billing.js';
@@ -14,17 +15,7 @@ import {
   extendPlanSchema,
   releaseSlotSchema,
   requestPriceSchema,
-  areaPincodesSchema,
-  createAreaSchema,
-  createStateSchema,
-  INDIAN_PINCODE_REGEX,
   reachExceptionSchema,
-  updateAreaSchema,
-  updateStateSchema,
-  type BackofficeCoverage,
-  type ReachDemand,
-  type ServiceArea,
-  type ServiceState,
   type StaffPropertyReach,
   reviewDecisionSchema,
   grantPlanSchema,
@@ -146,6 +137,7 @@ backofficeRouter.use(dashboardRouter);
 backofficeRouter.use(reportsRouter);
 backofficeRouter.use(plansConsoleRouter);
 backofficeRouter.use(catalogueRouter);
+backofficeRouter.use(coverageRouter);
 
 const staffAudit = (
   ctx: AuthContext,
@@ -1709,142 +1701,10 @@ async function loadPittu(db: SupabaseClient, propertyId: string): Promise<Backof
 }
 
 /* ================================================================== *
- * Where we serve: areas (PIN codes), states, demand, exceptions.
- * Every change is recorded by the tables' audit triggers.
+ * Where we serve: per-property exceptions. PIN codes, zones and service
+ * coverage are in backofficeCoverage.ts. Changes are recorded by the
+ * tables' audit triggers.
  * ================================================================== */
-
-async function loadCoverage(db: SupabaseClient): Promise<BackofficeCoverage> {
-  const [areas, pins, states, demand, props] = await Promise.all([
-    db.from('service_areas').select('id, name, state, is_active').order('name'),
-    db.from('service_area_pincodes').select('pincode, area_id').order('pincode').limit(10000),
-    db.from('service_states').select('state, pincode_prefixes, is_active').order('state'),
-    db.rpc('reach_demand'),
-    db
-      .from('properties')
-      .select('pincode')
-      .eq('is_draft', false)
-      .not('pincode', 'is', null)
-      .limit(50000),
-  ]);
-  const byArea = new Map<string, string[]>();
-  for (const p of must<{ pincode: string; area_id: string }[]>(pins)) {
-    byArea.set(p.area_id, [...(byArea.get(p.area_id) ?? []), p.pincode]);
-  }
-  // Properties per PIN code, to show how many each area and state serves.
-  const perPin = new Map<string, number>();
-  for (const p of must<{ pincode: string }[]>(props))
-    perPin.set(p.pincode, (perPin.get(p.pincode) ?? 0) + 1);
-  const count = (match: (pin: string) => boolean) =>
-    [...perPin].reduce((n, [pin, c]) => (match(pin) ? n + c : n), 0);
-  return {
-    areas: must<Omit<ServiceArea, 'pincodes'>[]>(areas).map((a) => {
-      const pincodes = byArea.get(a.id) ?? [];
-      const set = new Set(pincodes);
-      return { ...a, pincodes, properties: count((pin) => set.has(pin)) };
-    }),
-    states: must<ServiceState[]>(states).map((st) => ({
-      ...st,
-      properties: count((pin) => st.pincode_prefixes.some((pre) => pin.startsWith(pre))),
-    })),
-    demand: must<ReachDemand[]>(demand),
-  };
-}
-
-/* GET /backoffice/coverage */
-backofficeRouter.get('/coverage', async (req, res) => {
-  ok(res, await loadCoverage(auth(req).db));
-});
-
-/* POST /backoffice/areas {name, state} */
-backofficeRouter.post('/areas', allow('services.manage'), async (req, res) => {
-  const { db } = auth(req);
-  const input = createAreaSchema.parse(req.body);
-  const { error } = await db.from('service_areas').insert(input);
-  if (error?.code === '23505')
-    throw new HttpError(409, 'CONFLICT', 'An area with this name exists');
-  must({ error, data: null });
-  ok(res, await loadCoverage(db), 201);
-});
-
-/* PATCH /backoffice/areas/:id {name?, is_active?} */
-backofficeRouter.patch('/areas/:id', allow('services.manage'), async (req, res) => {
-  const { db } = auth(req);
-  const id = uuidParam(req.params.id, 'Area');
-  const input = updateAreaSchema.parse(req.body);
-  const row = must<{ id: string } | null>(
-    await db.from('service_areas').update(input).eq('id', id).select('id').maybeSingle(),
-  );
-  if (!row) throw notFound('Area');
-  ok(res, await loadCoverage(db));
-});
-
-/*
- * POST /backoffice/areas/:id/pincodes {pincodes} — adds PIN codes. A PIN
- * already in another area is refused (one PIN, one area) and named.
- */
-backofficeRouter.post('/areas/:id/pincodes', allow('services.manage'), async (req, res) => {
-  const { db } = auth(req);
-  const id = uuidParam(req.params.id, 'Area');
-  const pincodes = [...new Set(areaPincodesSchema.parse(req.body).pincodes)];
-  const taken = must<{ pincode: string; area_id: string }[]>(
-    await db.from('service_area_pincodes').select('pincode, area_id').in('pincode', pincodes),
-  );
-  const elsewhere = taken.filter((t) => t.area_id !== id).map((t) => t.pincode);
-  if (elsewhere.length) {
-    throw invalid(`Already in another area: ${elsewhere.join(', ')}`, {
-      pincodes: 'Remove these from the other area first',
-    });
-  }
-  const fresh = pincodes.filter((p) => !taken.some((t) => t.pincode === p));
-  if (fresh.length) {
-    must(
-      await db
-        .from('service_area_pincodes')
-        .insert(fresh.map((pincode) => ({ pincode, area_id: id }))),
-    );
-  }
-  ok(res, await loadCoverage(db));
-});
-
-/* DELETE /backoffice/areas/:id/pincodes/:pincode */
-backofficeRouter.delete(
-  '/areas/:id/pincodes/:pincode',
-  allow('services.manage'),
-  async (req, res) => {
-    const { db } = auth(req);
-    const id = uuidParam(req.params.id, 'Area');
-    const pincode = String(req.params.pincode);
-    if (!INDIAN_PINCODE_REGEX.test(pincode)) throw invalid('Enter a valid 6-digit PIN code');
-    must(await db.from('service_area_pincodes').delete().eq('area_id', id).eq('pincode', pincode));
-    ok(res, await loadCoverage(db));
-  },
-);
-
-/* POST /backoffice/states {state, pincode_prefixes} */
-backofficeRouter.post('/states', allow('services.manage'), async (req, res) => {
-  const { db } = auth(req);
-  const input = createStateSchema.parse(req.body);
-  const { error } = await db.from('service_states').insert(input);
-  if (error?.code === '23505') throw new HttpError(409, 'CONFLICT', 'This state is already listed');
-  must({ error, data: null });
-  ok(res, await loadCoverage(db), 201);
-});
-
-/* PATCH /backoffice/states/:state {is_active?, pincode_prefixes?} */
-backofficeRouter.patch('/states/:state', allow('services.manage'), async (req, res) => {
-  const { db } = auth(req);
-  const input = updateStateSchema.parse(req.body);
-  const row = must<{ state: string } | null>(
-    await db
-      .from('service_states')
-      .update(input)
-      .eq('state', String(req.params.state))
-      .select('state')
-      .maybeSingle(),
-  );
-  if (!row) throw notFound('State');
-  ok(res, await loadCoverage(db));
-});
 
 /** Reach of one property for staff (with the exception reason, if any). */
 async function loadStaffReach(

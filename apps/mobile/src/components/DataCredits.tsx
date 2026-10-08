@@ -6,7 +6,8 @@ const OSM_COPYRIGHT = 'https://www.openstreetmap.org/copyright';
 /**
  * Credits the open data we use, as their licences require: place names and
  * PIN code areas © OpenStreetMap contributors (ODbL), weather from MET
- * Norway (CC BY 4.0). Shown wherever that data appears.
+ * Norway (CC BY 4.0), the PIN directory from India Post via data.gov.in
+ * (Government Open Data Licence – India). Shown wherever that data appears.
  */
 export function DataCredits({
   weather = false,
@@ -25,6 +26,7 @@ export function DataCredits({
       >
         © OpenStreetMap contributors
       </Text>
+      {' · PIN codes: India Post, data.gov.in (GODL)'}
     </Text>
   );
 }

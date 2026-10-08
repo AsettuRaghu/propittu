@@ -11,6 +11,9 @@
     "packages/shared": {},
     "apps/backoffice": {
       "entry": ["src/main.tsx"]
+    },
+    ".": {
+      "entry": ["supabase/pincodes/*.mjs"]
     }
   },
   "ignoreBinaries": ["supabase", "expo-doctor"]

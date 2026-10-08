@@ -61,6 +61,10 @@ of each section.
 | **A sale deed already in the locker (7 Oct 2026).** Same file (fingerprint, no AI cost) or same registration number → "Pittu knows this deed" with the property's name; **Open it** (the attempt is cleared) or the quiet link **"It's a different property — add it as new"** (form pre-filled from it). | The usual case is a forgotten upload; the link covers one deed for two sites. |
 | **The sale deed comes first (7 Oct 2026).** Pittu fills in from the deed; going against it asks first; if the customer goes ahead, it stays listed under "Differs from your deed" (with "Use deed's") until closed, and changes at setup go on the Backoffice Review list. | The deed is the most reliable source; the app warns and records, the customer decides. |
 
+| **Coverage is built on PIN codes (8 Oct 2026).** India's PIN directory (India Post, data.gov.in, GODL) is loaded into `pincodes` (`supabase/pincodes/pincodes.mjs`). Zones are named groups of PINs made of whole states, whole districts, single PINs and PINs left out; state and district rules follow the directory. Each service lists where it's offered (everywhere, zones, states, districts, PINs); the database decides per property (`service_covers`, `property_reach`). Old visit areas became zones; paperwork states became state rules on paperwork services. | One model for every service and place; nothing changed for customers on day one (checked on live data). The directory in use is the 2017 copy; refresh it with the current official file (`build` then `load`). |
+| **Services and plans are ordered by drag, categories are data, pricing is an explicit choice** (Fixed, On quote, Plan only) **(8 Oct 2026).** | The team runs the catalogue without code changes. |
+| **Renewals can stay on the customer's plan version** (per-version setting, on by default when publishing) **(8 Oct 2026).** | Changing a plan never surprises existing customers at renewal. |
+
 ## Known debt before public launch
 
 | Item | Risk | Fix |
@@ -70,4 +74,4 @@ of each section.
 | Real SMS isn't set up yet (DLT). | Only test numbers can sign in. | See SUPABASE_SETUP.md §9. |
 | Vercel Hobby plan is non-commercial. | Not allowed for a commercial launch. | Upgrade the team to Pro (about $20/month) before launch. |
 | `VERCEL_TOKEN` (GitHub secret) expires 1 year after creation. | Deploys stop working when it expires. | Renew it as described in DEPLOYMENT.md. |
-| No admin interface. | Service-request status is changed by hand in SQL. | Deliberately out of scope for V1 (§9). |
+| PIN directory is the 2017 copy of India Post's file. | Newer PIN codes are missing (the app warns but doesn't block). | Download the current "All India Pincode Directory" from data.gov.in, then `node supabase/pincodes/pincodes.mjs build <file>` and `load`. |

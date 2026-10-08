@@ -1,4 +1,4 @@
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import {
@@ -8,16 +8,17 @@ import {
   PAYMENT_TIMING_LABELS,
   SERVICE_FULFILMENTS,
   SERVICE_FULFILMENT_LABELS,
-  SERVICE_REACHES,
-  SERVICE_REACH_LABELS,
   requestStatusLabel,
+  type CoverageSummaryRow,
+  type CoverageZone,
+  type ServiceCoverage,
   type StaffService,
 } from '@propittu/shared';
 import { api, errorText } from '../lib/api';
 import { date, rupees } from '../lib/format';
 import { useRequestList } from '../lib/lists';
 import { REQUEST_TONES } from '../ui/status';
-import { useCoverage } from './Coverage';
+import { districtLabel, useCoverageSummary, useZones } from './Coverage';
 import { useCategories, useServices } from './Services';
 
 type Draft = {
@@ -75,7 +76,6 @@ const toBody = (d: Draft) => ({
   is_active: d.is_active,
   is_extra_available: d.pricing !== 'plan',
   fulfilment: d.fulfilment,
-  reach: d.reach,
   includes: d.includes.map((l) => l.trim()).filter(Boolean),
   turnaround: d.turnaround.trim() || null,
   payment_timing: d.payment_timing,
@@ -140,7 +140,7 @@ function Editor({ service, nextOrder }: { service: StaffService | null; nextOrde
       } else {
         const row = await api<StaffService>('/backoffice/services', {
           method: 'POST',
-          body: { code: d.code.trim(), ...toBody(d) },
+          body: { code: d.code.trim(), reach: 'area', ...toBody(d) },
         });
         void navigate(`/services/${row.id}`, { replace: true });
       }
@@ -422,7 +422,11 @@ function Editor({ service, nextOrder }: { service: StaffService | null; nextOrde
               {msg ? <span className={msg.ok ? 'note-ok' : 'error'}>{msg.text}</span> : null}
             </div>
           </section>
-          <Reach d={d} put={(v) => put('reach', v)} />
+          {service ? (
+            <Where serviceId={service.id} />
+          ) : (
+            <span className="sub">After you add the service, choose where it's offered here.</span>
+          )}
           <Preview d={d} />
           {service ? <Activity serviceId={service.id} /> : null}
         </aside>
@@ -431,64 +435,240 @@ function Editor({ service, nextOrder }: { service: StaffService | null; nextOrde
   );
 }
 
-/** Where the service reaches, using the live places in Coverage. */
-function Reach({ d, put }: { d: Draft; put: (v: StaffService['reach']) => void }) {
-  const { data } = useCoverage();
-  const areas = data?.areas.filter((a) => a.is_active) ?? [];
-  const states = data?.states.filter((s) => s.is_active) ?? [];
-  return (
+/** Where the service is offered: zones, whole states or districts, single PINs, or everywhere. */
+function Where({ serviceId }: { serviceId: string }) {
+  const qc = useQueryClient();
+  const zones = useZones();
+  const summary = useCoverageSummary();
+  const { data } = useQuery({
+    queryKey: ['bo-service-coverage', serviceId],
+    queryFn: () => api<ServiceCoverage>(`/backoffice/services/${serviceId}/coverage`),
+  });
+  return data ? (
+    <WhereEditor
+      key={JSON.stringify(data.rules)}
+      saved={data}
+      zones={zones.data ?? []}
+      summary={summary.data ?? []}
+      onSave={async (rules) => {
+        await api(`/backoffice/services/${serviceId}/coverage`, { method: 'PUT', body: { rules } });
+        await qc.invalidateQueries({ queryKey: ['bo-service-coverage', serviceId] });
+        void qc.invalidateQueries({ queryKey: ['bo-services'] });
+        void qc.invalidateQueries({ queryKey: ['bo-zones'] });
+      }}
+    />
+  ) : (
     <section className="section">
+      <div className="section-body sub">Loading where it's offered…</div>
+    </section>
+  );
+}
+
+type Rule = ServiceCoverage['rules'][number];
+
+function WhereEditor({
+  saved,
+  zones,
+  summary,
+  onSave,
+}: {
+  saved: ServiceCoverage;
+  zones: CoverageZone[];
+  summary: CoverageSummaryRow[];
+  onSave: (rules: Rule[]) => Promise<void>;
+}) {
+  const [rules, setRules] = useState<Rule[]>(saved.rules);
+  const [st, setSt] = useState('');
+  const [dSt, setDSt] = useState('');
+  const [dist, setDist] = useState('');
+  const [pins, setPins] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const dirty = JSON.stringify(rules) !== JSON.stringify(saved.rules);
+  const has = (kind: Rule['kind'], value = '') =>
+    rules.some((r) => r.kind === kind && r.value === value);
+  const toggle = (kind: Rule['kind'], value = '') =>
+    setRules((rs) =>
+      has(kind, value)
+        ? rs.filter((r) => !(r.kind === kind && r.value === value))
+        : [...rs, { kind, value }],
+    );
+  const addMany = (kind: Rule['kind'], values: string[]) =>
+    setRules((rs) => [
+      ...rs,
+      ...values
+        .filter((v) => !rs.some((r) => r.kind === kind && r.value === v))
+        .map((value) => ({ kind, value })),
+    ]);
+  const everywhere = has('everywhere');
+  const states = [...new Set(summary.map((r) => r.state))].sort();
+  const districts = summary.filter((r) => r.state === dSt).map((r) => r.district);
+  const list = (kind: Rule['kind'], fmt: (v: string) => string = (v) => v) =>
+    rules
+      .filter((r) => r.kind === kind)
+      .map((r) => (
+        <span key={r.value} className="pin">
+          {fmt(r.value)}
+          <button aria-label={`Remove ${r.value}`} onClick={() => toggle(kind, r.value)}>
+            ×
+          </button>
+        </span>
+      ));
+  const save = async () => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      await onSave(rules);
+      setMsg({ ok: true, text: 'Saved. The app uses it straight away.' });
+    } catch (e) {
+      setMsg({ ok: false, text: errorText(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className={`section ${dirty ? 'publish dirty' : ''}`}>
       <div className="section-head">
         <h2>Where it's offered</h2>
         <Link to="/coverage">Coverage</Link>
       </div>
       <div className="section-body stack">
-        <select
-          value={d.reach}
-          onChange={(e) => put(e.target.value as StaffService['reach'])}
-          aria-label="Reach"
-        >
-          {SERVICE_REACHES.map((r) => (
-            <option key={r} value={r}>
-              {SERVICE_REACH_LABELS[r]}
-            </option>
-          ))}
-        </select>
-        {d.reach === 'everywhere' ? (
-          <span className="sub">Anywhere in India — no area or state needed.</span>
-        ) : d.reach === 'area' ? (
+        <span className="sub">
+          {saved.everywhere
+            ? 'Now: everywhere in India.'
+            : `Now: ${saved.pins.toLocaleString('en-IN')} PIN codes · ${saved.properties} customer properties.`}
+        </span>
+        <label className="check">
+          <input type="checkbox" checked={everywhere} onChange={() => toggle('everywhere')} />
+          Everywhere in India (no location needed)
+        </label>
+        {!everywhere ? (
           <>
-            <span className="sub">
-              Properties with a PIN code in a live visit area: {areas.length} areas,{' '}
-              {areas.reduce((n, a) => n + a.properties, 0)} properties today.
-            </span>
-            <div className="pins">
-              {areas.map((a) => (
-                <Link key={a.id} className="pin link-pin" to={`/coverage?tab=areas&id=${a.id}`}>
-                  {a.name}
-                </Link>
+            <div className="where-block">
+              <b>Zones</b>
+              {zones.length === 0 ? (
+                <span className="sub">No zones yet — make them under Coverage → Zones.</span>
+              ) : null}
+              {zones.map((z) => (
+                <label key={z.id} className="check">
+                  <input
+                    type="checkbox"
+                    checked={has('zone', z.id)}
+                    onChange={() => toggle('zone', z.id)}
+                  />
+                  {z.name}
+                  <span className="sub inline">
+                    {' '}
+                    · {z.pin_count} PINs{z.is_active ? '' : ' · paused'}
+                  </span>
+                </label>
               ))}
             </div>
-          </>
-        ) : (
-          <>
-            <span className="sub">
-              Properties in a live paperwork state: {states.length} states,{' '}
-              {states.reduce((n, s) => n + s.properties, 0)} properties today.
-            </span>
-            <div className="pins">
-              {states.map((s) => (
-                <Link
-                  key={s.state}
-                  className="pin link-pin"
-                  to={`/coverage?tab=states&id=${encodeURIComponent(s.state)}`}
+            <div className="where-block">
+              <b>Whole states</b>
+              <div className="pins">{list('state')}</div>
+              <div className="row">
+                <select value={st} onChange={(e) => setSt(e.target.value)} aria-label="State">
+                  <option value="">Choose a state…</option>
+                  {states.map((x) => (
+                    <option key={x}>{x}</option>
+                  ))}
+                </select>
+                <button
+                  className="btn small"
+                  disabled={!st}
+                  onClick={() => {
+                    addMany('state', [st]);
+                    setSt('');
+                  }}
                 >
-                  {s.state}
-                </Link>
-              ))}
+                  Add
+                </button>
+              </div>
+            </div>
+            <div className="where-block">
+              <b>Whole districts</b>
+              <div className="pins">{list('district', districtLabel)}</div>
+              <div className="row">
+                <select
+                  value={dSt}
+                  onChange={(e) => {
+                    setDSt(e.target.value);
+                    setDist('');
+                  }}
+                  aria-label="State"
+                >
+                  <option value="">State…</option>
+                  {states.map((x) => (
+                    <option key={x}>{x}</option>
+                  ))}
+                </select>
+                <select
+                  value={dist}
+                  disabled={!dSt}
+                  onChange={(e) => setDist(e.target.value)}
+                  aria-label="District"
+                >
+                  <option value="">District…</option>
+                  {districts.map((x) => (
+                    <option key={x}>{x}</option>
+                  ))}
+                </select>
+                <button
+                  className="btn small"
+                  disabled={!dist}
+                  onClick={() => {
+                    addMany('district', [`${dist}|${dSt}`]);
+                    setDist('');
+                  }}
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+            <div className="where-block">
+              <b>Single PIN codes</b>
+              <div className="pins">{list('pincode')}</div>
+              <form
+                className="row"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  addMany(
+                    'pincode',
+                    pins.split(/[\s,;]+/).filter((p) => /^[1-9][0-9]{5}$/.test(p)),
+                  );
+                  setPins('');
+                }}
+              >
+                <input
+                  className="grow"
+                  value={pins}
+                  onChange={(e) => setPins(e.target.value)}
+                  placeholder="Paste PIN codes"
+                />
+                <button className="btn small" disabled={!pins.trim()}>
+                  Add
+                </button>
+              </form>
             </div>
           </>
-        )}
+        ) : null}
+        <div className="row">
+          <button className="btn primary" disabled={!dirty || busy} onClick={() => void save()}>
+            Save where it's offered
+          </button>
+          {dirty ? (
+            <button className="btn" onClick={() => setRules(saved.rules)}>
+              Undo
+            </button>
+          ) : null}
+        </div>
+        {!everywhere && rules.length === 0 ? (
+          <span className="warn-text">
+            Offered nowhere: customers will see “Not in your area yet”.
+          </span>
+        ) : null}
+        {msg ? <span className={msg.ok ? 'note-ok' : 'error'}>{msg.text}</span> : null}
       </div>
     </section>
   );

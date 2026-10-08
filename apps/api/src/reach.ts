@@ -3,8 +3,9 @@ import type { PropertyReach } from '@propittu/shared';
 import { must } from './errors.js';
 
 /**
- * What reaches each property of an account (visits by PIN code, paperwork
- * by state) — decided in SQL by property_reach(); members and staff only.
+ * What reaches each property of an account — decided in SQL by
+ * property_reach() from each service's coverage (PIN codes, zones, states);
+ * members and staff only.
  */
 export async function loadReach(
   db: SupabaseClient,
@@ -20,6 +21,7 @@ export async function loadReach(
       has_pincode: boolean;
       is_exception: boolean;
       interested: boolean;
+      service_ids: string[];
     }[]
   >(await db.rpc('property_reach', { p_account: accountId }));
   return new Map(
@@ -33,6 +35,7 @@ export async function loadReach(
         has_pincode: r.has_pincode,
         exception: r.is_exception,
         interested: r.interested,
+        service_ids: r.service_ids,
       },
     ]),
   );

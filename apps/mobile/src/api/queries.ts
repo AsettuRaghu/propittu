@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  PincodeInfo,
   PropertyReach,
   AccountPlanState,
   CatalogueService,
@@ -226,3 +227,13 @@ export function useInvalidateProperty() {
     void qc.invalidateQueries({ queryKey: keys.properties, exact: true });
   };
 }
+
+/** Place, district and state for a PIN code, from India's PIN directory (null when not found). */
+export const usePincode = (pin: string) =>
+  useQuery({
+    queryKey: ['pincode', pin],
+    enabled: /^[1-9][0-9]{5}$/.test(pin),
+    staleTime: Infinity,
+    retry: false,
+    queryFn: () => api<PincodeInfo>(`/pincodes/${pin}`).catch(() => null),
+  });

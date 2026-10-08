@@ -103,9 +103,16 @@ insert into public.staff_members (user_id, role)
 values ('55555555-5555-5555-5555-555555555555', 'super_admin');
 select public.start_trial('acc0000a-0000-0000-0000-00000000000a');
 select public.start_trial('acc0000b-0000-0000-0000-00000000000b');
--- A test visit area so the Hyderabad fixture below can book visits.
-with area as (insert into public.service_areas (name, state) values ('Test Hyderabad', 'Telangana') returning id)
-insert into public.service_area_pincodes (pincode, area_id) select '500032', id from area;
+-- A few PIN directory rows, and a visit zone so the Hyderabad fixture below can book visits.
+insert into public.pincodes (pincode, place, district, state) values
+  ('500032', 'Gachibowli', 'Rangareddy', 'Telangana'),
+  ('500081', 'Madhapur', 'Rangareddy', 'Telangana'),
+  ('500001', 'Hyderabad GPO', 'Hyderabad', 'Telangana'),
+  ('751001', 'Bhubaneswar', 'Khurda', 'Odisha');
+with z as (insert into public.coverage_zones (name) values ('Test Hyderabad') returning id),
+     r as (insert into public.coverage_zone_rules (zone_id, kind, value) select id, 'pincode', '500032' from z returning zone_id)
+insert into public.service_coverage (service_id, kind, value)
+select s.id, 'zone', (select zone_id from r limit 1)::text from public.services s where s.reach = 'area';
 
 
 -- =====================================================================
@@ -1390,9 +1397,9 @@ select tst.rejects($$select public.create_service_request('a1a1a1a1-0000-0000-00
 select tst.rejects($$select public.create_service_request('a1a1a1a1-0000-0000-0000-0000000000f1',
                      (select id from public.services where code = 'property_tax_assistance'), '')$$,
   'paperwork help cannot be booked in a state we do not cover');
-select tst.rejects($$insert into public.service_area_pincodes (pincode, area_id)
-                     select '751001', id from public.service_areas limit 1$$,
-  'customers cannot change service areas');
+select tst.rows('select * from public.coverage_zones', 0, 'customers do not read coverage zones');
+select tst.rejects($$insert into public.coverage_zones (name) values ('My own zone')$$,
+  'customers cannot change coverage zones');
 insert into public.reach_interest (property_id, account_id, created_by)
 values ('a1a1a1a1-0000-0000-0000-0000000000f1', 'acc0000a-0000-0000-0000-00000000000a', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
 select tst.ok((select interested from public.property_reach('acc0000a-0000-0000-0000-00000000000a')
@@ -1430,6 +1437,62 @@ select tst.rejects($$insert into public.property_reach_exceptions (property_id, 
 reset role;
 delete from public.service_requests where property_id = 'a1a1a1a1-0000-0000-0000-0000000000f1';
 delete from public.properties where id = 'a1a1a1a1-0000-0000-0000-0000000000f1';
+
+-- =====================================================================
+\echo
+\echo '== Coverage by PIN code: zones and per-service coverage =='
+-- =====================================================================
+set role authenticated;
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+insert into public.coverage_zones (id, name) values ('20000000-0000-0000-0000-000000000001', 'Rangareddy district');
+insert into public.coverage_zone_rules (zone_id, kind, value) values
+  ('20000000-0000-0000-0000-000000000001', 'district', 'Rangareddy|Telangana'),
+  ('20000000-0000-0000-0000-000000000001', 'exclude', '500081');
+select tst.ok(public.zone_has_pincode('20000000-0000-0000-0000-000000000001', '500032'),
+  'a district zone covers PINs the directory puts in that district');
+select tst.ok(not public.zone_has_pincode('20000000-0000-0000-0000-000000000001', '500081'),
+  'a PIN left out of a zone is not covered');
+select tst.ok(not public.zone_has_pincode('20000000-0000-0000-0000-000000000001', '500001'),
+  'PINs of another district are not covered');
+reset role;
+insert into public.pincodes (pincode, place, district, state) values ('500090', 'Nizampet', 'Rangareddy', 'Telangana');
+set role authenticated;
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+select tst.ok(public.zone_has_pincode('20000000-0000-0000-0000-000000000001', '500090'),
+  'a PIN added to the directory later joins the district zone by itself');
+update public.coverage_zones set is_active = false where id = '20000000-0000-0000-0000-000000000001';
+select tst.ok(not public.zone_has_pincode('20000000-0000-0000-0000-000000000001', '500032'), 'a paused zone covers nothing');
+
+insert into public.service_coverage (service_id, kind, value)
+select id, 'pincode', '500001' from public.services where code = 'property_cleaning';
+select tst.ok(public.service_covers((select id from public.services where code = 'property_cleaning'), '500001'),
+  'a service can be offered at a single PIN code');
+select tst.ok(not public.service_covers((select id from public.services where code = 'property_cleaning'), '751001'),
+  'and not where its coverage does not reach');
+select tst.ok(public.service_covers((select id from public.services where code = 'property_tax_assistance'), '500001'),
+  'paperwork services carried over by state reach every PIN of that state');
+
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rows('select * from public.pincodes where pincode = ''500032''', 1, 'customers can look up a PIN code');
+select tst.rejects($$insert into public.pincodes (pincode, place, district, state) values ('999999', 'x', 'x', 'x')$$,
+  'customers cannot change the PIN directory');
+select tst.rows('select * from public.service_coverage', 0, 'customers do not read coverage rules directly');
+select tst.rejects($$insert into public.service_coverage (service_id, kind, value)
+                     select id, 'everywhere', '' from public.services limit 1$$,
+  'customers cannot change where a service is offered');
+select tst.rejects($$select * from public.staff_pincode_search('5')$$, 'only staff search the PIN directory');
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+update public.coverage_zones set is_active = true where id = '20000000-0000-0000-0000-000000000001';
+select tst.ok((select count(*) = 2 from public.zone_pins() where zone_id = '20000000-0000-0000-0000-000000000001'),
+  'a zone lists its PINs: district rule expanded, exclusion removed');
+select tst.ok((select total = 4 from public.staff_pincode_search(p_state => 'Telangana') limit 1),
+  'staff search PIN codes by state');
+select tst.ok((select 'Rangareddy district' = any (zones) from public.staff_pincode_search('500032')),
+  'a PIN shows the live zones it belongs to');
+select tst.ok((select covered = 2 and pins = 3 from public.staff_coverage_summary()
+               where state = 'Telangana' and district = 'Rangareddy'),
+  'the summary counts covered PINs per district');
+reset role;
 
 -- =====================================================================
 \echo

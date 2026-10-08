@@ -1,11 +1,13 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
-import {
-  SERVICE_REACH_LABELS,
-  type BackofficeCoverage,
-  type ReachDemand,
-  type StaffService,
+import type {
+  CoverageSummaryRow,
+  CoverageZone,
+  PincodePage,
+  PincodeRow,
+  ReachDemand,
+  ZoneRuleKind,
 } from '@propittu/shared';
 import { api, errorText } from '../lib/api';
 import { useUrlState } from '../lib/params';
@@ -14,102 +16,53 @@ import { DataTable, type Column } from '../ui/DataTable';
 import { Section } from '../ui/Section';
 import { Tiles } from '../ui/Tiles';
 import { useEscape } from '../ui/useEscape';
-import { useServices } from './Services';
 
-type Area = BackofficeCoverage['areas'][number];
-type State = BackofficeCoverage['states'][number];
-
-export const useCoverage = () =>
+export const useCoverageSummary = () =>
   useQuery({
-    queryKey: ['bo-coverage'],
-    queryFn: () => api<BackofficeCoverage>('/backoffice/coverage'),
+    queryKey: ['bo-coverage-summary'],
+    queryFn: () => api<CoverageSummaryRow[]>('/backoffice/coverage/summary'),
+    staleTime: 60_000,
   });
+export const useZones = () =>
+  useQuery({ queryKey: ['bo-zones'], queryFn: () => api<CoverageZone[]>('/backoffice/zones') });
 
-/** Services a place gets: visit services in live areas, paperwork in live states, and "everywhere". */
-function servicesFor(
-  services: StaffService[],
-  place: { kind: 'area'; live: boolean; stateLive: boolean } | { kind: 'state'; live: boolean },
-) {
-  return services.filter((s) => {
-    if (s.reach === 'everywhere') return true;
-    if (s.reach === 'state') return place.kind === 'state' ? place.live : place.stateLive;
-    return place.kind === 'area' && place.live;
-  });
-}
+/** "Bangalore|Karnataka" → "Bangalore, Karnataka" */
+export const districtLabel = (v: string) => v.split('|').join(', ');
+const pct = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)}%` : '—');
 
-const parseList = (s: string) => s.split(/[\s,;]+/).filter(Boolean);
+type StateRow = {
+  state: string;
+  pins: number;
+  covered: number;
+  properties: number;
+  districts: number;
+};
 
-/** Where we can deliver: visit areas (PIN codes), paperwork states (PIN prefixes), and demand. */
+/** Where we can deliver, built on India's PIN codes: overview, PIN codes, zones, demand. */
 export function Coverage() {
   const qc = useQueryClient();
   const [params, set] = useUrlState();
-  const tab = params.get('tab') ?? 'areas';
-  const selected = params.get('id');
-  const { data, error, isPending } = useCoverage();
-  const refresh = () => void qc.invalidateQueries({ queryKey: ['bo-coverage'] });
-  const close = () => set({ id: null, full: null });
-
-  const liveAreas = data?.areas.filter((a) => a.is_active) ?? [];
-  const pins = liveAreas.reduce((n, a) => n + a.pincodes.length, 0);
-  const visitable = liveAreas.reduce((n, a) => n + a.properties, 0);
-  const waiting = data?.demand.reduce((n, d) => n + d.properties, 0) ?? 0;
-
-  const areaCols: Column<Area>[] = [
-    { key: 'name', header: 'Area', sort: (a) => a.name, render: (a) => a.name },
-    { key: 'state', header: 'State', sort: (a) => a.state, render: (a) => a.state },
-    {
-      key: 'pins',
-      header: 'PIN codes',
-      align: 'right',
-      sort: (a) => a.pincodes.length,
-      render: (a) => a.pincodes.length,
-    },
-    {
-      key: 'props',
-      header: 'Properties',
-      align: 'right',
-      sort: (a) => a.properties,
-      render: (a) => a.properties,
-    },
-    {
-      key: 'live',
-      header: 'Visits',
-      sort: (a) => (a.is_active ? 1 : 0),
-      render: (a) => (
-        <span className={`badge ${a.is_active ? 'good' : ''}`}>
-          {a.is_active ? 'Live' : 'Paused'}
-        </span>
-      ),
-      csv: (a) => (a.is_active ? 'Live' : 'Paused'),
-    },
-  ];
-  const stateCols: Column<State>[] = [
-    { key: 'state', header: 'State', sort: (s) => s.state, render: (s) => s.state },
-    {
-      key: 'prefixes',
-      header: 'PIN codes starting with',
-      sort: (s) => s.pincode_prefixes.join(','),
-      render: (s) => <span className="mono">{s.pincode_prefixes.join(', ') || '—'}</span>,
-    },
-    {
-      key: 'props',
-      header: 'Properties',
-      align: 'right',
-      sort: (s) => s.properties,
-      render: (s) => s.properties,
-    },
-    {
-      key: 'live',
-      header: 'Paperwork',
-      sort: (s) => (s.is_active ? 1 : 0),
-      render: (s) => (
-        <span className={`badge ${s.is_active ? 'good' : ''}`}>
-          {s.is_active ? 'Live' : 'Paused'}
-        </span>
-      ),
-      csv: (s) => (s.is_active ? 'Live' : 'Paused'),
-    },
-  ];
+  const tab = params.get('tab') ?? 'overview';
+  const summary = useCoverageSummary();
+  const zones = useZones();
+  const demand = useQuery({
+    queryKey: ['bo-demand'],
+    queryFn: () => api<ReachDemand[]>('/backoffice/coverage/demand'),
+  });
+  const refresh = () => {
+    for (const k of [
+      'bo-zones',
+      'bo-coverage-summary',
+      'bo-pincodes',
+      'bo-demand',
+      'bo-service-coverage',
+    ])
+      void qc.invalidateQueries({ queryKey: [k] });
+  };
+  const s = summary.data ?? [];
+  const total = s.reduce((n, r) => n + r.pins, 0);
+  const covered = s.reduce((n, r) => n + r.covered, 0);
+  const waiting = demand.data?.reduce((n, d) => n + d.properties, 0) ?? 0;
 
   return (
     <div className="page">
@@ -117,343 +70,773 @@ export function Coverage() {
         <div>
           <h1>Coverage</h1>
           <p>
-            Where our team can visit (areas, by PIN code) and help with paperwork (states). Which
-            services reach a place is set on each <Link to="/services">service</Link>.
+            Everything is a PIN code. Group them into zones, then choose on each{' '}
+            <Link to="/services">service</Link> where it is offered (zones, whole states or
+            districts, or single PINs).
           </p>
         </div>
       </div>
-      {error ? <div className="error">{errorText(error)}</div> : null}
       <Tiles
         value={tab}
-        onChange={(v) => set({ tab: v, id: null })}
+        onChange={(v) => set({ tab: v, id: null, state: null, district: null })}
         tiles={[
           {
-            value: 'areas',
-            label: 'Visit areas live',
-            count: data ? liveAreas.length : '–',
-            hint: `${pins} PIN codes`,
+            value: 'overview',
+            label: 'PIN codes in India',
+            count: summary.data ? total.toLocaleString('en-IN') : '–',
           },
           {
-            value: 'states',
-            label: 'Paperwork states live',
-            count: data ? data.states.filter((s) => s.is_active).length : '–',
-          },
-          {
-            value: 'areas_props',
-            label: 'Properties we can visit',
-            count: data ? visitable : '–',
+            value: 'pins',
+            label: 'Covered by a live zone',
+            count: summary.data ? covered.toLocaleString('en-IN') : '–',
             tone: 'good',
           },
+          { value: 'zones', label: 'Zones', count: zones.data?.length ?? '–' },
           {
             value: 'demand',
             label: 'Waiting for us',
-            count: data ? waiting : '–',
+            count: demand.data ? waiting : '–',
             tone: waiting ? 'warn' : '',
             hint: 'properties outside',
           },
         ]}
       />
-
-      {tab === 'states' ? (
-        <DataTable
-          rows={data?.states}
-          columns={stateCols}
-          rowKey={(s) => s.state}
-          selected={selected}
-          onRowClick={(s) => set({ id: s.state })}
-          onClose={close}
-          detail={
-            selected && data?.states.find((s) => s.state === selected) ? (
-              <StatePane
-                s={data.states.find((s) => s.state === selected)!}
-                onChanged={refresh}
-                onClose={close}
-              />
-            ) : null
-          }
-          searchText={(s) => `${s.state} ${s.pincode_prefixes.join(' ')}`}
-          searchPlaceholder="Search states"
-          defaultSort={{ key: 'state', dir: 'asc' }}
-          exportName="paperwork-states"
-          loading={isPending}
-          toolbar={<NewState onChanged={refresh} />}
-        />
+      {summary.error ? <div className="error">{errorText(summary.error)}</div> : null}
+      {tab === 'zones' ? (
+        <Zones zones={zones.data} loading={zones.isPending} onChanged={refresh} />
       ) : tab === 'demand' ? (
-        <Demand data={data} loading={isPending} onChanged={refresh} />
-      ) : (
-        <DataTable
-          rows={data?.areas}
-          columns={areaCols}
-          rowKey={(a) => a.id}
-          selected={selected}
-          onRowClick={(a) => set({ id: a.id })}
-          onClose={close}
-          detail={
-            selected && data?.areas.find((a) => a.id === selected) ? (
-              <AreaPane
-                area={data.areas.find((a) => a.id === selected)!}
-                stateLive={
-                  !!data.states.find(
-                    (s) => s.state === data.areas.find((a) => a.id === selected)!.state,
-                  )?.is_active
-                }
-                onChanged={refresh}
-                onClose={close}
-              />
-            ) : null
-          }
-          searchText={(a) => `${a.name} ${a.state} ${a.pincodes.join(' ')}`}
-          searchPlaceholder="Search areas or a PIN code"
-          defaultSort={{
-            key: tab === 'areas_props' ? 'props' : 'name',
-            dir: tab === 'areas_props' ? 'desc' : 'asc',
-          }}
-          exportName="visit-areas"
-          loading={isPending}
-          toolbar={<NewArea onChanged={refresh} />}
+        <Demand
+          rows={demand.data}
+          zones={zones.data ?? []}
+          loading={demand.isPending}
+          onChanged={refresh}
         />
+      ) : tab === 'pins' ? (
+        <Pincodes summary={s} zones={zones.data ?? []} onChanged={refresh} />
+      ) : (
+        <Overview summary={s} loading={summary.isPending} />
       )}
     </div>
   );
 }
 
-function ServicesHere({ list }: { list: StaffService[] }) {
-  if (list.length === 0) return <span className="sub">No services reach here yet.</span>;
+/* ---- Overview: states, then districts ---- */
+
+function Overview({ summary, loading }: { summary: CoverageSummaryRow[]; loading: boolean }) {
+  const [params, set] = useUrlState();
+  const state = params.get('state');
+  const byState = new Map<string, StateRow>();
+  for (const r of summary) {
+    const x = byState.get(r.state) ?? {
+      state: r.state,
+      pins: 0,
+      covered: 0,
+      properties: 0,
+      districts: 0,
+    };
+    x.pins += r.pins;
+    x.covered += r.covered;
+    x.properties += r.properties;
+    x.districts += 1;
+    byState.set(r.state, x);
+  }
+  const stateCols: Column<StateRow>[] = [
+    { key: 'state', header: 'State', sort: (r) => r.state, render: (r) => r.state },
+    {
+      key: 'districts',
+      header: 'Districts',
+      align: 'right',
+      sort: (r) => r.districts,
+      render: (r) => r.districts,
+    },
+    {
+      key: 'pins',
+      header: 'PIN codes',
+      align: 'right',
+      sort: (r) => r.pins,
+      render: (r) => r.pins.toLocaleString('en-IN'),
+    },
+    {
+      key: 'covered',
+      header: 'Covered',
+      align: 'right',
+      sort: (r) => r.covered,
+      render: (r) => `${r.covered} · ${pct(r.covered, r.pins)}`,
+    },
+    {
+      key: 'props',
+      header: 'Properties',
+      align: 'right',
+      sort: (r) => r.properties,
+      render: (r) => r.properties,
+    },
+  ];
+  const distCols: Column<CoverageSummaryRow>[] = [
+    { key: 'district', header: 'District', sort: (r) => r.district, render: (r) => r.district },
+    {
+      key: 'pins',
+      header: 'PIN codes',
+      align: 'right',
+      sort: (r) => r.pins,
+      render: (r) => r.pins,
+    },
+    {
+      key: 'covered',
+      header: 'Covered',
+      align: 'right',
+      sort: (r) => r.covered,
+      render: (r) => `${r.covered} · ${pct(r.covered, r.pins)}`,
+    },
+    {
+      key: 'props',
+      header: 'Properties',
+      align: 'right',
+      sort: (r) => r.properties,
+      render: (r) => r.properties,
+    },
+  ];
+  if (state)
+    return (
+      <>
+        <div className="row">
+          <button className="link" onClick={() => set({ state: null })}>
+            ← All states
+          </button>
+          <b>{state}</b>
+          <span className="sub">Click a district to see its PIN codes.</span>
+        </div>
+        <DataTable
+          rows={summary.filter((r) => r.state === state)}
+          columns={distCols}
+          rowKey={(r) => r.district}
+          onRowClick={(r) => set({ tab: 'pins', state: r.state, district: r.district })}
+          searchText={(r) => r.district}
+          searchPlaceholder="Search districts"
+          defaultSort={{ key: 'props', dir: 'desc' }}
+          exportName={`coverage-${state}`}
+        />
+      </>
+    );
   return (
-    <ul className="list">
-      {list.map((s) => (
-        <li key={s.id}>
-          <Link to={`/services/${s.id}`}>{s.name}</Link>
-          <span className={`badge ${s.is_active ? 'good' : ''}`}>
-            {s.is_active ? 'Live' : 'Hidden'}
-          </span>
-          <span className="sub">{SERVICE_REACH_LABELS[s.reach]}</span>
-        </li>
-      ))}
-    </ul>
+    <>
+      <span className="sub">
+        Click a state to see its districts. Properties are customers' properties with that PIN.
+      </span>
+      <DataTable
+        rows={[...byState.values()]}
+        columns={stateCols}
+        rowKey={(r) => r.state}
+        onRowClick={(r) => set({ state: r.state })}
+        searchText={(r) => r.state}
+        searchPlaceholder="Search states"
+        defaultSort={{ key: 'props', dir: 'desc' }}
+        exportName="coverage-states"
+        loading={loading}
+      />
+    </>
   );
 }
 
-function AreaPane({
-  area,
-  stateLive,
+/* ---- PIN codes: the whole directory, searchable and filterable ---- */
+
+function Pincodes({
+  summary,
+  zones,
+  onChanged,
+}: {
+  summary: CoverageSummaryRow[];
+  zones: CoverageZone[];
+  onChanged: () => void;
+}) {
+  const [params, set] = useUrlState();
+  const state = params.get('state') ?? '';
+  const district = params.get('district') ?? '';
+  const zone = params.get('zone') ?? '';
+  const coveredF = params.get('covered') ?? '';
+  const [q, setQ] = useState(params.get('q') ?? '');
+  const [page, setPage] = useState(0);
+  const [target, setTarget] = useState('');
+  const a = useAction(onChanged);
+  const size = 200;
+  const query = new URLSearchParams({
+    ...(params.get('q') ? { q: params.get('q')! } : {}),
+    ...(state ? { state } : {}),
+    ...(district ? { district } : {}),
+    ...(zone ? { zone } : {}),
+    ...(coveredF ? { covered: coveredF } : {}),
+    limit: String(size),
+    offset: String(page * size),
+  }).toString();
+  const { data, error, isPending } = useQuery({
+    queryKey: ['bo-pincodes', query],
+    queryFn: () => api<PincodePage>(`/backoffice/pincodes?${query}`),
+  });
+  const states = [...new Set(summary.map((r) => r.state))].sort();
+  const districts = summary.filter((r) => r.state === state).map((r) => r.district);
+  const put = (patch: Record<string, string | null>) => {
+    setPage(0);
+    set(patch);
+  };
+
+  // Adding what is on screen to a zone: a whole district or state when that is the filter.
+  const addToZone = () => {
+    if (!target) return;
+    const path = `/backoffice/zones/${target}/rules`;
+    const plain = !params.get('q') && !zone && !coveredF;
+    if (plain && district)
+      return a.mutate({
+        path,
+        body: { kind: 'district', values: [`${district}|${state}`] },
+        ok: `${district} added to the zone`,
+      });
+    if (plain && state && !district)
+      return a.mutate({
+        path,
+        body: { kind: 'state', values: [state] },
+        ok: `${state} added to the zone`,
+      });
+    const pins = data?.rows.map((r) => r.pincode) ?? [];
+    if (pins.length)
+      a.mutate({
+        path,
+        body: { kind: 'pincode', values: pins },
+        ok: `${pins.length} PIN codes added to the zone`,
+      });
+  };
+  const addLabel =
+    !params.get('q') && !zone && !coveredF && district
+      ? `Add district ${district}`
+      : !params.get('q') && !zone && !coveredF && state
+        ? `Add all of ${state}`
+        : `Add these ${data?.rows.length ?? 0} PINs`;
+
+  const cols: Column<PincodeRow>[] = [
+    {
+      key: 'pin',
+      header: 'PIN code',
+      sort: (r) => r.pincode,
+      render: (r) => <span className="mono strong">{r.pincode}</span>,
+    },
+    {
+      key: 'place',
+      header: 'Place',
+      sort: (r) => r.place,
+      render: (r) => (
+        <>
+          {r.place}
+          <span className="sub clip" title={r.localities.join(', ')}>
+            {r.localities
+              .filter((l) => l !== r.place)
+              .slice(0, 4)
+              .join(', ')}
+          </span>
+        </>
+      ),
+    },
+    { key: 'district', header: 'District', sort: (r) => r.district, render: (r) => r.district },
+    { key: 'state', header: 'State', sort: (r) => r.state, render: (r) => r.state },
+    {
+      key: 'zones',
+      header: 'Zones',
+      sort: (r) => r.zones.length,
+      render: (r) =>
+        r.zones.length ? r.zones.join(', ') : <span className="sub">Not covered</span>,
+      csv: (r) => r.zones.join('; '),
+    },
+    {
+      key: 'props',
+      header: 'Properties',
+      align: 'right',
+      sort: (r) => r.properties,
+      render: (r) => r.properties || '—',
+    },
+  ];
+  return (
+    <>
+      <div className="filters">
+        <form
+          className="row"
+          onSubmit={(e) => {
+            e.preventDefault();
+            put({ q: q.trim() || null });
+          }}
+        >
+          <input
+            type="search"
+            className="search"
+            placeholder="PIN code, place or locality"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+          <button className="btn small">Search</button>
+        </form>
+        <select
+          value={state}
+          onChange={(e) => put({ state: e.target.value || null, district: null })}
+          aria-label="State"
+        >
+          <option value="">All states</option>
+          {states.map((x) => (
+            <option key={x}>{x}</option>
+          ))}
+        </select>
+        <select
+          value={district}
+          disabled={!state}
+          onChange={(e) => put({ district: e.target.value || null })}
+          aria-label="District"
+        >
+          <option value="">{state ? 'All districts' : 'Choose a state first'}</option>
+          {districts.map((x) => (
+            <option key={x}>{x}</option>
+          ))}
+        </select>
+        <select
+          value={zone}
+          onChange={(e) => put({ zone: e.target.value || null })}
+          aria-label="Zone"
+        >
+          <option value="">Any zone</option>
+          {zones.map((z) => (
+            <option key={z.id} value={z.id}>
+              {z.name}
+            </option>
+          ))}
+        </select>
+        <select
+          value={coveredF}
+          onChange={(e) => put({ covered: e.target.value || null })}
+          aria-label="Covered"
+        >
+          <option value="">Covered or not</option>
+          <option value="yes">Covered</option>
+          <option value="no">Not covered</option>
+        </select>
+      </div>
+      <div className="row between">
+        <span className="sub">
+          {data ? `${data.total.toLocaleString('en-IN')} PIN codes` : 'Loading…'}
+          {data && data.total > size
+            ? ` · showing ${page * size + 1}–${Math.min((page + 1) * size, data.total)}`
+            : ''}
+        </span>
+        <div className="row">
+          <select
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+            aria-label="Zone to add to"
+          >
+            <option value="">Add to a zone…</option>
+            {zones.map((z) => (
+              <option key={z.id} value={z.id}>
+                {z.name}
+              </option>
+            ))}
+          </select>
+          <button
+            className="btn small primary"
+            disabled={!target || !data?.rows.length || a.isPending}
+            onClick={addToZone}
+          >
+            {addLabel}
+          </button>
+        </div>
+      </div>
+      <Feedback a={a} />
+      <DataTable
+        rows={data?.rows}
+        columns={cols}
+        rowKey={(r) => r.pincode}
+        defaultSort={{ key: 'pin', dir: 'asc' }}
+        exportName="pincodes"
+        loading={isPending}
+        error={error ? errorText(error) : null}
+        empty="No PIN codes match."
+        pageSize={size}
+      />
+      {data && data.total > size ? (
+        <div className="row">
+          <button className="btn small" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
+            ← Previous
+          </button>
+          <button
+            className="btn small"
+            disabled={(page + 1) * size >= data.total}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Next →
+          </button>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+/* ---- Zones ---- */
+
+const ruleSummary = (z: CoverageZone) => {
+  const n = (k: ZoneRuleKind) => z.rules.filter((r) => r.kind === k).length;
+  return [
+    n('state') && `${n('state')} state${n('state') > 1 ? 's' : ''}`,
+    n('district') && `${n('district')} district${n('district') > 1 ? 's' : ''}`,
+    n('pincode') && `${n('pincode')} PINs`,
+    n('exclude') && `${n('exclude')} left out`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+};
+
+function Zones({
+  zones,
+  loading,
+  onChanged,
+}: {
+  zones: CoverageZone[] | undefined;
+  loading: boolean;
+  onChanged: () => void;
+}) {
+  const [params, set] = useUrlState();
+  const selected = params.get('id');
+  const [name, setName] = useState('');
+  const a = useAction(onChanged);
+  const close = () => set({ id: null, full: null });
+  const open = zones?.find((z) => z.id === selected);
+  const cols: Column<CoverageZone>[] = [
+    { key: 'name', header: 'Zone', sort: (z) => z.name, render: (z) => z.name },
+    {
+      key: 'rules',
+      header: 'Made of',
+      sort: (z) => z.rules.length,
+      render: (z) => ruleSummary(z) || <span className="sub">Empty</span>,
+    },
+    {
+      key: 'pins',
+      header: 'PIN codes',
+      align: 'right',
+      sort: (z) => z.pin_count,
+      render: (z) => z.pin_count.toLocaleString('en-IN'),
+    },
+    {
+      key: 'props',
+      header: 'Properties',
+      align: 'right',
+      sort: (z) => z.properties,
+      render: (z) => z.properties,
+    },
+    {
+      key: 'services',
+      header: 'Used by',
+      sort: (z) => z.services.length,
+      render: (z) => (z.services.length ? `${z.services.length} services` : '—'),
+    },
+    {
+      key: 'live',
+      header: 'Status',
+      sort: (z) => (z.is_active ? 1 : 0),
+      render: (z) => (
+        <span className={`badge ${z.is_active ? 'good' : ''}`}>
+          {z.is_active ? 'Live' : 'Paused'}
+        </span>
+      ),
+    },
+  ];
+  return (
+    <>
+      <Feedback a={a} />
+      <DataTable
+        rows={zones}
+        columns={cols}
+        rowKey={(z) => z.id}
+        selected={selected}
+        onRowClick={(z) => set({ id: z.id })}
+        onClose={close}
+        detail={open ? <ZonePane zone={open} onChanged={onChanged} onClose={close} /> : null}
+        searchText={(z) => z.name}
+        searchPlaceholder="Search zones"
+        defaultSort={{ key: 'name', dir: 'asc' }}
+        exportName="zones"
+        loading={loading}
+        toolbar={
+          <form
+            className="row"
+            onSubmit={(e) => {
+              e.preventDefault();
+              a.mutate(
+                { path: '/backoffice/zones', body: { name: name.trim() }, ok: 'Zone added' },
+                { onSuccess: () => setName('') },
+              );
+            }}
+          >
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="New zone, e.g. Bengaluru East"
+            />
+            <button className="btn small primary" disabled={!name.trim() || a.isPending}>
+              Add zone
+            </button>
+          </form>
+        }
+      />
+    </>
+  );
+}
+
+function ZonePane({
+  zone,
   onChanged,
   onClose,
 }: {
-  area: Area;
-  stateLive: boolean;
+  zone: CoverageZone;
   onChanged: () => void;
   onClose: () => void;
 }) {
   useEscape(onClose);
   const a = useAction(onChanged);
-  const services = useServices();
+  const summary = useCoverageSummary();
+  const [st, setSt] = useState('');
+  const [dSt, setDSt] = useState('');
+  const [dist, setDist] = useState('');
   const [pins, setPins] = useState('');
-  const [find, setFind] = useState('');
-  const base = `/backoffice/areas/${area.id}`;
-  const shown = area.pincodes.filter((p) => p.includes(find.trim()));
+  const [excl, setExcl] = useState('');
+  const base = `/backoffice/zones/${zone.id}`;
+  const states = [...new Set(summary.data?.map((r) => r.state))].sort();
+  const districts = summary.data?.filter((r) => r.state === dSt).map((r) => r.district) ?? [];
+  const add = (kind: ZoneRuleKind, values: string[] | string, ok: string, after?: () => void) =>
+    a.mutate({ path: `${base}/rules`, body: { kind, values }, ok }, { onSuccess: after });
+  const chips = (kind: ZoneRuleKind, fmt: (v: string) => string = (v) => v) => {
+    const list = zone.rules.filter((r) => r.kind === kind);
+    if (!list.length) return <span className="sub">None.</span>;
+    return (
+      <div className="pins">
+        {list.map((r) => (
+          <span key={r.id} className="pin">
+            {fmt(r.value)}
+            <button
+              aria-label={`Remove ${r.value}`}
+              disabled={a.isPending}
+              onClick={() =>
+                a.mutate({ path: `${base}/rules/${r.id}`, method: 'DELETE', ok: 'Removed' })
+              }
+            >
+              ×
+            </button>
+          </span>
+        ))}
+      </div>
+    );
+  };
   return (
     <div className="customer">
       <header className="ticket-head">
         <div>
-          <h2>{area.name}</h2>
+          <h2>{zone.name}</h2>
           <span className="sub">
-            {area.state} · {area.pincodes.length} PIN codes · {area.properties} properties
+            {zone.pin_count.toLocaleString('en-IN')} PIN codes · {zone.properties} properties ·{' '}
+            {ruleSummary(zone) || 'empty'}
           </span>
         </div>
         <div className="row">
           <button
             className="btn small"
             onClick={() => {
-              const name = window.prompt('Area name', area.name);
-              if (name?.trim() && name.trim() !== area.name)
-                a.mutate({
-                  path: base,
-                  method: 'PATCH',
-                  body: { name: name.trim() },
-                  ok: 'Renamed',
-                });
+              const n = window.prompt('Zone name', zone.name);
+              if (n?.trim() && n.trim() !== zone.name)
+                a.mutate({ path: base, method: 'PATCH', body: { name: n.trim() }, ok: 'Renamed' });
             }}
           >
             Rename
           </button>
           <button
-            className={`btn small ${area.is_active ? 'danger' : 'primary'}`}
+            className={`btn small ${zone.is_active ? 'danger' : 'primary'}`}
             disabled={a.isPending}
             onClick={() => {
               if (
-                area.is_active &&
-                !window.confirm(`Pause visits in ${area.name}? New visit requests there stop.`)
+                zone.is_active &&
+                !window.confirm(
+                  `Pause ${zone.name}? Services offered through it stop reaching these PINs.`,
+                )
               )
                 return;
               a.mutate({
                 path: base,
                 method: 'PATCH',
-                body: { is_active: !area.is_active },
-                ok: area.is_active ? 'Paused' : 'Live again',
+                body: { is_active: !zone.is_active },
+                ok: zone.is_active ? 'Paused' : 'Live again',
               });
             }}
           >
-            {area.is_active ? 'Pause visits' : 'Make live'}
+            {zone.is_active ? 'Pause' : 'Make live'}
+          </button>
+          <button
+            className="btn small danger"
+            disabled={zone.services.length > 0 || a.isPending}
+            title={zone.services.length ? 'Remove it from its services first' : undefined}
+            onClick={() => {
+              if (window.confirm(`Delete ${zone.name}?`))
+                a.mutate({ path: base, method: 'DELETE', ok: 'Deleted' }, { onSuccess: onClose });
+            }}
+          >
+            Delete
           </button>
         </div>
       </header>
       <Feedback a={a} />
       <div className="sections">
-        <Section title="PIN codes" count={area.pincodes.length}>
+        <Section
+          title="Whole states"
+          count={zone.rules.filter((r) => r.kind === 'state').length}
+          aside={<span className="sub">Every PIN in the state, now and later</span>}
+        >
+          {chips('state')}
+          <div className="row">
+            <select value={st} onChange={(e) => setSt(e.target.value)} aria-label="State">
+              <option value="">Choose a state…</option>
+              {states.map((x) => (
+                <option key={x}>{x}</option>
+              ))}
+            </select>
+            <button
+              className="btn small"
+              disabled={!st || a.isPending}
+              onClick={() => add('state', [st], `${st} added`, () => setSt(''))}
+            >
+              Add state
+            </button>
+          </div>
+        </Section>
+        <Section
+          title="Whole districts"
+          count={zone.rules.filter((r) => r.kind === 'district').length}
+          aside={<span className="sub">Every PIN in the district</span>}
+        >
+          {chips('district', districtLabel)}
+          <div className="row">
+            <select
+              value={dSt}
+              onChange={(e) => {
+                setDSt(e.target.value);
+                setDist('');
+              }}
+              aria-label="State"
+            >
+              <option value="">State…</option>
+              {states.map((x) => (
+                <option key={x}>{x}</option>
+              ))}
+            </select>
+            <select
+              value={dist}
+              disabled={!dSt}
+              onChange={(e) => setDist(e.target.value)}
+              aria-label="District"
+            >
+              <option value="">District…</option>
+              {districts.map((x) => (
+                <option key={x}>{x}</option>
+              ))}
+            </select>
+            <button
+              className="btn small"
+              disabled={!dist || a.isPending}
+              onClick={() =>
+                add('district', [`${dist}|${dSt}`], `${dist} added`, () => setDist(''))
+              }
+            >
+              Add district
+            </button>
+          </div>
+          <span className="sub">
+            Tip: on the PIN codes tab, filter by state and district, then “Add to a zone”.
+          </span>
+        </Section>
+        <Section
+          title="Single PIN codes"
+          count={zone.rules.filter((r) => r.kind === 'pincode').length}
+        >
           <form
             className="row"
             onSubmit={(e) => {
               e.preventDefault();
-              if (!pins.trim()) return;
-              a.mutate(
-                { path: `${base}/pincodes`, body: { pincodes: pins }, ok: 'PIN codes added' },
-                { onSuccess: () => setPins('') },
-              );
+              add('pincode', pins, 'PIN codes added', () => setPins(''));
             }}
           >
             <input
               className="grow"
               value={pins}
               onChange={(e) => setPins(e.target.value)}
-              placeholder="Add PIN codes — paste many at once, e.g. 560001, 560002"
+              placeholder="Paste PIN codes, e.g. 560001, 560038"
             />
-            <button className="btn primary" disabled={a.isPending || !pins.trim()}>
+            <button className="btn small primary" disabled={!pins.trim() || a.isPending}>
               Add
             </button>
           </form>
-          {area.pincodes.length > 12 ? (
-            <input
-              type="search"
-              placeholder="Find a PIN code"
-              value={find}
-              onChange={(e) => setFind(e.target.value)}
-            />
-          ) : null}
-          <div className="pins">
-            {shown.map((p) => (
-              <span key={p} className="pin">
-                {p}
-                <button
-                  aria-label={`Remove ${p}`}
-                  disabled={a.isPending}
-                  onClick={() =>
-                    a.mutate({
-                      path: `${base}/pincodes/${p}`,
-                      method: 'DELETE',
-                      ok: `Removed ${p}`,
-                    })
-                  }
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-            {area.pincodes.length === 0 ? <span className="sub">No PIN codes yet.</span> : null}
-          </div>
+          {chips('pincode')}
         </Section>
-        <Section title="Services offered here">
-          <span className="sub">
-            Visit services reach live areas; paperwork services reach live states
-            {stateLive ? ` (${area.state} is live)` : ` (${area.state} is not live for paperwork)`}.
-          </span>
-          <ServicesHere
-            list={servicesFor(services.data ?? [], {
-              kind: 'area',
-              live: area.is_active,
-              stateLive,
-            })}
-          />
-        </Section>
-      </div>
-    </div>
-  );
-}
-
-function StatePane({
-  s,
-  onChanged,
-  onClose,
-}: {
-  s: State;
-  onChanged: () => void;
-  onClose: () => void;
-}) {
-  useEscape(onClose);
-  const a = useAction(onChanged);
-  const services = useServices();
-  const [prefixes, setPrefixes] = useState(s.pincode_prefixes.join(', '));
-  const path = `/backoffice/states/${encodeURIComponent(s.state)}`;
-  return (
-    <div className="customer">
-      <header className="ticket-head">
-        <div>
-          <h2>{s.state}</h2>
-          <span className="sub">{s.properties} properties</span>
-        </div>
-        <button
-          className={`btn small ${s.is_active ? 'danger' : 'primary'}`}
-          disabled={a.isPending}
-          onClick={() =>
-            a.mutate({
-              path,
-              method: 'PATCH',
-              body: { is_active: !s.is_active },
-              ok: s.is_active ? 'Paused' : 'Live again',
-            })
+        <Section
+          title="Left out"
+          count={zone.rules.filter((r) => r.kind === 'exclude').length}
+          open={zone.rules.some((r) => r.kind === 'exclude')}
+          aside={
+            <span className="sub">PINs not covered even inside a state or district above</span>
           }
         >
-          {s.is_active ? 'Pause paperwork' : 'Make live'}
-        </button>
-      </header>
-      <Feedback a={a} />
-      <div className="sections">
-        <Section title="Which PIN codes belong to this state">
           <form
             className="row"
             onSubmit={(e) => {
               e.preventDefault();
-              a.mutate({
-                path,
-                method: 'PATCH',
-                body: { pincode_prefixes: parseList(prefixes) },
-                ok: 'Saved',
-              });
+              add('exclude', excl, 'Left out', () => setExcl(''));
             }}
           >
             <input
               className="grow"
-              value={prefixes}
-              onChange={(e) => setPrefixes(e.target.value)}
-              placeholder="e.g. 56, 57, 58, 59"
+              value={excl}
+              onChange={(e) => setExcl(e.target.value)}
+              placeholder="PIN codes to leave out"
             />
-            <button className="btn primary" disabled={a.isPending}>
-              Save
+            <button className="btn small" disabled={!excl.trim() || a.isPending}>
+              Leave out
             </button>
           </form>
-          <span className="sub">PIN codes starting with these digits count as this state.</span>
+          {chips('exclude')}
         </Section>
-        <Section title="Services offered here">
-          <ServicesHere
-            list={servicesFor(services.data ?? [], { kind: 'state', live: s.is_active })}
-          />
+        <Section title="Services offered through this zone" count={zone.services.length}>
+          {zone.services.length ? (
+            <ul className="list">
+              {zone.services.map((s) => (
+                <li key={s.id}>
+                  <Link to={`/services/${s.id}`}>{s.name}</Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <span className="sub">
+              None yet. Add this zone to a service on the service's page, under “Where it's
+              offered”.
+            </span>
+          )}
+          <Link to={`/coverage?tab=pins&zone=${zone.id}`}>See its PIN codes</Link>
         </Section>
       </div>
     </div>
   );
 }
 
+/* ---- Waiting for us ---- */
+
 function Demand({
-  data,
+  rows,
+  zones,
   loading,
   onChanged,
 }: {
-  data: BackofficeCoverage | undefined;
+  rows: ReachDemand[] | undefined;
+  zones: CoverageZone[];
   loading: boolean;
   onChanged: () => void;
 }) {
   const a = useAction(onChanged);
-  const [area, setArea] = useState('');
+  const [zone, setZone] = useState('');
   const cols: Column<ReachDemand>[] = [
     {
       key: 'pincode',
@@ -480,29 +863,32 @@ function Demand({
       key: 'add',
       header: '',
       render: (d) =>
-        d.pincode && area ? (
+        d.pincode && zone ? (
           <button
             className="btn small"
             disabled={a.isPending}
             onClick={(e) => {
               e.stopPropagation();
               a.mutate({
-                path: `/backoffice/areas/${area}/pincodes`,
-                body: { pincodes: [d.pincode] },
+                path: `/backoffice/zones/${zone}/rules`,
+                body: { kind: 'pincode', values: [d.pincode] },
                 ok: `${d.pincode} added`,
               });
             }}
           >
-            Add to area
+            Add to zone
           </button>
         ) : null,
     },
   ];
   return (
     <>
+      <span className="sub">
+        Customers' properties whose PIN code is in no live zone, most wanted first.
+      </span>
       <Feedback a={a} />
       <DataTable
-        rows={data?.demand}
+        rows={rows}
         columns={cols}
         rowKey={(d) => d.pincode ?? 'none'}
         searchText={(d) => `${d.pincode ?? ''} ${d.place ?? ''}`}
@@ -510,98 +896,22 @@ function Demand({
         defaultSort={{ key: 'properties', dir: 'desc' }}
         exportName="demand"
         loading={loading}
-        empty="No demand outside our areas yet."
+        empty="Every property is inside a live zone."
         toolbar={
           <select
-            value={area}
-            onChange={(e) => setArea(e.target.value)}
-            aria-label="Area to add to"
+            value={zone}
+            onChange={(e) => setZone(e.target.value)}
+            aria-label="Zone to add to"
           >
-            <option value="">Add PIN codes to an area…</option>
-            {data?.areas.map((x) => (
-              <option key={x.id} value={x.id}>
-                {x.name}
+            <option value="">Add PIN codes to a zone…</option>
+            {zones.map((z) => (
+              <option key={z.id} value={z.id}>
+                {z.name}
               </option>
             ))}
           </select>
         }
       />
     </>
-  );
-}
-
-function NewArea({ onChanged }: { onChanged: () => void }) {
-  const a = useAction(onChanged);
-  const [name, setName] = useState('');
-  const [state, setState] = useState('');
-  return (
-    <form
-      className="row"
-      onSubmit={(e) => {
-        e.preventDefault();
-        a.mutate(
-          {
-            path: '/backoffice/areas',
-            body: { name: name.trim(), state: state.trim() },
-            ok: 'Area added',
-          },
-          {
-            onSuccess: () => {
-              setName('');
-              setState('');
-            },
-          },
-        );
-      }}
-    >
-      <input
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="New area, e.g. Bengaluru"
-      />
-      <input value={state} onChange={(e) => setState(e.target.value)} placeholder="State" />
-      <button className="btn small primary" disabled={!name.trim() || !state.trim() || a.isPending}>
-        Add area
-      </button>
-      {a.error ? <span className="error">{errorText(a.error)}</span> : null}
-    </form>
-  );
-}
-
-function NewState({ onChanged }: { onChanged: () => void }) {
-  const a = useAction(onChanged);
-  const [state, setState] = useState('');
-  const [prefixes, setPrefixes] = useState('');
-  return (
-    <form
-      className="row"
-      onSubmit={(e) => {
-        e.preventDefault();
-        a.mutate(
-          {
-            path: '/backoffice/states',
-            body: { state: state.trim(), pincode_prefixes: parseList(prefixes) },
-            ok: 'State added',
-          },
-          {
-            onSuccess: () => {
-              setState('');
-              setPrefixes('');
-            },
-          },
-        );
-      }}
-    >
-      <input value={state} onChange={(e) => setState(e.target.value)} placeholder="New state" />
-      <input
-        value={prefixes}
-        onChange={(e) => setPrefixes(e.target.value)}
-        placeholder="PIN prefixes, e.g. 50"
-      />
-      <button className="btn small primary" disabled={!state.trim() || a.isPending}>
-        Add state
-      </button>
-      {a.error ? <span className="error">{errorText(a.error)}</span> : null}
-    </form>
   );
 }

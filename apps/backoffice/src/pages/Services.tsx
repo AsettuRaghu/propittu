@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import {
   SERVICE_FULFILMENT_LABELS,
-  SERVICE_REACH_LABELS,
   type StaffService,
   type StaffServiceCategory,
 } from '@propittu/shared';
@@ -15,7 +14,6 @@ import { Feedback, useAction } from '../ui/action';
 import { DataTable, type Column } from '../ui/DataTable';
 import { Reorder } from '../ui/Reorder';
 import { Tiles } from '../ui/Tiles';
-import { useCoverage } from './Coverage';
 
 export const useServices = () =>
   useQuery({
@@ -71,7 +69,6 @@ function ServiceList() {
   const { data, error, isPending } = useServices();
   const categories = useCategories();
   const requests = useRequestList();
-  const coverage = useCoverage();
   const [ordering, setOrdering] = useState(false);
   const a = useAction(() => {
     setOrdering(false);
@@ -80,15 +77,7 @@ function ServiceList() {
   const catName = (code: string) => categories.data?.find((c) => c.code === code)?.name ?? code;
   const ordered = [...(data ?? [])].sort((x, y) => x.sort_order - y.sort_order);
   const position = new Map(ordered.map((s, i) => [s.id, i + 1]));
-  const where = (s: StaffService) => {
-    const c = coverage.data;
-    if (s.reach === 'everywhere' || !c) return SERVICE_REACH_LABELS[s.reach];
-    const n =
-      s.reach === 'area'
-        ? c.areas.filter((x) => x.is_active).length
-        : c.states.filter((x) => x.is_active).length;
-    return `${SERVICE_REACH_LABELS[s.reach]} · ${n} live`;
-  };
+  const where = (s: StaffService) => (s.reach === 'everywhere' ? 'Everywhere' : 'Chosen PIN codes');
   const open = (id: string) =>
     requests.data?.filter(
       (r) => r.service.id === id && !['completed', 'cancelled'].includes(r.status),

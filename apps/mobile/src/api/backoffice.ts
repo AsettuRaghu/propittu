@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   AccountPlanState,
   AiSummary,
-  BackofficeCoverage,
   StaffPropertyReach,
   PropertyReview,
   PropertyReviewStatus,
@@ -101,36 +100,7 @@ export const useBoProperty = (id: string) =>
     queryFn: () => api<BackofficeProperty>(`/backoffice/properties/${id}`),
   });
 
-/* ---- Where we serve: areas, states, demand, exceptions ---- */
-
-const coverageKey = ['backoffice', 'coverage'] as const;
-
-export const useBoCoverage = () =>
-  useQuery({
-    queryKey: coverageKey,
-    queryFn: () => api<BackofficeCoverage>('/backoffice/coverage'),
-  });
-
-/** Any coverage change; the API answers with the updated coverage. */
-export function useBoCoverageChange() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      path,
-      method,
-      body,
-    }: {
-      path: string;
-      method: 'POST' | 'PATCH' | 'DELETE';
-      body?: Record<string, unknown>;
-    }) => api<BackofficeCoverage>(`/backoffice${path}`, { method, body }),
-    onSuccess: (data) => {
-      qc.setQueryData(coverageKey, data);
-      void qc.invalidateQueries({ queryKey: ['properties'] });
-      void qc.invalidateQueries({ queryKey: ['backoffice', 'property'] });
-    },
-  });
-}
+/* ---- Where we serve: per-property exceptions (coverage itself is managed in the web portal) ---- */
 
 export function useBoReachException(propertyId: string) {
   const refresh = useRefresh();

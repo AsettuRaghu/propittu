@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   formatIndianMobile,
   formatPrice,
@@ -288,13 +288,13 @@ function Services() {
       renderItem={({ item }) => <ServiceRow service={item} />}
       ListHeaderComponent={
         <Card
-          onPress={() => router.push('/backoffice/areas')}
+          onPress={() => void Linking.openURL('https://propittu-admin.vercel.app/coverage')}
           style={[styles.card, styles.serviceRow, { marginBottom: space.sm }]}
         >
           <Icon name="map" size={20} color={colors.primary} />
           <View style={styles.flex}>
             <Text style={typography.bodyStrong}>Where we serve</Text>
-            <Text style={typography.small}>Visit areas, PIN codes, states and demand</Text>
+            <Text style={typography.small}>PIN codes and zones are managed in the web portal</Text>
           </View>
           <Icon name="chevron" size={18} color={colors.textSubtle} />
         </Card>

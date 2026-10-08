@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import {
   AREA_UNITS,
@@ -14,6 +15,7 @@ import {
   type Property,
   type PropertyType,
 } from '@propittu/shared';
+import { usePincode } from '@/api/queries';
 import { PROPERTY_TYPE_ICONS } from '@/lib/icons';
 import { space } from '@/theme';
 import { TextField } from './Field';
@@ -171,6 +173,24 @@ export function PropertyForm({
   /** Edit and review: also the purchase, land, site and boundary details. */
   more?: boolean;
 }) {
+  // The PIN code comes first: it decides which services reach the property,
+  // and from India's PIN directory it fills in the city and state.
+  const pin = usePincode(values.pincode.trim());
+  const found = pin.data ?? null;
+  const pinMissing = /^[1-9][0-9]{5}$/.test(values.pincode.trim()) && pin.isFetched && !found;
+  const pinHint = found
+    ? `${found.place}, ${found.district}, ${found.state}`
+    : 'Tells us which services can reach this property';
+  useEffect(() => {
+    if (!found) return;
+    const patch: Partial<PropertyFormValues> = {};
+    if (!values.city.trim()) patch.city = found.district;
+    if (!values.state.trim()) patch.state = found.state;
+    if (Object.keys(patch).length) onChange(patch);
+    // Only when a new PIN is found; typing in City/State afterwards is left alone.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [found?.pincode]);
+
   const field = (key: keyof PropertyFormValues) => ({
     variant: 'flat' as const,
     value: values[key] as string,
@@ -206,6 +226,18 @@ export function PropertyForm({
           placeholder="House / plot no., street, area"
           {...field('address_line')}
         />
+        <TextField
+          label="PIN code"
+          hint={pinHint}
+          keyboardType="number-pad"
+          maxLength={6}
+          placeholder="560001"
+          {...field('pincode')}
+          error={
+            errors.pincode ??
+            (pinMissing ? 'We couldn’t find this PIN code — please check it' : undefined)
+          }
+        />
         <View style={styles.row}>
           <View style={styles.flex}>
             <TextField label="City" optional autoCapitalize="words" {...field('city')} />
@@ -214,14 +246,6 @@ export function PropertyForm({
             <TextField label="State" optional autoCapitalize="words" {...field('state')} />
           </View>
         </View>
-        <TextField
-          label="PIN code"
-          hint="Tells us which services can reach this property"
-          keyboardType="number-pad"
-          maxLength={6}
-          placeholder="560001"
-          {...field('pincode')}
-        />
       </FormSection>
 
       <FormSection title="Size">
