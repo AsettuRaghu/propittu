@@ -29,6 +29,15 @@ dashboardRouter.get('/dashboard', async (req, res) => {
   const weekAhead = new Date(now.getTime() + 7 * 86_400_000).toISOString();
   const weekAgo = new Date(now.getTime() - 7 * 86_400_000).toISOString();
 
+  const [watchRes, legalRes, valueRes] = await Promise.all([
+    db.from('watch_items').select('id', { count: 'exact', head: true }).eq('review', 'pending'),
+    db.from('legal_checks').select('findings').eq('status', 'in_review').limit(500),
+    db.from('value_rates').select('id', { count: 'exact', head: true }).eq('status', 'draft'),
+  ]);
+  const legal = must<{ findings: { level: string; review: string }[] }[]>(legalRes);
+  must(watchRes);
+  must(valueRes);
+
   const [openRes, ticketsRes, paymentsRes, refundsRes, customersRes, spend] = await Promise.all([
     db
       .from('service_requests')
@@ -118,6 +127,15 @@ dashboardRouter.get('/dashboard', async (req, res) => {
     })),
     new_customers_7d: customersRes.count ?? 0,
     ai_spend_month_usd: Number(spend.data ?? 0),
+    pittu: {
+      watch_to_review: watchRes.count ?? 0,
+      legal_in_review: legal.length,
+      legal_open_findings: legal.reduce(
+        (n, c) => n + c.findings.filter((f) => f.level !== 'green' && f.review === 'open').length,
+        0,
+      ),
+      value_rows_to_check: valueRes.count ?? 0,
+    },
   };
   ok(res, data);
 });

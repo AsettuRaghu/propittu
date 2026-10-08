@@ -14,6 +14,37 @@ import { RangeTabs, asRange } from '../ui/RangeTabs';
 const revenue = (b: ReportBucket) => b.plan_revenue_paise + b.extra_revenue_paise - b.refunds_paise;
 type Num = Exclude<keyof ReportBucket, 'key' | 'label'>;
 
+const CAPABILITY_NAMES: Record<string, string> = {
+  read: 'Pittu Read (documents)',
+  ask: 'Pittu Ask',
+  watch: 'Pittu Watch (news)',
+  value: 'Pittu Value (rates)',
+  legal: 'Pittu Legal',
+};
+type AiRow = BackofficeReport['ai_by_capability'][number];
+const AI_COLUMNS: Column<AiRow>[] = [
+  {
+    key: 'capability',
+    header: 'Capability',
+    sort: (c) => c.capability,
+    render: (c) => CAPABILITY_NAMES[c.capability] ?? c.capability,
+  },
+  {
+    key: 'calls',
+    header: 'AI calls',
+    align: 'right',
+    sort: (c) => c.calls,
+    render: (c) => c.calls,
+  },
+  {
+    key: 'cost',
+    header: 'Cost',
+    align: 'right',
+    sort: (c) => c.cost_usd,
+    render: (c) => `$${c.cost_usd.toFixed(2)}`,
+  },
+];
+
 /** The numbers behind the Dashboard charts, as tables to sort and export (India time). */
 export function Reports() {
   const [params, set] = useUrlState();
@@ -204,6 +235,18 @@ export function Reports() {
             defaultSort={{ key: 'key', dir: 'desc' }}
             exportName={`report-${range}`}
           />
+          {data.ai_by_capability.length ? (
+            <>
+              <div className="section-title">Pittu AI cost by capability</div>
+              <DataTable
+                rows={data.ai_by_capability}
+                columns={AI_COLUMNS}
+                rowKey={(c) => c.capability}
+                defaultSort={{ key: 'cost', dir: 'desc' }}
+                exportName={`report-ai-${range}`}
+              />
+            </>
+          ) : null}
           <div className="two-col">
             <div>
               <div className="section-title">By service</div>

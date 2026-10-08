@@ -160,7 +160,11 @@ reportsRouter.get('/reports', async (req, res) => {
         .select('category, resolved_at')
         .gte('resolved_at', from)
         .limit(LIMIT),
-      db.from('ai_operations').select('cost_usd, created_at').gte('created_at', from).limit(LIMIT),
+      db
+        .from('ai_operations')
+        .select('capability, cost_usd, created_at')
+        .gte('created_at', from)
+        .limit(LIMIT),
     ]);
 
   const series = new Map<string, ReportBucket>(
@@ -249,8 +253,15 @@ reportsRouter.get('/reports', async (req, res) => {
   }
   for (const r of must<{ amount_paise: number; processed_at: string | null }[]>(refunds))
     bump(r.processed_at, 'refunds_paise', r.amount_paise);
-  for (const o of must<{ cost_usd: number | string; created_at: string }[]>(ai))
+  const aiRows = must<{ capability: string; cost_usd: number | string; created_at: string }[]>(ai);
+  const byCapability = new Map<string, { capability: string; calls: number; cost_usd: number }>();
+  for (const o of aiRows) {
     bump(o.created_at, 'ai_cost_usd', Number(o.cost_usd));
+    const c = byCapability.get(o.capability) ?? { capability: o.capability, calls: 0, cost_usd: 0 };
+    c.calls++;
+    c.cost_usd += Number(o.cost_usd);
+    byCapability.set(o.capability, c);
+  }
 
   const cats = new Map<string, { category: string; opened: number; resolved: number }>();
   const cat = (c: string) => {
@@ -280,6 +291,9 @@ reportsRouter.get('/reports', async (req, res) => {
       .map(({ days, ...s }) => ({ ...s, avg_days_to_complete: avg(days) }))
       .sort((a, b) => b.requested - a.requested),
     tickets_by_category: [...cats.values()].sort((a, b) => b.opened - a.opened),
+    ai_by_capability: [...byCapability.values()]
+      .map((c) => ({ ...c, cost_usd: Math.round(c.cost_usd * 100) / 100 }))
+      .sort((a, b) => b.cost_usd - a.cost_usd),
   };
   ok(res, data);
 });

@@ -170,6 +170,36 @@ export function Dashboard() {
           },
         ]
       : []),
+    ...(dash.data?.pittu?.legal_open_findings
+      ? [
+          {
+            level: 'warn' as const,
+            title: `${dash.data.pittu.legal_open_findings} Pittu Legal finding${dash.data.pittu.legal_open_findings > 1 ? 's' : ''} to review`,
+            detail: `In ${dash.data.pittu.legal_in_review} legal check${dash.data.pittu.legal_in_review > 1 ? 's' : ''}; the customer is waiting for the report.`,
+            to: '/legal',
+          },
+        ]
+      : []),
+    ...(dash.data?.pittu?.watch_to_review
+      ? [
+          {
+            level: 'warn' as const,
+            title: `${dash.data.pittu.watch_to_review} Pittu Watch news to review`,
+            detail: 'Approve or reject so owners see what matters near their property.',
+            to: '/watch',
+          },
+        ]
+      : []),
+    ...(dash.data?.pittu?.value_rows_to_check
+      ? [
+          {
+            level: 'warn' as const,
+            title: `${dash.data.pittu.value_rows_to_check} Pittu Value rate rows to check`,
+            detail: 'Read from a rate document; publish them to value properties.',
+            to: '/value?tab=rates&status=draft',
+          },
+        ]
+      : []),
     ...(ending.length
       ? [
           {

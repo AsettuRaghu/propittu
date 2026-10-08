@@ -1,64 +1,58 @@
 # Propittu — pending items
 
-Decisions and work parked for later (as of 6 Oct 2026). Revisit once DLT
-registration is through.
+What is open, as of **8 Oct 2026**. Built work is tracked in the Build Tracker; product decisions are in
+docs/DECISIONS.md; Pittu's design in docs/PITTU.md.
 
 ## Waiting on the owner
 
-| # | Item | What's needed | Status |
-|---|---|---|---|
-| 1 | **Real SMS (OTP)** | DLT registration (Entity ID, sender header e.g. `PROPTU`, OTP template), MSG91 account + KYC. No Twilio needed. | Owner: DLT in progress. Then ~1 day build: Supabase Send-SMS hook → API → MSG91; keep one reviewer test number. |
-| 2 | **Store fee model** | Decide: (a) service-only — app features free for all with one fair-use limit, plans = visit memberships, Razorpay 0%; or (b) keep plans unlocking capacity, sell them on the web (no in-app Buy). | Deferred. Today plans unlock app capacity (Limited Access + per-plan limits) → a reviewer would likely require store billing. |
-| 3 | **Store accounts** | Apple Developer (organisation, D-U-N-S), Google Play Console (organisation). | Deferred (5.A). |
-| 4 | **Legal pages** | Filled in (Asettulu Technologies LLP; Grievance Officer “Contact Propittu”; no cancellations or refunds — write to contact@propittu.com). Still to do: lawyer review; move to propittu.com. Pages live at `/legal/privacy`, `/legal/terms`, `/legal/delete-account`. | Filled in; lawyer review pending. |
-| 5 | **Support phone** | A customer-care number (shown in Help & Support when `EXPO_PUBLIC_SUPPORT_PHONE` is set). | Hidden until available. |
+| # | Item | What's needed |
+|---|---|---|
+| 1 | **Real SMS (OTP)** | DLT registration (Entity ID, sender header e.g. `PROPTU`, OTP template), MSG91 account + KYC. Then ~1 day build: Supabase Send-SMS hook → API → MSG91; keep one reviewer test number. |
+| 2 | **Store fee model** | Decide: (a) service-only — app features free with one fair-use limit, plans = visit memberships; or (b) plans unlock capacity, sold on the web (no in-app Buy). |
+| 3 | **Store accounts** | Apple Developer (organisation, D-U-N-S), Google Play Console (organisation). |
+| 4 | **Legal pages** | Lawyer review; move to propittu.com. Live at `/legal/privacy`, `/legal/terms`, `/legal/delete-account`. |
+| 5 | **Support phone** | A customer-care number (shown in Help & Support when `EXPO_PUBLIC_SUPPORT_PHONE` is set). |
+| 6 | **Pittu Legal manual pilot** | Run the Basic check by hand on our properties (docs/PITTU_LEGAL_PILOT.md); send the results and the ECs. |
+| 7 | **EC provider** | Send the drafted email to Landeed (+ one alternative): API pricing and Karnataka/Telangana coverage. Needed for automatic EC fetching. |
+| 8 | **Kaveri helpdesk** | Confirm a company account may apply for ECs on customers' behalf. |
+| 9 | **Lawyer partner** | For the advocate-signed tier, and to review the legal report wording before we charge for it. |
+| 10 | **Prices and products** | Prices of the legal checks (guide: ₹2,000 / ₹5,000 / ₹10,000) and Guard; whether "Check before you buy" is a separate product. |
+| 11 | **Separate AI keys** | A testing key (`~/propittu-anthropic-eval-key.txt`) apart from the app's, so Console totals match the Pittu page. |
+| 12 | **Current PIN directory** | Download "All India Pincode Directory" (data.gov.in) into Downloads; we load it with `supabase/pincodes/pincodes.mjs` (the 2017 copy is in use). |
+| 13 | **In-app Backoffice** | The link is hidden (8 Oct 2026); decide before go-live: bring it back or remove the in-app Backoffice. |
+| 14 | **Publishing the app** | Ask each time. Waiting in the app: PIN-first property form, live support chat and "new reply" alerts, categories from the portal, EC document type, renewal price, Backoffice link hidden. |
 
 ## Dates to remember
 
 | When | What |
 |---|---|
-| **by 29 Oct 2026** | Replace the Anthropic **production** API key (`propittu-production`, created 6 Oct 2026, 30-day expiry → ~5 Nov). Console → API Keys → create new → paste into Vercel `ANTHROPIC_API_KEY` (Production, Sensitive) → redeploy → delete the old key. Until replaced, Pittu stops reading (nothing else is affected). |
+| **by 29 Oct 2026** | Replace the Anthropic **production** API key (`propittu-production`, 30-day expiry → ~5 Nov). Console → API Keys → create new → Vercel `ANTHROPIC_API_KEY` (Production, Sensitive) → redeploy → delete the old key. Until replaced, Pittu stops reading (nothing else is affected). |
 
-## Open from the UI/UX pass (7 Oct 2026)
+## Next that needs no decision (Claude)
 
-Waiting on the owner:
-- Photographing deed pages instead of a PDF: proposed (in-app camera, 1–10 pages, server joins them into one PDF); waiting for go-ahead.
-- Configurable Pittu questions + configurable service templates: design together (recommended) or separately.
-- Publishing to testers (EAS preview): ask each time.
+- App screens for the new Pittu features: "Around your property" (approved Watch news) with a marker on
+  Home cards, the government value, and the shared legal report — for the next app publish.
+- "Let Pittu read this deed" for sale deeds uploaded as ordinary documents.
+- S1 secure login storage (see Go-live) — build, then test after a publish.
+- Check that the live server reaches the GDELT news index after the first daily Watch run.
+- Portal lists: move search and filters to the server when they pass a few hundred rows.
 
-Loose ends noted:
-- Deeds uploaded as plain documents (e.g. One's) are never read, so no deed-vs-pin check — offer "Let Pittu read this deed" (explained to the owner; awaiting decision).
+## Parked (owner's priorities)
 
-Next planned: Home round 3 — "Around your property" news posted from Backoffice, the flash-news marker on cards, analytics groundwork.
+| Priority | Item | Notes |
+|---|---|---|
+| P4 | **Service templates and steps** | Per-service intake fields, steps, conditions and calculations, outcome fields, versions (docs/CONFIGURABLE_SERVICES.md). Today's two paths with the guided request pane are enough; build it around the first service that doesn't fit. |
+| P4 | **Vendors in service steps** | A vendor directory and a vendor step (e.g. a lawyer). Builds on templates. |
+| P5 | **Colour-coded PIN map** | A dot per PIN (covered / not / waiting), later shaded PIN boundaries. |
+| On hold | **Configurable Pittu questions, schedules, campaigns** | Part of the configurable-services design. |
+| Store build | **Push notifications, Google Maps on iPhone** | Need a native app build. |
 
-## Value features — agreed direction (owner, 7 Oct 2026)
+## Pittu — what is built and what waits
 
-Goal: make the basic details valuable enough that owners keep the app, trust us, then use services.
-Cities first: **Bengaluru and Hyderabad**. Information gathered by **AI at low cost plus the
-backend team's own knowledge**, always reviewed by the team before customers see it.
-
-Order: (1) richer property details, mostly from the deed (purchase price, sellers, land use, Khata
-type, approving authority, plot details …) · (2) reminders — "Coming up" on Home + on-phone
-notifications · (3) property health score · then (4) "Around your property" news and government
-alerts · (5) value then and now · (6) legal health check (paid). Server push notifications wait
-for the store build.
-
-## Feature backlog to discuss (owner's notes, 7 Oct 2026)
-
-Nothing below is decided yet. Grouped by theme, in the suggested order.
-
-1. **Add-property improvements (small, next)**
-   - Photograph deed pages instead of a PDF — **built 7 Oct; to be tested by the owner later.**
-   - "Let Pittu read this deed" for deeds uploaded as plain documents.
-   - Pittu's questions during onboarding — e.g. ask them while Pittu reads the deed, instead of after saving.
-2. **Configurable services and questions — ON HOLD (owner, 7 Oct 2026: too big for now).** Design kept in docs/CONFIGURABLE_SERVICES.md for when it's picked up again.
-   - Service request templates: steps, what the app collects, what staff see, statuses, outcome fields (e.g. tax year, receipt number).
-   - Default schedule interval per service (e.g. a site visit every 3 months) and tracking deviation from it.
-   - Campaigns from Backoffice: time-limited lower prices; area pushes when an agent is visiting a region (needs notifications).
-   - Configurable Pittu questions (rules in the database, conditions, versions, editor with preview).
-3. **Home round 3** — "Around your property" news posted from Backoffice, the flash-news marker on cards, analytics groundwork.
-4. **Market value estimates** — design pending the owner's answers (area, rate setting, pricing, valuer partner).
-5. **Google Maps on both platforms** — iPhone uses Apple Maps today; Google Maps on iPhone needs a Google Maps API key and a native app build (not Expo Go), so it fits with the store builds.
+- **Pittu Read:** sale deed (live); Encumbrance Certificate (first version, staff-started) — score on the pilot ECs.
+- **Pittu Legal:** EC check, upload-first — rules, staff review, printable report, share. Automatic EC fetching waits on item 7.
+- **Pittu Watch:** local news, daily at 7 am, team-approved. Government notices next on the same pipeline.
+- **Pittu Value:** government value from published rates × area. Market prices need a data partner later.
 
 ## Go-live setup (5.B.4)
 
@@ -92,8 +86,3 @@ Nothing below is decided yet. Grouped by theme, in the suggested order.
 - Market value estimate (discussed 6 Oct): design doc pending the owner's answers on area, rate setting, pricing and a valuer partner.
 
 - Service-specific fields (e.g. tax assessment year) on paperwork-help outcomes.
-
-- **In-app Backoffice link hidden (8 Oct 2026).** The team works in the web portal; the in-app Backoffice screens remain but the Profile link is hidden. Decide before go-live: bring it back or remove the in-app Backoffice.
-- **Feature request, priority 4 (parked 8 Oct 2026): vendors in service steps.** A vendor directory (skills, PIN coverage, rates) and a "vendor task" step type so a vendor (e.g. a lawyer for legal verification) can be assigned to a request. Not urgent; revisit after the service templates/steps design.
-- **Long-term goal, priority 4 (parked 8 Oct 2026): service templates and steps.** Per-service intake fields, steps (staff, site visit, customer input, approval, payment, documents), conditions and calculations, outcome fields, versions — design in docs/CONFIGURABLE_SERVICES.md. Vendors (above) build on it. Not urgent. Reviewed again 8 Oct 2026: parked for a later phase — today's two paths with the guided request pane are enough; build it around the first service that doesn't fit (engine → journey editor → forms and formulas → quote approval and staged payments).
-- **Feature request, priority 5 (parked 8 Oct 2026): colour-coded PIN map in Coverage.** First a dot per PIN (covered / not / customers waiting, by zone or service) using PIN locations from the current data.gov.in directory; later shaded PIN boundaries (government open data, needs simplifying for the web).

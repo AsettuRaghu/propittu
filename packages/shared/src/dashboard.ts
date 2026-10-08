@@ -23,6 +23,16 @@ export interface BackofficeDashboard {
   new_customers_7d: number;
   /** Pittu's AI cost this calendar month (US$). */
   ai_spend_month_usd: number;
+  /** Pittu work waiting for the team. */
+  pittu: {
+    /** Pittu Watch news to approve or reject. */
+    watch_to_review: number;
+    /** Pittu Legal checks in review, and the amber/red findings still open in them. */
+    legal_in_review: number;
+    legal_open_findings: number;
+    /** Pittu Value rate rows read from documents, not yet published. */
+    value_rows_to_check: number;
+  };
 }
 
 export const REPORT_RANGES = ['today', 'month', 'quarter', '6m', '1y', 'all'] as const;
@@ -74,4 +84,6 @@ export interface BackofficeReport {
     avg_days_to_complete: number | null;
   }[];
   tickets_by_category: { category: string; opened: number; resolved: number }[];
+  /** Pittu's AI cost in the period by capability (read, watch, value, legal, ask). */
+  ai_by_capability: { capability: string; calls: number; cost_usd: number }[];
 }

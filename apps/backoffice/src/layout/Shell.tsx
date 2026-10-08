@@ -52,9 +52,9 @@ export function Shell() {
             label="Support tickets"
             count={unseen.size || data?.tickets_waiting}
           />
-          <Item to="/legal" label="Pittu Legal" />
-          <Item to="/watch" label="Pittu Watch" />
-          <Item to="/value" label="Pittu Value" />
+          <Item to="/legal" label="Pittu Legal" count={data?.pittu?.legal_in_review} />
+          <Item to="/watch" label="Pittu Watch" count={data?.pittu?.watch_to_review} />
+          <Item to="/value" label="Pittu Value" count={data?.pittu?.value_rows_to_check} />
           <div className="nav-label">Customers</div>
           <Item to="/customers" label="Customers" />
           <Item to="/payments" label="Payments" count={data?.refunds_needed.length} />
