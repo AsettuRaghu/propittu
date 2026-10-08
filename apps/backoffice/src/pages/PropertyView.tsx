@@ -4,6 +4,7 @@ import {
   DOCUMENT_STATUSES,
   DOCUMENT_STATUS_LABELS,
   DOCUMENT_TYPE_LABELS,
+  LEGAL_CHECK_STATUS_LABELS,
   EC_ENTRY_KIND_LABELS,
   FACT_LABELS,
   PITTU_QUESTION_LABELS,
@@ -13,13 +14,16 @@ import {
   type DocumentStatus,
   type EcEntry,
   type EcReading,
+  type LegalCheck,
   type StaffDocumentReading,
   type PittuQuestionId,
 } from '@propittu/shared';
+import { Link, useNavigate } from 'react-router';
 import { api, errorText } from '../lib/api';
 import { date } from '../lib/format';
 import { Feedback, useAction } from '../ui/action';
 import { DataTable, type Column } from '../ui/DataTable';
+import { LevelBadge, useLegalChecks } from './Legal';
 
 const show = (v: unknown) =>
   v === null || v === undefined || v === ''
@@ -136,6 +140,7 @@ function Body({ p, onChanged }: { p: BackofficeProperty; onChanged: () => void }
           </div>
         </div>
       ) : null}
+      <LegalChecks p={p} />
       <Pittu p={p} onChanged={onChanged} />
     </>
   );
@@ -475,6 +480,69 @@ function EcView({ ec }: { ec: EcReading }) {
       <span className="sub">
         Pittu Read lists what the EC says; it doesn't judge risk. Check anything marked “low”.
       </span>
+    </div>
+  );
+}
+
+/** Pittu Legal on this property: run the EC check, see earlier checks. */
+function LegalChecks({ p }: { p: BackofficeProperty }) {
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const checks = useLegalChecks(p.property.id);
+  const ecs = p.documents.filter((d) => d.document_type === 'encumbrance_certificate');
+  const [ec, setEc] = useState(ecs[0]?.id ?? '');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const run = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const c = await api<LegalCheck>(`/backoffice/properties/${p.property.id}/legal-checks`, {
+        method: 'POST',
+        body: { ec_document_id: ec },
+      });
+      void qc.invalidateQueries({ queryKey: ['bo-legal'] });
+      void navigate(`/legal?status=all&id=${c.id}`);
+    } catch (e) {
+      setErr(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="block">
+      <h3>Legal check (Pittu Legal)</h3>
+      {ecs.length === 0 ? (
+        <span className="sub">
+          Add the property's Encumbrance Certificate (document type “Encumbrance Certificate (EC)”),
+          read it with Pittu, then run the check here.
+        </span>
+      ) : (
+        <div className="row">
+          <select value={ec} onChange={(e) => setEc(e.target.value)} aria-label="EC">
+            {ecs.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.file_name}
+              </option>
+            ))}
+          </select>
+          <button className="btn small primary" disabled={!ec || busy} onClick={() => void run()}>
+            {busy ? 'Checking…' : 'Run the EC check'}
+          </button>
+        </div>
+      )}
+      {err ? <span className="error">{err}</span> : null}
+      {checks.data?.length ? (
+        <ul className="list">
+          {checks.data.map((c) => (
+            <li key={c.id}>
+              <Link to={`/legal?status=all&id=${c.id}`}>Check of {date(c.created_at)}</Link>
+              <LevelBadge level={c.overall} />
+              <span className="sub">{LEGAL_CHECK_STATUS_LABELS[c.status]}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }

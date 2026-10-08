@@ -5,6 +5,8 @@ import { LiveProvider } from './lib/live';
 import { Shell } from './layout/Shell';
 import { Coverage } from './pages/Coverage';
 import { Customers } from './pages/Customers';
+import { Legal } from './pages/Legal';
+import { LegalReport } from './pages/LegalReport';
 import { Dashboard } from './pages/Dashboard';
 import { Payments } from './pages/Payments';
 import { PlanPage } from './pages/PlanPage';
@@ -45,8 +47,11 @@ export function App() {
               <Route path="coverage" element={<Coverage />} />
               <Route path="pittu" element={<Pittu />} />
               <Route path="reports" element={<Reports />} />
+              <Route path="legal" element={<Legal />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
+            {/* Printable report: no sidebar. */}
+            <Route path="legal/:id/report" element={<LegalReport />} />
           </Routes>
         </BrowserRouter>
       </StaffGate>

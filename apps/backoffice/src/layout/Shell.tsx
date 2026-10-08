@@ -52,6 +52,7 @@ export function Shell() {
             label="Support tickets"
             count={unseen.size || data?.tickets_waiting}
           />
+          <Item to="/legal" label="Pittu Legal" />
           <div className="nav-label">Customers</div>
           <Item to="/customers" label="Customers" />
           <Item to="/payments" label="Payments" count={data?.refunds_needed.length} />

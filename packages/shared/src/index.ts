@@ -13,3 +13,4 @@ export * from './pittu';
 export * from './reach';
 export * from './weather';
 export * from './dashboard';
+export * from './legal';

@@ -2,7 +2,7 @@
   "name": "@propittu/api",
   "version": "1.0.0",
   "private": true,
-  "description": "Propittu API — business layer between the mobile app and Supabase.",
+  "description": "Propittu API \u2014 business layer between the mobile app and Supabase.",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
@@ -12,7 +12,7 @@
     "test": "node test/smoke.mjs",
     "test:bundle": "npm run build && SMOKE_TARGET=bundle node test/smoke.mjs",
     "build": "node scripts/build-vercel.mjs",
-    "test:ai": "tsx --test test/ai-unit.ts test/pittu-unit.ts test/weather-unit.ts test/geo-unit.ts test/health-unit.ts"
+    "test:ai": "tsx --test test/ai-unit.ts test/pittu-unit.ts test/weather-unit.ts test/geo-unit.ts test/health-unit.ts test/legal-unit.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.131.0",

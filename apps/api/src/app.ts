@@ -10,6 +10,7 @@ import { pittuRouter } from './routes/pittu.js';
 import { documentsRouter } from './routes/documents.js';
 import { healthRouter } from './routes/health.js';
 import { legalRouter } from './routes/legal.js';
+import { legalChecksCustomerRouter } from './routes/legalChecks.js';
 import { backofficeRouter } from './routes/backoffice.js';
 import { billingReturnRouter, billingRouter } from './routes/billing.js';
 import { webhooksRouter } from './routes/webhooks.js';
@@ -116,6 +117,7 @@ export function createApp(): express.Express {
   app.use(documentsRouter);
   app.use(analysisRouter);
   app.use(pittuRouter);
+  app.use(legalChecksCustomerRouter);
   app.use(servicesRouter);
   app.use(weatherRouter);
 

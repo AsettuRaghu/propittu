@@ -1695,5 +1695,38 @@ delete from public.service_categories where code = 'construction';
 select tst.rows($$select * from public.service_categories where code = 'construction'$$, 0, 'an unused category can be deleted');
 reset role;
 
+-- =====================================================================
+\echo
+\echo '== Pittu Legal: EC checks =='
+-- =====================================================================
+reset role;
+insert into public.properties (id, account_id, user_id, property_type, name)
+values ('a1a1a1a1-0000-0000-0000-0000000000e1', 'acc0000a-0000-0000-0000-00000000000a',
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'land', 'Legal check plot');
+insert into public.property_documents (id, property_id, account_id, user_id, document_type, file_name, storage_path, mime_type, file_size, upload_status)
+values ('30000000-0000-0000-0000-000000000001', 'a1a1a1a1-0000-0000-0000-0000000000e1', 'acc0000a-0000-0000-0000-00000000000a',
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'encumbrance_certificate', 'ec.pdf',
+        'acc0000a-0000-0000-0000-00000000000a/a1a1a1a1-0000-0000-0000-0000000000e1/ec.pdf', 'application/pdf', 1000, 'ready');
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rejects($$insert into public.legal_checks (account_id, property_id, ec_document_id, rules_version)
+                     values ('acc0000a-0000-0000-0000-00000000000a', 'a1a1a1a1-0000-0000-0000-0000000000e1',
+                             '30000000-0000-0000-0000-000000000001', 'x')$$,
+  'a customer cannot create a legal check');
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+insert into public.legal_checks (id, account_id, property_id, ec_document_id, rules_version, overall)
+values ('31000000-0000-0000-0000-000000000001', 'acc0000a-0000-0000-0000-00000000000a',
+        'a1a1a1a1-0000-0000-0000-0000000000e1', '30000000-0000-0000-0000-000000000001', 'ec-rules-v1', 'amber');
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rows('select * from public.legal_checks', 0, 'the customer does not see a check still in review');
+select tst.rows($$update public.legal_checks set status = 'shared'$$, 0, 'the customer cannot share it themselves');
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+update public.legal_checks set status = 'shared', shared_at = now() where id = '31000000-0000-0000-0000-000000000001';
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rows('select * from public.legal_checks', 1, 'once shared, the customer sees their check');
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.rows('select * from public.legal_checks', 0, 'another customer never sees it');
+reset role;
+
 \echo
 \echo 'ALL RLS CHECKS PASSED'

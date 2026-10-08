@@ -11,7 +11,7 @@ facts and findings; the **application layer** decides what they mean.
 | **Pittu Ask** | Questions and the care plan after a reading | Live (rules in `packages/shared/src/pittu.ts`) |
 | **Pittu Watch** | News and government alerts around properties | Planned |
 | **Pittu Value** | Value then and now, "Ready to sell", verified property pack | Planned |
-| **Pittu Legal** | Legal health check, Check before you buy, Guard, grounded answers | Planned (first) |
+| **Pittu Legal** | EC check (upload-first: rules in `apps/api/src/legal/ecRules.ts`, staff review, shareable report); later Check before you buy, Guard, grounded answers | EC check first version |
 
 ## Layout
 
@@ -23,6 +23,8 @@ apps/api/src/pittu/
                     run.ts — runTask(): budget → model → validation → cost log by capability
   read/             Pittu Read: tasks/ (saleDeed.ts, encumbrance.ts) and jobs.ts (queue, claim, retry,
                     "never read twice" fingerprint) with ReadHooks for the app layer
+apps/api/src/legal/ Pittu Legal's application layer: ecRules.ts (EC vs deed → green/amber/red
+                    findings, unit-tested), checks.ts (create, review, share)
 apps/api/src/deeds/ the application layer for sale deeds: reuse an earlier reading of the
                     same file, mark duplicates, clear an abandoned draft
 ```
