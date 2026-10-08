@@ -4,8 +4,9 @@ import { AppState } from 'react-native';
 import { env } from './env';
 
 /**
- * Supabase is used on the device for ONE thing: phone-OTP authentication
- * (PRODUCT_SPEC.md §12). All property data goes through the Propittu API.
+ * Supabase is used on the device for phone-OTP authentication
+ * (PRODUCT_SPEC.md §12) and for Realtime "something changed" signals on an
+ * open support ticket. All data itself goes through the Propittu API.
  *
  * Session persistence uses AsyncStorage. Known MVP tradeoff: the refresh
  * token is stored unencrypted in the app sandbox. Move to a chunked

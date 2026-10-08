@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import type {
   BackofficeTicket,
   BackofficeTicketDetail,
@@ -9,6 +10,7 @@ import type {
   TicketStatus,
   UpdateProfileInput,
 } from '@propittu/shared';
+import { supabase } from '@/lib/supabase';
 import { api } from './client';
 
 /** Help & Support tickets, profile editing and receipts. */
@@ -33,6 +35,48 @@ export const useTicket = (id: string) =>
     queryFn: () => api<SupportTicketDetail>(`/support/tickets/${id}`),
     staleTime: 0,
   });
+
+/**
+ * Keeps an open ticket live: Supabase Realtime pushes new messages and status
+ * changes for this ticket (row-level security applies, so a customer only
+ * hears about their own), and we refetch the thread through the API.
+ */
+export function useLiveTicket(id: string, staff = false) {
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (!id) return;
+    const refresh = () => {
+      void qc.invalidateQueries({
+        queryKey: staff ? supportKeys.boTicket(id) : supportKeys.ticket(id),
+      });
+      void qc.invalidateQueries({
+        queryKey: staff ? ['backoffice', 'tickets'] : supportKeys.tickets,
+      });
+    };
+    const channel = supabase
+      .channel(`ticket-${id}-${staff ? 'staff' : 'customer'}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'support_ticket_messages',
+          filter: `ticket_id=eq.${id}`,
+        },
+        refresh,
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'support_tickets', filter: `id=eq.${id}` },
+        refresh,
+      )
+      // Also catches up after the phone slept and the connection came back.
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') refresh();
+      });
+    return () => void supabase.removeChannel(channel);
+  }, [id, staff, qc]);
+}
 
 export function useCreateTicket() {
   const qc = useQueryClient();

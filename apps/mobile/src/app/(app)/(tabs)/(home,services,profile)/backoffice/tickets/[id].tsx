@@ -9,7 +9,7 @@ import {
 } from '@propittu/shared';
 import { PullRefresh } from '@/components/PullRefresh';
 import { useMe } from '@/api/queries';
-import { useBoReplyTicket, useBoTicket, useBoTicketStatus } from '@/api/support';
+import { useBoReplyTicket, useBoTicket, useBoTicketStatus, useLiveTicket } from '@/api/support';
 import { uploadAll } from '@/components/AttachmentPicker';
 import { dialog, toast } from '@/components/Dialog';
 import { ErrorState, LoadingState } from '@/components/States';
@@ -24,6 +24,7 @@ import { space, typography } from '@/theme';
 export default function BoTicketScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: t, isPending, error, refetch } = useBoTicket(id);
+  useLiveTicket(id, true);
   const me = useMe();
   const reply = useBoReplyTicket(id);
   const setStatus = useBoTicketStatus(id);
