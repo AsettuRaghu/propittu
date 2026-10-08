@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { dashboardRouter } from './backofficeDashboard.js';
+import { reportsRouter } from './backofficeReports.js';
 import { cancelOpenLinks } from '../billing/billing.js';
 import { Router, type RequestHandler } from 'express';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -137,6 +138,7 @@ const allow =
 
 backofficeRouter.use(requireStaff);
 backofficeRouter.use(dashboardRouter);
+backofficeRouter.use(reportsRouter);
 
 const staffAudit = (
   ctx: AuthContext,
@@ -193,7 +195,7 @@ backofficeRouter.get('/accounts', async (req, res) => {
     .from('backoffice_accounts')
     .select(ACCOUNT_COLUMNS)
     .order('created_at', { ascending: false })
-    .limit(50);
+    .limit(q ? 50 : 500);
   if (q) {
     const digits = q.replace(/\D/g, '');
     if (z.guid().safeParse(q).success) query = query.eq('id', q);
@@ -495,7 +497,7 @@ async function listRequests(
     .from('service_requests')
     .select(BO_REQUEST_COLUMNS)
     .order('created_at', { ascending: false })
-    .limit(100);
+    .limit(300);
   if (filter.accountId) query = query.eq('account_id', filter.accountId);
   if (filter.status === 'open') query = query.in('status', OPEN_REQUEST_STATUSES);
   else if (filter.status && filter.status !== 'all') query = query.eq('status', filter.status);
@@ -1276,7 +1278,7 @@ backofficeRouter.get('/payments', async (req, res) => {
     .select(`${ORDER_COLUMNS}, user_id`)
     .neq('status', 'cancelled')
     .order('created_at', { ascending: false })
-    .limit(100);
+    .limit(300);
   if (status !== 'all') query = query.eq('status', status);
   const rows = must<(OrderRow & { user_id: string })[]>(await query);
 
@@ -1349,7 +1351,7 @@ backofficeRouter.get('/tickets', async (req, res) => {
     .from('support_tickets')
     .select(`${TICKET_COLUMNS}, account_id, user_id`)
     .order('last_message_at', { ascending: false })
-    .limit(100);
+    .limit(300);
   if (status === 'open') query = query.in('status', OPEN_TICKET_STATUSES);
   else if (status !== 'all') query = query.eq('status', status);
   ok(res, await withTicketCustomers(db, must<TicketRow[]>(await query)));

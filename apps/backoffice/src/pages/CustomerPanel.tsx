@@ -17,6 +17,7 @@ import { api, errorText } from '../lib/api';
 import { date, dateTime, rupees } from '../lib/format';
 import { Feedback, useAction } from '../ui/action';
 import { ORDER_TONES, REQUEST_TONES } from '../ui/status';
+import { useEscape } from '../ui/useEscape';
 import { PropertyView } from './PropertyView';
 
 const SOURCE_LABELS = { trial: 'Free Trial', payment: 'Paid', staff: 'Given by the team' };
@@ -34,6 +35,7 @@ export function CustomerPanel({
   onClose: () => void;
 }) {
   const qc = useQueryClient();
+  useEscape(onClose);
   const { data, error, isPending } = useQuery({
     queryKey: ['bo-account', id],
     queryFn: () => api<BackofficeAccountDetail>(`/backoffice/accounts/${id}`),

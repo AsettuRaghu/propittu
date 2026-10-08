@@ -17,6 +17,7 @@ import { api, errorText } from '../lib/api';
 import { rupees } from '../lib/format';
 import { useUrlState } from '../lib/params';
 import { Feedback, useAction } from '../ui/action';
+import { useEscape } from '../ui/useEscape';
 import { Coverage } from './Coverage';
 
 /** What we offer (services) and where we can deliver it (areas, states, demand). */
@@ -80,7 +81,7 @@ function ServiceList({
         {error ? <div className="empty error">{errorText(error)}</div> : null}
         {data ? (
           <div className="table-wrap">
-            <table>
+            <table className="clickable">
               <thead>
                 <tr>
                   <th>Service</th>
@@ -201,6 +202,7 @@ function ServiceForm({
   onCreated: (id: string) => void;
 }) {
   const qc = useQueryClient();
+  useEscape(onClose);
   const [d, setD] = useState(() => toDraft(service));
   const a = useAction(() => void qc.invalidateQueries({ queryKey: ['bo-services'] }));
   const put = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((x) => ({ ...x, [k]: v }));

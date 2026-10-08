@@ -15,6 +15,7 @@ import { api, errorText } from '../lib/api';
 import { date, dateTime, rupees } from '../lib/format';
 import { Feedback, useAction } from '../ui/action';
 import { REQUEST_TONES } from '../ui/status';
+import { useEscape } from '../ui/useEscape';
 
 const ACTION_LABELS: Partial<Record<ServiceRequestStatus, string>> = {
   confirmed: 'Accept',
@@ -27,6 +28,7 @@ const ACTION_LABELS: Partial<Record<ServiceRequestStatus, string>> = {
 /** One request beside the list: what it is, who it's for, and everything staff can do next. */
 export function RequestPanel({ id, onClose }: { id: string; onClose: () => void }) {
   const qc = useQueryClient();
+  useEscape(onClose);
   const {
     data: r,
     error,

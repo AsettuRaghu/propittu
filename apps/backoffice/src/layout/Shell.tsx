@@ -1,11 +1,38 @@
+import { useQuery } from '@tanstack/react-query';
 import { NavLink, Outlet } from 'react-router';
+import type { BackofficeDashboard } from '@propittu/shared';
 import { useStaff } from '../auth/Session';
+import { api } from '../lib/api';
 import { useLive } from '../lib/live';
 
-/** Sidebar + page: the Backoffice frame on a laptop screen. */
+function Item({
+  to,
+  label,
+  count,
+  end,
+}: {
+  to: string;
+  label: string;
+  count?: number;
+  end?: boolean;
+}) {
+  return (
+    <NavLink to={to} end={end}>
+      {label}
+      {count ? <span className="count">{count}</span> : null}
+    </NavLink>
+  );
+}
+
+/** Sidebar + page: the Backoffice frame on a laptop screen. Counts show what needs us. */
 export function Shell() {
   const { me, signOut } = useStaff();
   const { unseen } = useLive();
+  const { data } = useQuery({
+    queryKey: ['dashboard'],
+    queryFn: () => api<BackofficeDashboard>('/backoffice/dashboard'),
+    refetchInterval: 60_000,
+  });
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -17,18 +44,18 @@ export function Shell() {
           </div>
         </div>
         <nav className="nav" aria-label="Sections">
-          <NavLink to="/" end>
-            Dashboard
-          </NavLink>
-          <NavLink to="/requests">Requests</NavLink>
-          <NavLink to="/support">
-            Support
-            {unseen.size ? <span className="count">{unseen.size}</span> : null}
-          </NavLink>
-          <NavLink to="/customers">Customers</NavLink>
-          <NavLink to="/payments">Plans &amp; payments</NavLink>
-          <NavLink to="/services">Services &amp; coverage</NavLink>
-          <NavLink to="/pittu">Pittu</NavLink>
+          <Item to="/" end label="Dashboard" />
+          <div className="nav-label">Work</div>
+          <Item to="/requests" label="Requests" count={data?.requests.requested} />
+          <Item to="/support" label="Support" count={unseen.size || data?.tickets_waiting} />
+          <div className="nav-label">Customers</div>
+          <Item to="/customers" label="Customers" />
+          <Item to="/payments" label="Plans & payments" count={data?.refunds_needed.length} />
+          <div className="nav-label">Setup</div>
+          <Item to="/services" label="Services & coverage" />
+          <Item to="/pittu" label="Pittu" />
+          <div className="nav-label">Insights</div>
+          <Item to="/reports" label="Reports" />
         </nav>
         <div className="sidebar-foot">
           <span>{me.full_name || 'Admin'}</span>

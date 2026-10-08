@@ -1,109 +1,170 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import {
+  TICKET_CATEGORIES,
   TICKET_CATEGORY_LABELS,
   TICKET_STATUSES,
   TICKET_STATUS_LABELS,
+  formatIndianMobile,
   type BackofficeTicket,
   type BackofficeTicketDetail,
   type TicketStatus,
 } from '@propittu/shared';
 import { api, errorText } from '../lib/api';
+import { dateTime, relative } from '../lib/format';
+import { useTicketList } from '../lib/lists';
 import { useLive } from '../lib/live';
 import { useUrlState } from '../lib/params';
-import { dateTime, relative } from '../lib/format';
+import { DataTable, type Column } from '../ui/DataTable';
 import { TICKET_TONES } from '../ui/status';
+import { Tiles } from '../ui/Tiles';
+import { useEscape } from '../ui/useEscape';
 
-const FILTERS: { value: 'open' | 'all' | TicketStatus; label: string }[] = [
-  { value: 'open', label: 'Open' },
-  { value: 'waiting_on_customer', label: 'Waiting on customer' },
-  { value: 'resolved', label: 'Resolved' },
-  { value: 'all', label: 'All' },
-];
+const onUs = (t: BackofficeTicket) => t.status === 'open' || t.status === 'in_progress';
 
-/** The support inbox: newest activity first; pick a ticket to reply beside the list. */
+/** The support inbox: live, newest activity first; pick a ticket to reply beside the list. */
 export function Support() {
   const [params, set] = useUrlState();
-  const status = params.get('status') ?? 'open';
+  const view = params.get('status') ?? 'on_us';
+  const category = params.get('category') ?? '';
   const selected = params.get('id');
-  const { data, error, isPending } = useQuery({
-    queryKey: ['bo-tickets', status],
-    queryFn: () => api<BackofficeTicket[]>(`/backoffice/tickets?status=${status}`),
-    // Live updates arrive through Realtime; this is only a safety net.
-    refetchInterval: 60_000,
-  });
+  const { data, error, isPending } = useTicketList();
   const { unseen } = useLive();
+
+  const views = {
+    on_us: onUs,
+    new: (t: BackofficeTicket) => unseen.has(t.id),
+    waiting_on_customer: (t: BackofficeTicket) => t.status === 'waiting_on_customer',
+    resolved: (t: BackofficeTicket) => t.status === 'resolved' || t.status === 'closed',
+    all: () => true,
+  };
+  const count = (f: (t: BackofficeTicket) => boolean) => data?.filter(f).length ?? '–';
+  const rows = data?.filter(
+    (t) => (views[view as keyof typeof views] ?? onUs)(t) && (!category || t.category === category),
+  );
+
+  const columns: Column<BackofficeTicket>[] = [
+    {
+      key: 'subject',
+      header: 'Ticket',
+      sort: (t) => t.subject,
+      render: (t) => (
+        <>
+          {t.subject}
+          {unseen.has(t.id) ? <span className="badge warn new">New reply</span> : null}
+          <span className="sub mono">{t.reference}</span>
+        </>
+      ),
+      csv: (t) => `${t.subject} ${t.reference}`,
+    },
+    {
+      key: 'customer',
+      header: 'Customer',
+      sort: (t) => t.customer_name ?? '',
+      render: (t) => (
+        <>
+          {t.customer_name || '—'}
+          <span className="sub">
+            {t.customer_phone ? formatIndianMobile(t.customer_phone) : ''}
+          </span>
+        </>
+      ),
+      csv: (t) => `${t.customer_name ?? ''} ${t.customer_phone ?? ''}`.trim(),
+    },
+    {
+      key: 'category',
+      header: 'Topic',
+      sort: (t) => TICKET_CATEGORY_LABELS[t.category],
+      render: (t) => (
+        <>
+          {TICKET_CATEGORY_LABELS[t.category]}
+          <span className="sub">{t.service_request?.service?.name ?? t.property?.name ?? ''}</span>
+        </>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      sort: (t) => t.status,
+      render: (t) => (
+        <span className={`badge ${TICKET_TONES[t.status]}`}>{TICKET_STATUS_LABELS[t.status]}</span>
+      ),
+      csv: (t) => TICKET_STATUS_LABELS[t.status],
+    },
+    {
+      key: 'created',
+      header: 'Opened',
+      sort: (t) => t.created_at,
+      render: (t) => relative(t.created_at),
+    },
+    {
+      key: 'last',
+      header: 'Last message',
+      sort: (t) => t.last_message_at,
+      render: (t) => relative(t.last_message_at),
+      csv: (t) => t.last_message_at,
+    },
+  ];
 
   return (
     <div className="page">
       <div className="page-head">
         <div>
           <h1>Support</h1>
-          <p>Newest activity first.</p>
-        </div>
-        <div className="tabs" role="group" aria-label="Status">
-          {FILTERS.map((f) => (
-            <button
-              key={f.value}
-              aria-pressed={status === f.value}
-              onClick={() => set({ status: f.value, id: null })}
-            >
-              {f.label}
-            </button>
-          ))}
+          <p>Live: new tickets and replies appear here as they arrive.</p>
         </div>
       </div>
+      <Tiles
+        value={view}
+        onChange={(v) => set({ status: v, id: null })}
+        tiles={[
+          { value: 'on_us', label: 'Waiting on us', count: count(onUs), tone: 'warn' },
+          {
+            value: 'new',
+            label: 'New replies',
+            count: unseen.size,
+            tone: unseen.size ? 'bad' : '',
+          },
+          {
+            value: 'waiting_on_customer',
+            label: 'Waiting on customer',
+            count: count(views.waiting_on_customer),
+          },
+          { value: 'resolved', label: 'Resolved', count: count(views.resolved), tone: 'good' },
+          { value: 'all', label: 'Everything', count: data?.length ?? '–' },
+        ]}
+      />
       <div className={`split ${selected ? '' : 'closed'}`}>
-        <section className="section">
-          {isPending ? <div className="empty">Loading…</div> : null}
-          {error ? <div className="empty error">{errorText(error)}</div> : null}
-          {data && data.length === 0 ? <div className="empty">No tickets here.</div> : null}
-          {data && data.length > 0 ? (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Ticket</th>
-                    <th>Customer</th>
-                    <th>About</th>
-                    <th>Status</th>
-                    <th>Last message</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.map((t) => (
-                    <tr
-                      key={t.id}
-                      className={selected === t.id ? 'selected' : ''}
-                      onClick={() => set({ id: t.id })}
-                    >
-                      <td>
-                        {t.subject}
-                        {unseen.has(t.id) ? (
-                          <span className="badge warn new">New reply</span>
-                        ) : null}
-                        <span className="sub mono">
-                          {t.reference} · {TICKET_CATEGORY_LABELS[t.category]}
-                        </span>
-                      </td>
-                      <td>
-                        {t.customer_name || '—'}
-                        <span className="sub">{t.customer_phone ?? ''}</span>
-                      </td>
-                      <td>{t.service_request?.service?.name ?? t.property?.name ?? '—'}</td>
-                      <td>
-                        <span className={`badge ${TICKET_TONES[t.status]}`}>
-                          {TICKET_STATUS_LABELS[t.status]}
-                        </span>
-                      </td>
-                      <td>{relative(t.last_message_at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
-        </section>
+        <DataTable
+          rows={rows}
+          columns={columns}
+          rowKey={(t) => t.id}
+          selected={selected}
+          onRowClick={(t) => set({ id: t.id })}
+          searchText={(t) =>
+            `${t.reference} ${t.subject} ${t.customer_name ?? ''} ${t.customer_phone ?? ''}`
+          }
+          searchPlaceholder="Search reference, subject, customer"
+          defaultSort={{ key: 'last', dir: 'desc' }}
+          exportName="tickets"
+          loading={isPending}
+          error={error ? errorText(error) : null}
+          empty="No tickets here."
+          toolbar={
+            <select
+              value={category}
+              onChange={(e) => set({ category: e.target.value || null })}
+              aria-label="Topic"
+            >
+              <option value="">All topics</option>
+              {TICKET_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {TICKET_CATEGORY_LABELS[c]}
+                </option>
+              ))}
+            </select>
+          }
+        />
         {selected ? <TicketPanel id={selected} onClose={() => set({ id: null })} /> : null}
       </div>
     </div>
@@ -122,6 +183,7 @@ function TicketPanel({ id, onClose }: { id: string; onClose: () => void }) {
     refetchInterval: 60_000,
   });
   const { markSeen } = useLive();
+  useEscape(onClose);
   const lastAt = t?.last_message_at;
   useEffect(() => {
     // Open (or a new message while open) counts as seen.

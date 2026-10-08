@@ -5,8 +5,10 @@ import {
   type BackofficeDashboard,
   type ServiceRequestStatus,
 } from '@propittu/shared';
+import { useState } from 'react';
 import { api, errorText } from '../lib/api';
-import { dateTime, rupees } from '../lib/format';
+import { dateTime, relative, rupees } from '../lib/format';
+import { useRequestList, useTicketList } from '../lib/lists';
 import { REQUEST_TONES } from '../ui/status';
 
 /** Today at a glance — every number opens the matching list. */
@@ -16,6 +18,26 @@ export function Dashboard() {
     queryFn: () => api<BackofficeDashboard>('/backoffice/dashboard'),
     refetchInterval: 60_000,
   });
+  const requests = useRequestList();
+  const tickets = useTicketList();
+  const [now] = useState(() => Date.now());
+  const toConfirm = (requests.data ?? [])
+    .filter((r) => r.status === 'requested')
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+    .slice(0, 8);
+  const comingUp = (requests.data ?? [])
+    .filter(
+      (r) =>
+        r.status === 'scheduled' &&
+        r.scheduled_for &&
+        Date.parse(r.scheduled_for) >= now - 86_400_000,
+    )
+    .sort((a, b) => (a.scheduled_for ?? '').localeCompare(b.scheduled_for ?? ''))
+    .slice(0, 8);
+  const waiting = (tickets.data ?? [])
+    .filter((t) => t.status === 'open' || t.status === 'in_progress')
+    .sort((a, b) => a.last_message_at.localeCompare(b.last_message_at))
+    .slice(0, 8);
 
   return (
     <div className="page">
@@ -67,6 +89,45 @@ export function Dashboard() {
             <Stat
               value={`$${data.ai_spend_month_usd.toFixed(2)}`}
               label="Pittu AI cost this month"
+            />
+          </div>
+
+          <div className="three-col">
+            <Queue
+              title="To confirm (oldest first)"
+              more="/requests?status=requested"
+              empty="Nothing waiting."
+              rows={toConfirm.map((r) => ({
+                key: r.id,
+                to: `/requests?status=requested&id=${r.id}`,
+                main: r.service.name,
+                sub: `${r.customer_name || r.customer_phone || 'Customer'} · ${r.property?.name ?? 'Property deleted'}`,
+                side: relative(r.created_at),
+              }))}
+            />
+            <Queue
+              title="Visits coming up"
+              more="/requests?status=scheduled"
+              empty="No visits scheduled."
+              rows={comingUp.map((r) => ({
+                key: r.id,
+                to: `/requests?status=scheduled&id=${r.id}`,
+                main: r.property?.name ?? r.service.name,
+                sub: `${r.service.name} · ${r.customer_name || r.customer_phone || 'Customer'}`,
+                side: dateTime(r.scheduled_for),
+              }))}
+            />
+            <Queue
+              title="Tickets waiting on us"
+              more="/support"
+              empty="Inbox clear."
+              rows={waiting.map((t) => ({
+                key: t.id,
+                to: `/support?id=${t.id}`,
+                main: t.subject,
+                sub: t.customer_name || t.customer_phone || 'Customer',
+                side: relative(t.last_message_at),
+              }))}
             />
           </div>
 
@@ -160,5 +221,40 @@ function Stat({
     </Link>
   ) : (
     <div className={`stat ${tone}`}>{body}</div>
+  );
+}
+
+function Queue({
+  title,
+  more,
+  empty,
+  rows,
+}: {
+  title: string;
+  more: string;
+  empty: string;
+  rows: { key: string; to: string; main: string; sub: string; side: string }[];
+}) {
+  return (
+    <section className="section">
+      <div className="section-head">
+        <h2>{title}</h2>
+        <Link to={more}>See all</Link>
+      </div>
+      {rows.length === 0 ? <div className="empty">{empty}</div> : null}
+      <ul className="queue">
+        {rows.map((r) => (
+          <li key={r.key}>
+            <Link to={r.to}>
+              <span>
+                {r.main}
+                <small>{r.sub}</small>
+              </span>
+              <em>{r.side}</em>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

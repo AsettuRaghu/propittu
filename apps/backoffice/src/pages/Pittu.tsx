@@ -97,7 +97,7 @@ export function Pittu() {
                   </thead>
                   <tbody>
                     {s.failures.map((f) => (
-                      <tr key={f.analysis_id} className="static">
+                      <tr key={f.analysis_id}>
                         <td>
                           {f.property_name}
                           {f.is_draft ? <span className="sub">Still being added</span> : null}
@@ -151,7 +151,7 @@ export function Pittu() {
                   </thead>
                   <tbody>
                     {s.by_account.map((r) => (
-                      <tr key={r.account_id} className="static">
+                      <tr key={r.account_id}>
                         <td>
                           <Link to={`/customers?id=${r.account_id}`}>
                             {r.customer_name ||
@@ -200,7 +200,7 @@ export function Pittu() {
               </thead>
               <tbody>
                 {list.data.map((r) => (
-                  <tr key={r.property_id} className="static">
+                  <tr key={r.property_id}>
                     <td>
                       <Link to={`/customers?id=${r.account_id}&property=${r.property_id}`}>
                         {r.property_name}

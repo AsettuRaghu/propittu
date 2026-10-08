@@ -1,100 +1,150 @@
 import { useQuery } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { formatIndianMobile, type BackofficeAccount } from '@propittu/shared';
 import { api, errorText } from '../lib/api';
-import { date } from '../lib/format';
+import { date, relative } from '../lib/format';
 import { useUrlState } from '../lib/params';
+import { DataTable, type Column } from '../ui/DataTable';
+import { Tiles } from '../ui/Tiles';
 import { CustomerPanel } from './CustomerPanel';
 
-/** Find a customer by phone, name or account id; open one beside the list. */
+const SOURCE = { trial: 'Free Trial', payment: 'Paid', staff: 'Given by the team' } as const;
+
+/** Every customer (newest 500): tiles by plan, a searchable table, the customer beside it. */
 export function Customers() {
   const [params, set] = useUrlState();
-  const q = params.get('q') ?? '';
+  const view = params.get('view') ?? 'all';
   const selected = params.get('id');
-  const [text, setText] = useState(q);
-
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  // Search as the person types, a moment after they stop.
-  const type = (value: string) => {
-    setText(value);
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => set({ q: value.trim() || null, id: null }), 350);
-  };
-
+  const [now] = useState(() => Date.now());
   const { data, error, isPending } = useQuery({
-    queryKey: ['bo-accounts', q],
-    queryFn: () =>
-      api<BackofficeAccount[]>(`/backoffice/accounts${q ? `?q=${encodeURIComponent(q)}` : ''}`),
+    queryKey: ['bo-accounts'],
+    queryFn: () => api<BackofficeAccount[]>('/backoffice/accounts'),
   });
+
+  const ending = (a: BackofficeAccount) =>
+    !!a.plan_ends_at &&
+    Date.parse(a.plan_ends_at) > now &&
+    Date.parse(a.plan_ends_at) - now < 7 * 86_400_000;
+  const views = {
+    all: () => true,
+    trial: (a: BackofficeAccount) => a.plan_source === 'trial',
+    payment: (a: BackofficeAccount) => a.plan_source === 'payment',
+    staff: (a: BackofficeAccount) => a.plan_source === 'staff',
+    none: (a: BackofficeAccount) => !a.plan_code,
+    ending,
+    requests: (a: BackofficeAccount) => a.open_request_count > 0,
+    suspended: (a: BackofficeAccount) => a.status !== 'active',
+  };
+  const count = (k: keyof typeof views) => data?.filter(views[k]).length ?? '–';
+  const rows = data?.filter(views[view as keyof typeof views] ?? views.all);
+
+  const columns: Column<BackofficeAccount>[] = [
+    {
+      key: 'name',
+      header: 'Customer',
+      sort: (a) => a.full_name ?? '',
+      render: (a) => (
+        <>
+          {a.full_name || '—'}
+          <span className="sub">{a.phone ? formatIndianMobile(a.phone) : ''}</span>
+        </>
+      ),
+      csv: (a) => `${a.full_name ?? ''} ${a.phone ?? ''}`.trim(),
+    },
+    {
+      key: 'plan',
+      header: 'Plan',
+      sort: (a) => a.plan_name ?? '',
+      render: (a) => (
+        <>
+          {a.plan_name ?? <span className="sub">No plan</span>}
+          <span className="sub">{a.plan_source ? SOURCE[a.plan_source] : ''}</span>
+        </>
+      ),
+      csv: (a) => a.plan_name ?? '',
+    },
+    {
+      key: 'ends',
+      header: 'Plan ends',
+      sort: (a) => a.plan_ends_at,
+      render: (a) =>
+        a.plan_ends_at ? (
+          <span className={ending(a) ? 'warn-text' : ''}>
+            {date(a.plan_ends_at)}
+            <span className="sub">{relative(a.plan_ends_at)}</span>
+          </span>
+        ) : (
+          '—'
+        ),
+      csv: (a) => a.plan_ends_at,
+    },
+    {
+      key: 'properties',
+      header: 'Properties',
+      align: 'right',
+      sort: (a) => a.property_count,
+      render: (a) => a.property_count,
+    },
+    {
+      key: 'open',
+      header: 'Open requests',
+      align: 'right',
+      sort: (a) => a.open_request_count,
+      render: (a) => a.open_request_count || '—',
+    },
+    {
+      key: 'joined',
+      header: 'Joined',
+      sort: (a) => a.created_at,
+      render: (a) => date(a.created_at),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      sort: (a) => a.status,
+      render: (a) => (
+        <span className={`badge ${a.status === 'active' ? 'good' : 'bad'}`}>{a.status}</span>
+      ),
+    },
+  ];
 
   return (
     <div className="page">
       <div className="page-head">
         <div>
           <h1>Customers</h1>
-          <p>Newest first. Search by phone, name or account id.</p>
+          <p>The newest 500. Click a number to filter.</p>
         </div>
-        <input
-          className="search"
-          type="search"
-          placeholder="Search customers"
-          value={text}
-          onChange={(e) => type(e.target.value)}
-          aria-label="Search customers"
-        />
       </div>
-
+      <Tiles
+        value={view}
+        onChange={(v) => set({ view: v, id: null, property: null })}
+        tiles={[
+          { value: 'all', label: 'All customers', count: count('all') },
+          { value: 'trial', label: 'On Free Trial', count: count('trial') },
+          { value: 'payment', label: 'Paying', count: count('payment'), tone: 'good' },
+          { value: 'staff', label: 'Given by the team', count: count('staff') },
+          { value: 'ending', label: 'Plan ends in 7 days', count: count('ending'), tone: 'warn' },
+          { value: 'none', label: 'No plan', count: count('none') },
+          { value: 'requests', label: 'With open requests', count: count('requests') },
+          { value: 'suspended', label: 'Suspended', count: count('suspended'), tone: 'bad' },
+        ]}
+      />
       <div className={`split ${selected ? '' : 'closed'}`}>
-        <section className="section">
-          {isPending ? <div className="empty">Loading…</div> : null}
-          {error ? <div className="empty error">{errorText(error)}</div> : null}
-          {data && data.length === 0 ? <div className="empty">No customers found.</div> : null}
-          {data && data.length > 0 ? (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Customer</th>
-                    <th>Plan</th>
-                    <th>Properties</th>
-                    <th>Open requests</th>
-                    <th>Joined</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.map((a) => (
-                    <tr
-                      key={a.id}
-                      className={selected === a.id ? 'selected' : ''}
-                      onClick={() => set({ id: a.id, property: null })}
-                    >
-                      <td>
-                        {a.full_name || '—'}
-                        <span className="sub">{a.phone ? formatIndianMobile(a.phone) : ''}</span>
-                      </td>
-                      <td>
-                        {a.plan_name ?? 'No plan'}
-                        <span className="sub">
-                          {a.plan_ends_at ? `until ${date(a.plan_ends_at)}` : ''}
-                        </span>
-                      </td>
-                      <td>{a.property_count}</td>
-                      <td>{a.open_request_count || '—'}</td>
-                      <td>
-                        {date(a.created_at)}
-                        {a.status !== 'active' ? (
-                          <span className="sub">
-                            <span className="badge bad">{a.status}</span>
-                          </span>
-                        ) : null}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
-        </section>
+        <DataTable
+          rows={rows}
+          columns={columns}
+          rowKey={(a) => a.id}
+          selected={selected}
+          onRowClick={(a) => set({ id: a.id, property: null })}
+          searchText={(a) => `${a.full_name ?? ''} ${a.phone ?? ''} ${a.id}`}
+          searchPlaceholder="Search name, phone or account id"
+          defaultSort={{ key: 'joined', dir: 'desc' }}
+          exportName="customers"
+          loading={isPending}
+          error={error ? errorText(error) : null}
+          empty="No customers here."
+        />
         {selected ? (
           <CustomerPanel
             id={selected}

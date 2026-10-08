@@ -7,6 +7,7 @@ import { Customers } from './pages/Customers';
 import { Dashboard } from './pages/Dashboard';
 import { Payments } from './pages/Payments';
 import { Pittu } from './pages/Pittu';
+import { Reports } from './pages/Reports';
 import { Requests } from './pages/Requests';
 import { Services } from './pages/Services';
 import { Support } from './pages/Support';
@@ -35,6 +36,7 @@ export function App() {
               <Route path="payments" element={<Payments />} />
               <Route path="services" element={<Services />} />
               <Route path="pittu" element={<Pittu />} />
+              <Route path="reports" element={<Reports />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>

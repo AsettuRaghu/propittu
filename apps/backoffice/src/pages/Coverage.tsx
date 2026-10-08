@@ -65,7 +65,7 @@ export function Coverage() {
               </thead>
               <tbody>
                 {data.demand.map((d) => (
-                  <tr key={d.pincode ?? 'none'} className="static">
+                  <tr key={d.pincode ?? 'none'}>
                     <td className="mono">{d.pincode ?? 'No PIN code'}</td>
                     <td>{d.place ?? '—'}</td>
                     <td>{d.properties}</td>
