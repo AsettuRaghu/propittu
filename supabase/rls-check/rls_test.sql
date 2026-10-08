@@ -1612,5 +1612,25 @@ select tst.rejects($$select public.staff_set_version_renewals((select id from pu
 reset role;
 reset role;
 
+-- =====================================================================
+\echo
+\echo '== Service categories =='
+-- =====================================================================
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rows('select * from public.service_categories', 3, 'customers can read the categories');
+select tst.rejects($$insert into public.service_categories (code, name) values ('hack', 'Hack')$$,
+  'a customer cannot add a category');
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+insert into public.service_categories (code, name, sort_order) values ('construction', 'Construction', 40);
+select tst.rows($$select * from public.service_categories where code = 'construction'$$, 1, 'staff can add a category');
+select tst.rejects($$update public.services set category = 'no_such' where code = 'property_visit'$$,
+  'a service must use an existing category');
+select tst.rejects($$delete from public.service_categories where code = 'property_care'$$,
+  'a category still used by services cannot be deleted');
+delete from public.service_categories where code = 'construction';
+select tst.rows($$select * from public.service_categories where code = 'construction'$$, 0, 'an unused category can be deleted');
+reset role;
+
 \echo
 \echo 'ALL RLS CHECKS PASSED'

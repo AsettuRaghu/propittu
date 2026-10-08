@@ -2,13 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-  REACH_PROBLEM_LABELS,
-  reachProblem,
-  SERVICE_CATEGORIES,
-  SERVICE_CATEGORY_LABELS,
-  type CatalogueService,
-} from '@propittu/shared';
+import { REACH_PROBLEM_LABELS, reachProblem, type CatalogueService } from '@propittu/shared';
 import { useMe, useProperties, useServices } from '@/api/queries';
 import { PageHeader } from '@/components/PageHeader';
 import { PullRefresh } from '@/components/PullRefresh';
@@ -16,6 +10,7 @@ import { ServiceRequestList } from '@/components/ServiceRequestList';
 import { ServiceRow } from '@/components/ServiceRow';
 import { ErrorState, LimitedAccessState, LoadingState } from '@/components/States';
 import { Button, ListGroup, ListRow, Segmented } from '@/components/ui';
+import { serviceGroups } from '@/lib/serviceGroups';
 import { serviceVisual } from '@/lib/icons';
 import { colors, space } from '@/theme';
 
@@ -113,11 +108,9 @@ function Catalogue() {
         </ListGroup>
       ) : null}
 
-      {SERVICE_CATEGORIES.map((category) => {
-        const items = rest.filter((s) => s.category === category);
-        if (items.length === 0) return null;
+      {serviceGroups(rest).map(({ code, name, items }) => {
         return (
-          <ListGroup key={category} title={SERVICE_CATEGORY_LABELS[category]} plain>
+          <ListGroup key={code} title={name} plain>
             {items.map((s) => (
               <ServiceRow
                 key={s.id}

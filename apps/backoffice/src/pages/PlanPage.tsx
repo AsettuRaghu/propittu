@@ -143,10 +143,11 @@ export function PlanPage() {
         <div className="empty">This plan was not found.</div>
       </div>
     );
-  return <Editor key={plan?.id ?? 'new'} plan={plan ?? null} />;
+  const nextOrder = Math.max(0, ...(data ?? []).map((p) => p.sort_order)) + 10;
+  return <Editor key={plan?.id ?? 'new'} plan={plan ?? null} nextOrder={nextOrder} />;
 }
 
-function Editor({ plan }: { plan: StaffPlan | null }) {
+function Editor({ plan, nextOrder }: { plan: StaffPlan | null; nextOrder: number }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const services = useServices();
@@ -155,7 +156,7 @@ function Editor({ plan }: { plan: StaffPlan | null }) {
     code: plan?.code ?? '',
     name: plan?.name ?? '',
     description: plan?.description ?? '',
-    sort_order: String(plan?.sort_order ?? 100),
+    sort_order: String(plan?.sort_order ?? nextOrder),
   });
   const [terms, setTerms] = useState(() => toTerms(plan?.current ?? null));
   const [busy, setBusy] = useState(false);
@@ -164,10 +165,7 @@ function Editor({ plan }: { plan: StaffPlan | null }) {
   const savedTerms = JSON.stringify(toVersionBody(toTerms(plan?.current ?? null)));
   const termsDirty = JSON.stringify(toVersionBody(terms)) !== savedTerms;
   const detailsDirty =
-    !!plan &&
-    (details.name !== plan.name ||
-      details.description !== plan.description ||
-      Number(details.sort_order) !== plan.sort_order);
+    !!plan && (details.name !== plan.name || details.description !== plan.description);
 
   const run = async (fn: () => Promise<unknown>, ok: string) => {
     setBusy(true);
@@ -272,16 +270,6 @@ function Editor({ plan }: { plan: StaffPlan | null }) {
                   onChange={(e) => setDetails({ ...details, name: e.target.value })}
                 />
               </label>
-              <label className="field">
-                Position in the list
-                <input
-                  type="number"
-                  min={0}
-                  value={details.sort_order}
-                  onChange={(e) => setDetails({ ...details, sort_order: e.target.value })}
-                />
-                <small>Lower numbers are shown first.</small>
-              </label>
               <label className="field wide">
                 Description
                 <textarea
@@ -299,7 +287,6 @@ function Editor({ plan }: { plan: StaffPlan | null }) {
                         {
                           name: details.name.trim(),
                           description: details.description.trim(),
-                          sort_order: Number(details.sort_order) || 0,
                         },
                         'Details saved.',
                       )

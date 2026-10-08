@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { dashboardRouter } from './backofficeDashboard.js';
+import { catalogueRouter } from './backofficeCatalogue.js';
 import { plansConsoleRouter } from './backofficePlans.js';
 import { reportsRouter } from './backofficeReports.js';
 import { cancelOpenLinks } from '../billing/billing.js';
@@ -144,6 +145,7 @@ backofficeRouter.use(requireStaff);
 backofficeRouter.use(dashboardRouter);
 backofficeRouter.use(reportsRouter);
 backofficeRouter.use(plansConsoleRouter);
+backofficeRouter.use(catalogueRouter);
 
 const staffAudit = (
   ctx: AuthContext,

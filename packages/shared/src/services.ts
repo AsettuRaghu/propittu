@@ -10,7 +10,6 @@ import {
   MAX_PHOTO_BYTES,
   MAX_VIDEO_BYTES,
   SERVICE_REQUEST_STATUS_LABELS,
-  SERVICE_CATEGORIES,
   SERVICE_REQUEST_STATUSES,
   type AccountStatus,
   type DocumentType,
@@ -194,6 +193,9 @@ export const PREFERRED_SLOT_HOURS: Record<PreferredSlot, string> = {
 
 /** Shown in the catalogue for the signed-in Account (GET /services). */
 export interface CatalogueService extends Service {
+  /** The category's name and position, so the app can group services without a list in code. */
+  category_name: string;
+  category_order: number;
   coverage: 'included' | 'extra' | 'unavailable';
   /** Included allowance left (null when the Plan does not include it). */
   included_remaining: number | null;
@@ -464,7 +466,7 @@ export type OutcomeFileIntentInput = z.input<typeof outcomeFileIntentSchema>;
 const serviceFields = {
   name: z.string().trim().min(1, 'Enter a name').max(80),
   description: z.string().trim().min(1, 'Enter a description').max(500),
-  category: z.enum(SERVICE_CATEGORIES),
+  category: z.string().regex(/^[a-z][a-z0-9_]*$/, 'Choose a category'),
   price_paise: z.number().int().min(0).max(100_000_000).nullable(),
   is_active: z.boolean(),
   is_extra_available: z.boolean(),
@@ -519,3 +521,27 @@ export const grantPlanSchema = z.object({
 export const extendPlanSchema = z.object({
   days: z.number().int().min(1).max(365),
 });
+
+/* ------------------------------------------------------------------ *
+ * Catalogue set-up (Backoffice portal)
+ * ------------------------------------------------------------------ */
+
+/** GET /backoffice/service-categories */
+export interface StaffServiceCategory {
+  code: string;
+  name: string;
+  sort_order: number;
+  service_count: number;
+}
+
+export const categoryCreateSchema = z.object({
+  code: z
+    .string()
+    .regex(/^[a-z][a-z0-9_]*$/, 'Lowercase letters, digits and _ only')
+    .max(40),
+  name: z.string().trim().min(1, 'Enter a name').max(60),
+});
+export const categoryUpdateSchema = z.object({ name: z.string().trim().min(1).max(60) });
+
+/** POST …/order — the new order, first to last. */
+export const reorderSchema = z.object({ ids: z.array(z.string().min(1).max(100)).min(1).max(500) });

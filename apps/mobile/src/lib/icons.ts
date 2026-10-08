@@ -31,7 +31,7 @@ export const PROPERTY_TYPE_GRADIENTS: Record<PropertyType, readonly [string, str
   other: ['#0284C7', '#4338CA'],
 };
 
-const SERVICE_CATEGORY_ICONS: Record<ServiceCategory, IconName> = {
+const SERVICE_CATEGORY_ICONS: Record<string, IconName> = {
   property_government: 'government',
   property_care: 'shield-check',
   other: 'chat',
@@ -60,7 +60,7 @@ export function serviceVisual(
 ): { icon: IconName; accent: Accent } {
   return (
     SERVICE_ICONS[code] ?? {
-      icon: SERVICE_CATEGORY_ICONS[category],
+      icon: SERVICE_CATEGORY_ICONS[category] ?? 'services',
       accent: category === 'property_government' ? 'amber' : 'teal',
     }
   );

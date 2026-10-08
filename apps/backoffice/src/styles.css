@@ -1458,3 +1458,49 @@ a.link-pin {
 a.link-pin:hover {
   border-color: var(--brand);
 }
+.reorder ol {
+  list-style: none;
+  margin: 8px 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.reorder li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: grab;
+}
+.reorder li.dragging {
+  opacity: 0.5;
+  border-style: dashed;
+}
+.reorder .handle {
+  color: var(--subtle);
+  letter-spacing: -2px;
+}
+.reorder .pos {
+  width: 22px;
+  color: var(--subtle);
+  font-variant-numeric: tabular-nums;
+}
+.reorder .grow {
+  flex: 1;
+}
+.pricing {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pricing label.check {
+  align-items: flex-start;
+}
+.pricing small {
+  display: block;
+  color: var(--subtle);
+}

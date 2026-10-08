@@ -8,8 +8,6 @@ import {
   REACH_PROBLEM_LABELS,
   REACH_PROBLEM_TEXT,
   reachProblem,
-  SERVICE_CATEGORIES,
-  SERVICE_CATEGORY_LABELS,
   CANCEL_POLICY_LABELS,
   requestPayment,
   SERVICE_FULFILMENT_LABELS,
@@ -18,6 +16,7 @@ import {
   type PreferredSlot,
 } from '@propittu/shared';
 import { payForServiceRequest } from '@/api/billing';
+import { serviceGroups } from '@/lib/serviceGroups';
 import { useCreateServiceRequest, useProperties, useServices } from '@/api/queries';
 import { toIsoDate } from '@/components/DateField';
 import { dialog } from '@/components/Dialog';
@@ -332,11 +331,9 @@ function ServicePicker({
   return (
     <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <PageHeader title="What do you need?" />
-      {SERVICE_CATEGORIES.map((category) => {
-        const items = services.filter((s) => s.category === category);
-        if (items.length === 0) return null;
+      {serviceGroups(services).map(({ code, name, items }) => {
         return (
-          <ListGroup key={category} title={SERVICE_CATEGORY_LABELS[category]} plain>
+          <ListGroup key={code} title={name} plain>
             {items.map((s) => (
               <ServiceRow key={s.id} service={s} onPress={() => onPick(s)} />
             ))}

@@ -6,8 +6,6 @@ import {
   CANCEL_POLICY_LABELS,
   PAYMENT_TIMINGS,
   PAYMENT_TIMING_LABELS,
-  SERVICE_CATEGORIES,
-  SERVICE_CATEGORY_LABELS,
   SERVICE_FULFILMENTS,
   SERVICE_FULFILMENT_LABELS,
   SERVICE_REACHES,
@@ -20,7 +18,7 @@ import { date, rupees } from '../lib/format';
 import { useRequestList } from '../lib/lists';
 import { REQUEST_TONES } from '../ui/status';
 import { useCoverage } from './Coverage';
-import { useServices } from './Services';
+import { useCategories, useServices } from './Services';
 
 type Draft = {
   code: string;
@@ -38,6 +36,7 @@ type Draft = {
   cancel_policy: StaffService['cancel_policy'];
   expected_days: string;
   sort_order: string;
+  pricing: 'fixed' | 'quote' | 'plan';
 };
 
 const toDraft = (s: StaffService | null): Draft => ({
@@ -57,6 +56,13 @@ const toDraft = (s: StaffService | null): Draft => ({
   cancel_policy: s?.cancel_policy ?? 'until_confirmed',
   expected_days: s?.expected_days ? String(s.expected_days) : '',
   sort_order: String(s?.sort_order ?? 100),
+  pricing: !s
+    ? 'fixed'
+    : !s.is_extra_available
+      ? 'plan'
+      : s.price_paise === null
+        ? 'quote'
+        : 'fixed',
 });
 
 /** Every editable field is sent, so nothing falls back to a default by accident. */
@@ -64,9 +70,10 @@ const toBody = (d: Draft) => ({
   name: d.name.trim(),
   description: d.description.trim(),
   category: d.category,
-  price_paise: d.rupees.trim() === '' ? null : Math.round(Number(d.rupees) * 100),
+  price_paise:
+    d.pricing === 'fixed' && d.rupees.trim() !== '' ? Math.round(Number(d.rupees) * 100) : null,
   is_active: d.is_active,
-  is_extra_available: d.is_extra_available,
+  is_extra_available: d.pricing !== 'plan',
   fulfilment: d.fulfilment,
   reach: d.reach,
   includes: d.includes.map((l) => l.trim()).filter(Boolean),
@@ -101,13 +108,18 @@ export function ServicePage() {
         <div className="empty">This service was not found.</div>
       </div>
     );
-  return <Editor key={service?.id ?? 'new'} service={service ?? null} />;
+  const nextOrder = Math.max(0, ...(data ?? []).map((x) => x.sort_order)) + 10;
+  return <Editor key={service?.id ?? 'new'} service={service ?? null} nextOrder={nextOrder} />;
 }
 
-function Editor({ service }: { service: StaffService | null }) {
+function Editor({ service, nextOrder }: { service: StaffService | null; nextOrder: number }) {
+  const categories = useCategories();
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const [saved, setSaved] = useState(() => toDraft(service));
+  const [saved, setSaved] = useState(() => ({
+    ...toDraft(service),
+    sort_order: String(service?.sort_order ?? nextOrder),
+  }));
   const [d, setD] = useState(saved);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -205,16 +217,20 @@ function Editor({ service }: { service: StaffService | null }) {
                   onChange={(e) => put('description', e.target.value)}
                 />
               </label>
-              {select('category', 'Category', SERVICE_CATEGORIES, SERVICE_CATEGORY_LABELS)}
               <label className="field">
-                Position in the list
-                <input
-                  type="number"
-                  min={0}
-                  value={d.sort_order}
-                  onChange={(e) => put('sort_order', e.target.value)}
-                />
-                <small>Lower numbers come first.</small>
+                Category
+                <select value={d.category} onChange={(e) => put('category', e.target.value)}>
+                  {(categories.data ?? []).map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <small>
+                  Manage categories under{' '}
+                  <Link to="/services?tab=categories">Services → Categories</Link>. The order in the
+                  app is set with “Change order” on the Services list.
+                </small>
               </label>
             </div>
           </section>
@@ -224,16 +240,60 @@ function Editor({ service }: { service: StaffService | null }) {
               <h2>Price and payment</h2>
             </div>
             <div className="section-body form-grid">
-              <label className="field">
-                Price in ₹
-                <input
-                  type="number"
-                  min={0}
-                  value={d.rupees}
-                  onChange={(e) => put('rupees', e.target.value)}
-                />
-                <small>Leave empty for “On quote”: the team sets the price per request.</small>
-              </label>
+              <div className="field wide pricing">
+                Pricing
+                <label className="check">
+                  <input
+                    type="radio"
+                    checked={d.pricing === 'fixed'}
+                    onChange={() => put('pricing', 'fixed')}
+                  />
+                  <span>
+                    Fixed price
+                    <small>
+                      Customers see the price and pay it when they book (or when confirmed).
+                    </small>
+                  </span>
+                </label>
+                {d.pricing === 'fixed' ? (
+                  <input
+                    className="short"
+                    type="number"
+                    min={0}
+                    placeholder="₹"
+                    value={d.rupees}
+                    onChange={(e) => put('rupees', e.target.value)}
+                    aria-label="Price in rupees"
+                  />
+                ) : null}
+                <label className="check">
+                  <input
+                    type="radio"
+                    checked={d.pricing === 'quote'}
+                    onChange={() => put('pricing', 'quote')}
+                  />
+                  <span>
+                    On quote
+                    <small>
+                      Customers request it without a price; the team sets a price on each request
+                      (Service requests → the request → Price), and the customer pays in the app.
+                    </small>
+                  </span>
+                </label>
+                <label className="check">
+                  <input
+                    type="radio"
+                    checked={d.pricing === 'plan'}
+                    onChange={() => put('pricing', 'plan')}
+                  />
+                  <span>
+                    Plan only
+                    <small>
+                      Not sold on its own: only customers whose plan includes it can request it.
+                    </small>
+                  </span>
+                </label>
+              </div>
               {select(
                 'payment_timing',
                 'When the customer pays',
@@ -246,14 +306,6 @@ function Editor({ service }: { service: StaffService | null }) {
                 CANCEL_POLICIES,
                 CANCEL_POLICY_LABELS,
               )}
-              <label className="check">
-                <input
-                  type="checkbox"
-                  checked={d.is_extra_available}
-                  onChange={(e) => put('is_extra_available', e.target.checked)}
-                />
-                Can be bought as an extra (outside the plan)
-              </label>
             </div>
           </section>
 
@@ -453,7 +505,11 @@ function Preview({ d }: { d: Draft }) {
       <div className="section-body stack preview">
         <b>{d.name || 'Service name'}</b>
         <span>
-          {d.rupees.trim() === '' ? 'On quote' : rupees(Math.round(Number(d.rupees) * 100))}
+          {d.pricing === 'plan'
+            ? 'Included in plans'
+            : d.pricing === 'quote' || d.rupees.trim() === ''
+              ? 'On quote'
+              : rupees(Math.round(Number(d.rupees) * 100))}
         </span>
         <span className="sub">{d.description || 'Description'}</span>
         {lines.length ? (

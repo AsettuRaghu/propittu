@@ -198,11 +198,11 @@ export type ValueSource = (typeof VALUE_SOURCES)[number];
  * live in the `services` table so GET /services can serve them.
  * ------------------------------------------------------------------ */
 
-export const SERVICE_CATEGORIES = ['property_government', 'property_care', 'other'] as const;
+/** A category code; categories are data (service_categories), managed in Backoffice. */
+export type ServiceCategory = string;
 
-export type ServiceCategory = (typeof SERVICE_CATEGORIES)[number];
-
-export const SERVICE_CATEGORY_LABELS: Record<ServiceCategory, string> = {
+/** Names of the first categories, a fallback when a name is not at hand. */
+export const SERVICE_CATEGORY_LABELS: Record<string, string> = {
   property_government: 'Property & Government',
   property_care: 'Property Care',
   other: 'Other',

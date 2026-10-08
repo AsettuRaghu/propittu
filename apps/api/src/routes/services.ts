@@ -58,7 +58,10 @@ async function allowances(
   return result;
 }
 
-function withCoverage(service: Service, remaining: Map<string, number>): CatalogueService {
+function withCoverage(
+  service: Service,
+  remaining: Map<string, number>,
+): Omit<CatalogueService, 'category_name' | 'category_order'> {
   const left = remaining.has(service.code) ? (remaining.get(service.code) as number) : null;
   return {
     ...service,
@@ -74,14 +77,19 @@ servicesRouter.get('/services', async (req, res) => {
   const [rows, remaining] = await Promise.all([
     db
       .from('services')
-      .select(SERVICE_COLUMNS)
+      .select(`${SERVICE_COLUMNS}, cat:service_categories(name, sort_order)`)
       .eq('is_active', true)
       .order('sort_order', { ascending: true }),
     allowances(db, accountId, planOf(req)),
   ]);
+  type Row = Service & { cat: { name: string; sort_order: number } | null };
   ok(
     res,
-    must<Service[]>(rows).map((s) => withCoverage(s, remaining)),
+    must<Row[]>(rows).map(({ cat, ...s }) => ({
+      ...withCoverage(s, remaining),
+      category_name: cat?.name ?? s.category,
+      category_order: cat?.sort_order ?? 0,
+    })),
   );
 });
 
