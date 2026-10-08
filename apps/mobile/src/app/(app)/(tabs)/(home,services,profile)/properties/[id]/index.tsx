@@ -69,6 +69,7 @@ export default function PropertyDetailsScreen() {
   }
 
   const edit = () => router.push(`/properties/${property.id}/edit`);
+  const openMedia = () => router.push(`/properties/${property.id}/media`);
   const onStep = (item: CompletionItem) =>
     item.key === 'photo' ? photosRef.current?.add() : goToCompletionStep(property.id, item.key);
   // The map prompt already asks for the pin, so it isn't repeated in the list.
@@ -145,13 +146,21 @@ export default function PropertyDetailsScreen() {
         }
       />
 
-      <ListGroup title={`Photos · ${property.photos.length}`} plain>
+      <ListGroup
+        title={`Photos · ${property.photos.length}`}
+        plain
+        action={<LinkButton title="Photos & videos" onPress={openMedia} />}
+      >
         <View style={styles.inner}>
           <PhotoSection ref={photosRef} propertyId={property.id} photos={property.photos} />
         </View>
       </ListGroup>
 
-      <ListGroup title="Videos" plain>
+      <ListGroup
+        title={`Videos · ${property.videos.length}`}
+        plain
+        action={<LinkButton title="See all" onPress={openMedia} />}
+      >
         <View style={styles.inner}>
           <VideoSection propertyId={property.id} videos={property.videos} />
         </View>

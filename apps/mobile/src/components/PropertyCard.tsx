@@ -41,7 +41,12 @@ export function PropertyCard({
           label="Documents"
           onPress={() => router.push(`/properties/${p.id}/documents`)}
         />
-        <IconStat icon="image" count={p.photo_count} label="Photos" onPress={onPress} />
+        <IconStat
+          icon="image"
+          count={p.photo_count + p.video_count}
+          label="Photos and videos"
+          onPress={() => router.push(`/properties/${p.id}/media`)}
+        />
         <IconStat
           icon="requests"
           count={p.service_request_count}
