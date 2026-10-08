@@ -19,6 +19,7 @@ import { api, errorText } from '../lib/api';
 import { date, rupees } from '../lib/format';
 import { useRequestList } from '../lib/lists';
 import { REQUEST_TONES } from '../ui/status';
+import { useCoverage } from './Coverage';
 import { useServices } from './Services';
 
 type Draft = {
@@ -96,7 +97,7 @@ export function ServicePage() {
   if (id !== 'new' && !service)
     return (
       <div className="page">
-        <Link to="/services">← Services &amp; coverage</Link>
+        <Link to="/services">← Services</Link>
         <div className="empty">This service was not found.</div>
       </div>
     );
@@ -161,7 +162,7 @@ function Editor({ service }: { service: StaffService | null }) {
 
   return (
     <div className="page">
-      <Link to="/services">← Services &amp; coverage</Link>
+      <Link to="/services">← Services</Link>
       <div className="page-head">
         <div>
           <h1>{service ? d.name || service.name : 'New service'}</h1>
@@ -262,13 +263,6 @@ function Editor({ service }: { service: StaffService | null }) {
             </div>
             <div className="section-body form-grid">
               {select('fulfilment', 'Delivered as', SERVICE_FULFILMENTS, SERVICE_FULFILMENT_LABELS)}
-              {select(
-                'reach',
-                'Where we offer it',
-                SERVICE_REACHES,
-                SERVICE_REACH_LABELS,
-                'Areas and states are set under Coverage.',
-              )}
               <label className="field">
                 Usual working days
                 <input
@@ -376,11 +370,75 @@ function Editor({ service }: { service: StaffService | null }) {
               {msg ? <span className={msg.ok ? 'note-ok' : 'error'}>{msg.text}</span> : null}
             </div>
           </section>
+          <Reach d={d} put={(v) => put('reach', v)} />
           <Preview d={d} />
           {service ? <Activity serviceId={service.id} /> : null}
         </aside>
       </div>
     </div>
+  );
+}
+
+/** Where the service reaches, using the live places in Coverage. */
+function Reach({ d, put }: { d: Draft; put: (v: StaffService['reach']) => void }) {
+  const { data } = useCoverage();
+  const areas = data?.areas.filter((a) => a.is_active) ?? [];
+  const states = data?.states.filter((s) => s.is_active) ?? [];
+  return (
+    <section className="section">
+      <div className="section-head">
+        <h2>Where it's offered</h2>
+        <Link to="/coverage">Coverage</Link>
+      </div>
+      <div className="section-body stack">
+        <select
+          value={d.reach}
+          onChange={(e) => put(e.target.value as StaffService['reach'])}
+          aria-label="Reach"
+        >
+          {SERVICE_REACHES.map((r) => (
+            <option key={r} value={r}>
+              {SERVICE_REACH_LABELS[r]}
+            </option>
+          ))}
+        </select>
+        {d.reach === 'everywhere' ? (
+          <span className="sub">Anywhere in India — no area or state needed.</span>
+        ) : d.reach === 'area' ? (
+          <>
+            <span className="sub">
+              Properties with a PIN code in a live visit area: {areas.length} areas,{' '}
+              {areas.reduce((n, a) => n + a.properties, 0)} properties today.
+            </span>
+            <div className="pins">
+              {areas.map((a) => (
+                <Link key={a.id} className="pin link-pin" to={`/coverage?tab=areas&id=${a.id}`}>
+                  {a.name}
+                </Link>
+              ))}
+            </div>
+          </>
+        ) : (
+          <>
+            <span className="sub">
+              Properties in a live paperwork state: {states.length} states,{' '}
+              {states.reduce((n, s) => n + s.properties, 0)} properties today.
+            </span>
+            <div className="pins">
+              {states.map((s) => (
+                <Link
+                  key={s.state}
+                  className="pin link-pin"
+                  to={`/coverage?tab=states&id=${encodeURIComponent(s.state)}`}
+                >
+                  {s.state}
+                </Link>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </section>
   );
 }
 

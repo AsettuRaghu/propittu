@@ -93,8 +93,9 @@ export interface ReachDemand {
 
 /** GET /backoffice/coverage */
 export interface BackofficeCoverage {
-  areas: ServiceArea[];
-  states: ServiceState[];
+  /** properties: how many customer properties fall in the area / state. */
+  areas: (ServiceArea & { properties: number })[];
+  states: (ServiceState & { properties: number })[];
   demand: ReachDemand[];
 }
 

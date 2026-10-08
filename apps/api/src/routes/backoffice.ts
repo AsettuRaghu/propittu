@@ -1712,22 +1712,38 @@ async function loadPittu(db: SupabaseClient, propertyId: string): Promise<Backof
  * ================================================================== */
 
 async function loadCoverage(db: SupabaseClient): Promise<BackofficeCoverage> {
-  const [areas, pins, states, demand] = await Promise.all([
+  const [areas, pins, states, demand, props] = await Promise.all([
     db.from('service_areas').select('id, name, state, is_active').order('name'),
     db.from('service_area_pincodes').select('pincode, area_id').order('pincode').limit(10000),
     db.from('service_states').select('state, pincode_prefixes, is_active').order('state'),
     db.rpc('reach_demand'),
+    db
+      .from('properties')
+      .select('pincode')
+      .eq('is_draft', false)
+      .not('pincode', 'is', null)
+      .limit(50000),
   ]);
   const byArea = new Map<string, string[]>();
   for (const p of must<{ pincode: string; area_id: string }[]>(pins)) {
     byArea.set(p.area_id, [...(byArea.get(p.area_id) ?? []), p.pincode]);
   }
+  // Properties per PIN code, to show how many each area and state serves.
+  const perPin = new Map<string, number>();
+  for (const p of must<{ pincode: string }[]>(props))
+    perPin.set(p.pincode, (perPin.get(p.pincode) ?? 0) + 1);
+  const count = (match: (pin: string) => boolean) =>
+    [...perPin].reduce((n, [pin, c]) => (match(pin) ? n + c : n), 0);
   return {
-    areas: must<Omit<ServiceArea, 'pincodes'>[]>(areas).map((a) => ({
-      ...a,
-      pincodes: byArea.get(a.id) ?? [],
+    areas: must<Omit<ServiceArea, 'pincodes'>[]>(areas).map((a) => {
+      const pincodes = byArea.get(a.id) ?? [];
+      const set = new Set(pincodes);
+      return { ...a, pincodes, properties: count((pin) => set.has(pin)) };
+    }),
+    states: must<ServiceState[]>(states).map((st) => ({
+      ...st,
+      properties: count((pin) => st.pincode_prefixes.some((pre) => pin.startsWith(pre))),
     })),
-    states: must<ServiceState[]>(states),
     demand: must<ReachDemand[]>(demand),
   };
 }

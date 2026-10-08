@@ -1450,3 +1450,11 @@ td.bar-col {
   gap: 2px;
   font-size: 13px;
 }
+a.link-pin {
+  text-decoration: none;
+  color: var(--brand);
+  padding: 2px 10px;
+}
+a.link-pin:hover {
+  border-color: var(--brand);
+}

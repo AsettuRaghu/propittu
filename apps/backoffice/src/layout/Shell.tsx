@@ -57,7 +57,8 @@ export function Shell() {
           <Item to="/payments" label="Payments" count={data?.refunds_needed.length} />
           <div className="nav-label">Setup</div>
           <Item to="/plans" label="Plans" />
-          <Item to="/services" label="Services & coverage" />
+          <Item to="/services" label="Services" />
+          <Item to="/coverage" label="Coverage" />
           <Item to="/pittu" label="Pittu" />
           <div className="nav-label">Insights</div>
           <Item to="/reports" label="Reports" />

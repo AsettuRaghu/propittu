@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { StaffGate } from './auth/Session';
 import { LiveProvider } from './lib/live';
 import { Shell } from './layout/Shell';
+import { Coverage } from './pages/Coverage';
 import { Customers } from './pages/Customers';
 import { Dashboard } from './pages/Dashboard';
 import { Payments } from './pages/Payments';
@@ -41,6 +42,7 @@ export function App() {
               <Route path="plans/:id" element={<PlanPage />} />
               <Route path="services" element={<Services />} />
               <Route path="services/:id" element={<ServicePage />} />
+              <Route path="coverage" element={<Coverage />} />
               <Route path="pittu" element={<Pittu />} />
               <Route path="reports" element={<Reports />} />
               <Route path="*" element={<Navigate to="/" replace />} />

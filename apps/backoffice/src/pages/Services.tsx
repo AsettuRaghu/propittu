@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import {
   SERVICE_CATEGORY_LABELS,
   SERVICE_FULFILMENT_LABELS,
@@ -12,7 +12,7 @@ import { useRequestList } from '../lib/lists';
 import { useUrlState } from '../lib/params';
 import { DataTable, type Column } from '../ui/DataTable';
 import { Tiles } from '../ui/Tiles';
-import { Coverage } from './Coverage';
+import { useCoverage } from './Coverage';
 
 export const useServices = () =>
   useQuery({
@@ -20,31 +20,20 @@ export const useServices = () =>
     queryFn: () => api<StaffService[]>('/backoffice/services'),
   });
 
-/** What we offer (services) and where we can deliver it (areas, states, demand). */
+/** What customers can request: price, delivery and where it reaches. Click one to configure it. */
 export function Services() {
-  const [params, set] = useUrlState();
-  const tab = params.get('tab') === 'coverage' ? 'coverage' : 'services';
   return (
     <div className="page">
       <div className="page-head">
         <div>
-          <h1>Services &amp; coverage</h1>
+          <h1>Services</h1>
           <p>
-            {tab === 'services'
-              ? 'What customers can request, its price and how it is delivered. Click a service to configure it.'
-              : 'Where our team can visit, and where people are waiting for us.'}
+            What customers can request, its price and how it is delivered. Where each service
+            reaches comes from <Link to="/coverage">Coverage</Link>.
           </p>
         </div>
-        <div className="tabs" role="group" aria-label="View">
-          <button aria-pressed={tab === 'services'} onClick={() => set({ tab: null })}>
-            Services
-          </button>
-          <button aria-pressed={tab === 'coverage'} onClick={() => set({ tab: 'coverage' })}>
-            Coverage
-          </button>
-        </div>
       </div>
-      {tab === 'services' ? <ServiceList /> : <Coverage />}
+      <ServiceList />
     </div>
   );
 }
@@ -55,6 +44,16 @@ function ServiceList() {
   const view = params.get('view') ?? 'all';
   const { data, error, isPending } = useServices();
   const requests = useRequestList();
+  const coverage = useCoverage();
+  const where = (s: StaffService) => {
+    const c = coverage.data;
+    if (s.reach === 'everywhere' || !c) return SERVICE_REACH_LABELS[s.reach];
+    const n =
+      s.reach === 'area'
+        ? c.areas.filter((a) => a.is_active).length
+        : c.states.filter((x) => x.is_active).length;
+    return `${SERVICE_REACH_LABELS[s.reach]} · ${n} live`;
+  };
   const open = (id: string) =>
     requests.data?.filter(
       (r) => r.service.id === id && !['completed', 'cancelled'].includes(r.status),
@@ -111,7 +110,8 @@ function ServiceList() {
       key: 'reach',
       header: 'Where',
       sort: (s) => s.reach,
-      render: (s) => SERVICE_REACH_LABELS[s.reach],
+      render: (s) => where(s),
+      csv: (s) => where(s),
     },
     {
       key: 'days',
