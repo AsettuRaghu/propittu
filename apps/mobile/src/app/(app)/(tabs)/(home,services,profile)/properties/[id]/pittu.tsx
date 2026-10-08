@@ -1,7 +1,7 @@
 import * as DocumentPicker from 'expo-document-picker';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   ALLOWED_DOCUMENT_MIME_TYPES,
   pittuQuestions,
@@ -13,6 +13,7 @@ import { prepareDocument, uploadDocument } from '@/api/uploads';
 import { useQueryClient } from '@tanstack/react-query';
 import { Icon } from '@/components/Icon';
 import { PittuCarePlan } from '@/components/PittuCarePlan';
+import { QuestionCard } from '@/components/QuestionCard';
 import { ErrorState, LoadingState } from '@/components/States';
 import { Banner, Button } from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
@@ -36,7 +37,6 @@ function Flow({ propertyId, state }: { propertyId: string; state: PittuState }) 
   const answer = useAnswerPittu(propertyId);
   const qc = useQueryClient();
   const [reply, setReply] = useState<string | null>(null);
-  const [glossary, setGlossary] = useState(false);
   const [receiptStep, setReceiptStep] = useState<'ask' | 'done' | null>(null);
   const [uploading, setUploading] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -51,7 +51,6 @@ function Flow({ propertyId, state }: { propertyId: string; state: PittuState }) 
 
   const pick = (q: PittuQuestion, value: string, text: string) => {
     setProblem(null);
-    setGlossary(false);
     answer.mutate(
       { question: q.id, answer: value },
       {
@@ -130,46 +129,15 @@ function Flow({ propertyId, state }: { propertyId: string; state: PittuState }) 
           </>
         ) : current ? (
           <>
-            <View style={[styles.card, shadow]}>
-              <Text style={styles.title}>{current.title}</Text>
-              <Text style={typography.small}>{current.why}</Text>
-              {current.glossary ? (
-                <>
-                  <Pressable onPress={() => setGlossary((g) => !g)} style={styles.chip}>
-                    <Text style={styles.chipText}>
-                      {glossary ? 'Hide' : current.glossary.label}
-                    </Text>
-                  </Pressable>
-                  {glossary ? (
-                    <View style={styles.glossary}>
-                      <Text style={typography.small}>{current.glossary.text}</Text>
-                    </View>
-                  ) : null}
-                </>
-              ) : null}
-            </View>
             {problem ? <Banner message={problem} /> : null}
-            <View style={styles.options}>
-              {current.options.map((o) => (
-                <Pressable
-                  key={o.value}
-                  onPress={() => pick(current, o.value, o.reply)}
-                  disabled={answer.isPending}
-                  accessibilityRole="button"
-                  style={({ pressed }) => [
-                    styles.option,
-                    (pressed || answer.isPending) && { opacity: 0.7 },
-                  ]}
-                >
-                  <Text style={typography.bodyStrong}>{o.label}</Text>
-                  <Icon name="chevron" size={16} color={colors.textSubtle} />
-                </Pressable>
-              ))}
-            </View>
-            <Button
-              title="Skip for now"
-              variant="ghost"
-              onPress={() =>
+            <QuestionCard
+              key={current.id}
+              question={current}
+              busy={answer.isPending}
+              onAnswer={(value) =>
+                pick(current, value, current.options.find((o) => o.value === value)?.reply ?? '')
+              }
+              onSkip={() =>
                 pick(
                   current,
                   'skipped',
@@ -206,8 +174,6 @@ const styles = StyleSheet.create({
     padding: space.lg,
     gap: space.sm,
   },
-  flex: { flex: 1, minWidth: 0 },
-  center: { textAlign: 'center' },
   content: { padding: space.lg, paddingTop: space.xs, gap: space.md, paddingBottom: space.xxl },
   progressRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   track: {
@@ -241,27 +207,5 @@ const styles = StyleSheet.create({
     color: colors.text,
     lineHeight: font(26),
     letterSpacing: -0.3,
-  },
-  chip: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.primarySoft,
-    borderRadius: radius.pill,
-    paddingHorizontal: space.md,
-    paddingVertical: 6,
-    marginTop: space.xs,
-  },
-  chipText: { fontSize: font(13), fontWeight: '700', color: colors.primary },
-  glossary: { backgroundColor: colors.background, borderRadius: radius.md, padding: space.md },
-  options: { gap: space.sm },
-  option: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    paddingHorizontal: space.lg,
-    paddingVertical: 15,
   },
 });

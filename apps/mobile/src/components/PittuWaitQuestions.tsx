@@ -1,9 +1,10 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { pittuQuestions, type PittuQuestionId } from '@propittu/shared';
 import { useAnswerPittu, usePittu } from '@/api/ai';
-import { font, radius, space } from '@/theme';
+import { font, radius } from '@/theme';
 import { FadeSwap } from './Celebration';
 import { Icon } from './Icon';
+import { QuestionCard } from './QuestionCard';
 
 /**
  * Questions that don't need the deed, asked while Pittu reads it — the
@@ -41,57 +42,23 @@ export function PittuWaitQuestions({ propertyId }: { propertyId: string }) {
 
   return (
     <FadeSwap id={next.id}>
-      <View style={styles.card}>
-        <Text style={styles.eyebrow}>While I read — a quick one</Text>
-        <Text style={styles.title}>{next.title}</Text>
-        {lastReply ? <Text style={styles.reply}>{lastReply}</Text> : null}
-        <View style={styles.options}>
-          {next.options.map((o) => (
-            <Pressable
-              key={o.value}
-              disabled={answer.isPending}
-              onPress={() => answer.mutate({ question: next.id, answer: o.value })}
-              accessibilityRole="button"
-              style={({ pressed }) => [styles.option, pressed && styles.pressed]}
-            >
-              <Text style={styles.optionText}>{o.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-        <Pressable
-          onPress={() => answer.mutate({ question: next.id, answer: 'skipped' })}
-          disabled={answer.isPending}
-          accessibilityRole="button"
-          hitSlop={6}
-        >
-          <Text style={styles.skip}>Skip</Text>
-        </Pressable>
-      </View>
+      <QuestionCard
+        key={next.id}
+        question={next}
+        eyebrow="While I read — a quick one"
+        note={lastReply}
+        busy={answer.isPending}
+        layout="chips"
+        tone="light"
+        onAnswer={(value) => answer.mutate({ question: next.id, answer: value })}
+        onSkip={() => answer.mutate({ question: next.id, answer: 'skipped' })}
+        skipLabel="Skip"
+      />
     </FadeSwap>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    alignSelf: 'stretch',
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    borderRadius: radius.lg,
-    padding: space.md,
-    gap: space.sm,
-  },
-  eyebrow: { fontSize: font(12.5), fontWeight: '700', color: 'rgba(255,255,255,0.8)' },
-  title: { fontSize: font(17), fontWeight: '800', color: '#FFFFFF' },
-  reply: { fontSize: font(13), color: 'rgba(255,255,255,0.8)' },
-  options: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
-  option: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: radius.pill,
-    paddingHorizontal: space.md,
-    paddingVertical: 8,
-  },
-  pressed: { opacity: 0.75 },
-  optionText: { fontSize: font(14), fontWeight: '700', color: '#4338CA' },
-  skip: { fontSize: font(13), fontWeight: '700', color: 'rgba(255,255,255,0.8)' },
   thanks: {
     flexDirection: 'row',
     alignItems: 'center',
