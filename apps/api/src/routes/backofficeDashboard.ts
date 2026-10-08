@@ -49,9 +49,9 @@ dashboardRouter.get('/dashboard', async (req, res) => {
       .gte('captured_at', todayStartIst(now)),
     db
       .from('payment_events')
-      .select('id, created_at, order:orders(reference, amount_paise, description, user_id)')
+      .select('id, received_at, order:orders(reference, amount_paise, description, user_id)')
       .in('outcome', ['refund_needed', 'already_paid'])
-      .order('created_at', { ascending: false })
+      .order('received_at', { ascending: false })
       .limit(20),
     db.from('accounts').select('id', { count: 'exact', head: true }).gte('created_at', weekAgo),
     serviceClient ? serviceClient.rpc('ai_month_spend_usd') : Promise.resolve({ data: 0 }),
@@ -85,7 +85,7 @@ dashboardRouter.get('/dashboard', async (req, res) => {
   const refundRows = must<
     {
       id: string;
-      created_at: string;
+      received_at: string;
       order: {
         reference: string;
         amount_paise: number;
@@ -114,7 +114,7 @@ dashboardRouter.get('/dashboard', async (req, res) => {
     },
     refunds_needed: refundRows.map((r) => ({
       event_id: r.id,
-      received_at: r.created_at,
+      received_at: r.received_at,
       order_reference: r.order?.reference ?? null,
       amount_paise: r.order?.amount_paise ?? null,
       customer_name: r.order ? (names.get(r.order.user_id) ?? null) : null,

@@ -2,11 +2,11 @@
   "name": "@propittu/backoffice",
   "version": "1.0.0",
   "private": true,
-  "description": "Propittu Backoffice — the team's command center, in the browser.",
+  "description": "Propittu Backoffice \u2014 the team's command center, in the browser.",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/vercel-output.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src"
