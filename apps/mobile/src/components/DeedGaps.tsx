@@ -9,8 +9,10 @@ import { LinkButton, ListGroup, ListRow } from './ui';
  * Where the property differs from its sale deed — the most reliable source
  * we have. Pittu fills things in from the deed; if the customer changes
  * them (or says the pin is right although the deed names another place),
- * we don't stop them, but the gap stays visible here until it's closed,
- * with one tap to take the deed's value.
+ * we don't stop them, but the gap stays visible here until it's closed.
+ * (Pittu already applied what it read with high confidence; what's listed
+ * here is what it was less sure of.) One tap takes the deed's value, or
+ * "Use all" takes them all.
  */
 export function DeedGaps({ property: p }: { property: PropertyDetail }) {
   const update = useUpdateProperty(p.id);
@@ -18,44 +20,24 @@ export function DeedGaps({ property: p }: { property: PropertyDetail }) {
     p.location_issue?.kind === 'deed' && p.location_issue.confirmed ? p.location_issue : null;
   if (p.deed_gaps.length === 0 && !pin) return null;
 
-  const takeDeedValue = async (g: DeedGap) => {
-    const ok = await dialog.confirm({
-      title:
-        g.yours === null
-          ? `Add the ${g.label.toLowerCase()} from your deed?`
-          : `Use the deed’s ${g.label.toLowerCase()}?`,
-      message:
-        g.yours === null
-          ? `${g.deed}, as your sale deed says.`
-          : `Change it from ${g.yours} to ${g.deed}, as your sale deed says.`,
-      confirmLabel: g.yours === null ? 'Add' : 'Use the deed’s',
-    });
-    if (!ok) return;
-    update.mutate({ [g.field]: g.value } as never, {
-      onSuccess: () => toast('Updated from your deed'),
+  // One tap applies the deed's value — no second question.
+  const apply = (gaps: DeedGap[], done: string) =>
+    update.mutate(Object.fromEntries(gaps.map((g) => [g.field, g.value])) as never, {
+      onSuccess: () => toast(done),
       onError: (err) =>
         void dialog.alert({
-          title: 'Couldn’t update it',
+          title: 'Couldn’t update from your deed',
           message: errorMessage(err),
           tone: 'danger',
         }),
     });
-  };
+  const takeDeedValue = (g: DeedGap) => apply([g], `${g.label} updated from your deed`);
 
-  // Details the deed has and the property doesn't yet — all added in one go.
   const empty = p.deed_gaps.filter((g) => g.yours === null);
-  const fillEmpty = () =>
-    update.mutate(Object.fromEntries(empty.map((g) => [g.field, g.value])) as never, {
-      onSuccess: () => toast(`${empty.length} details added from your deed`),
-      onError: (err) =>
-        void dialog.alert({
-          title: 'Couldn’t fill them in',
-          message: errorMessage(err),
-          tone: 'danger',
-        }),
-    });
+  const fillEmpty = () => apply(empty, `${empty.length} details added from your deed`);
 
   const differs = p.deed_gaps.filter((g) => g.yours !== null);
+  const useAll = () => apply(differs, `${differs.length} details updated from your deed`);
   const row = (g: DeedGap) => (
     <ListRow
       key={g.field}
@@ -68,7 +50,7 @@ export function DeedGaps({ property: p }: { property: PropertyDetail }) {
       right={
         <LinkButton
           title={g.yours === null ? 'Add' : 'Use deed’s'}
-          onPress={() => void takeDeedValue(g)}
+          onPress={() => takeDeedValue(g)}
         />
       }
     />
@@ -77,7 +59,11 @@ export function DeedGaps({ property: p }: { property: PropertyDetail }) {
   return (
     <>
       {differs.length > 0 || pin ? (
-        <ListGroup title={`Differs from your deed · ${differs.length + (pin ? 1 : 0)}`} plain>
+        <ListGroup
+          title={`Differs from your deed · ${differs.length + (pin ? 1 : 0)}`}
+          plain
+          action={differs.length > 1 ? <LinkButton title="Use all" onPress={useAll} /> : undefined}
+        >
           {pin ? (
             <ListRow
               icon="pin"

@@ -22,7 +22,7 @@ export interface PropertyInsight {
   gaps: DeedGap[];
   deed: HealthInput['deed'];
   /** The deed's facts as Pittu read them (latest reading wins). */
-  facts: { key: string; value: FactValue }[];
+  facts: { key: string; value: FactValue; confidence: string | null }[];
 }
 
 export async function loadInsights(
@@ -53,7 +53,7 @@ export async function loadInsights(
       .not('next_due_date', 'is', null),
     db
       .from('property_facts')
-      .select('property_id, key, value, created_at')
+      .select('property_id, key, value, confidence, created_at')
       .in('property_id', ids)
       .neq('status', 'superseded')
       .order('created_at', { ascending: true }),
@@ -70,7 +70,10 @@ export async function loadInsights(
       request: { service: { name: string } | null } | null;
     }[]
   >(dueRes);
-  const facts = must<{ property_id: string; key: string; value: FactValue }[]>(factsRes);
+  const facts =
+    must<{ property_id: string; key: string; value: FactValue; confidence: string | null }[]>(
+      factsRes,
+    );
 
   for (const p of properties) {
     // Later readings win.

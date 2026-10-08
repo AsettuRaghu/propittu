@@ -24,7 +24,7 @@ import { assertOwnsProperty } from '../ownership.js';
 import { enforceLimit, planOf, requireFeature } from '../plan.js';
 import { removeProperty } from '../propertyRemoval.js';
 import { signDownloads } from '../storage.js';
-import { fillEmptyFromDeed } from '../deedFill.js';
+import { syncFromDeed } from '../deedFill.js';
 import { loadInsights, type PropertyInsight } from '../insights.js';
 import { loadReach } from '../reach.js';
 import {
@@ -54,9 +54,9 @@ const SUMMARY_COLUMNS =
   'id, property_type, name, city, state, created_at, document_count, service_request_count, ' +
   'cover_photo_path, photo_count, video_count';
 
-export type PropertyRow = Property & { location_check?: unknown };
+export type PropertyRow = Property & { location_check?: unknown; deed_synced_analysis?: unknown };
 /** The server's last pin-vs-PIN-code check rides along; it is never sent as is. */
-const WITH_CHECK = `${PROPERTY_COLUMNS}, location_check`;
+const WITH_CHECK = `${PROPERTY_COLUMNS}, location_check, deed_synced_analysis`;
 
 interface SummaryRow extends Omit<
   PropertySummary,
@@ -66,7 +66,11 @@ interface SummaryRow extends Omit<
 }
 
 /** PostgREST returns numeric columns as numbers, but be defensive about strings. */
-export function toProperty({ location_check: _check, ...row }: PropertyRow): Property {
+export function toProperty({
+  location_check: _check,
+  deed_synced_analysis: _synced,
+  ...row
+}: PropertyRow): Property {
   const num = (v: unknown) => (v === null || v === undefined ? null : Number(v));
   return {
     ...row,
@@ -324,8 +328,13 @@ propertiesRouter.get('/properties/:id', async (req, res) => {
     ),
     loadDeedReading(db, id),
   ]);
-  // Whatever the deed has that the property doesn't is saved straight away.
-  const filled = await fillEmptyFromDeed(db, property, insight.facts, PROPERTY_COLUMNS);
+  // A new deed reading is applied once: empty fields filled, differences read
+  // with high confidence take the deed's value; doubtful ones stay for the owner.
+  const reading = await latestReadyAnalysis(db, id);
+  const filled =
+    reading && reading !== row.deed_synced_analysis
+      ? await syncFromDeed(db, property, insight.facts, reading, PROPERTY_COLUMNS)
+      : null;
   if (filled) {
     property = toProperty(filled as PropertyRow);
     insight =
@@ -511,6 +520,19 @@ async function loadDeedReading(
       .maybeSingle(),
   );
   return { document_id: doc.id, status: reading?.status ?? null };
+}
+
+/** The latest finished reading of this property's deed, if any. */
+async function latestReadyAnalysis(db: SupabaseClient, propertyId: string): Promise<string | null> {
+  const { data } = await db
+    .from('document_analyses')
+    .select('id')
+    .eq('property_id', propertyId)
+    .eq('status', 'ready')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return (data as { id: string } | null)?.id ?? null;
 }
 
 /** No answers, visits or deed reading yet. */

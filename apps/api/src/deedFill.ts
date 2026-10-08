@@ -1,7 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   PREFILL_FIELDS,
+  PREFILL_SOURCES,
   prefillFromFacts,
+  sameFactValue,
   type FactValue,
   type PrefillField,
   type Property,
@@ -9,29 +11,41 @@ import {
 } from '@propittu/shared';
 
 /**
- * The deed is our most reliable source: whatever Pittu read that the
- * property doesn't have yet is simply saved — no "please confirm". Only
- * real differences (the owner typed something else) are left for the
- * owner to decide, under "Differs from your deed". The name is the
- * owner's own and is never filled this way. Filled values are marked as
- * coming from the sale deed.
+ * The deed is our most reliable source. When a reading is ready, Pittu
+ * applies it once (see properties.deed_synced_analysis):
+ *   - empty fields take the deed's value;
+ *   - differences Pittu read with HIGH confidence take the deed's value too;
+ *   - doubtful differences are left for the owner ("Differs from your deed").
+ * The name is the owner's own and is never changed. Values applied are
+ * marked as coming from the sale deed.
  */
 const FILLABLE = PREFILL_FIELDS.filter((f) => f !== 'name');
 
 const empty = (v: unknown) => v === null || v === undefined || v === '';
 
+type Fact = { key: string; value: FactValue; confidence?: string | null };
+
+/** Read with high confidence: every fact behind the field that the deed has. */
+function sure(field: PrefillField, facts: Fact[]): boolean {
+  const behind = facts.filter((f) => PREFILL_SOURCES[field].includes(f.key));
+  return behind.length > 0 && behind.every((f) => f.confidence === 'high');
+}
+
 /** What the deed would fill into this property's empty fields (nothing when nothing). */
 export function deedFill(
   property: Property,
-  facts: { key: string; value: FactValue }[],
+  facts: Fact[],
 ): Partial<Record<PrefillField, string | number>> {
   if (facts.length === 0) return {};
   const deed = prefillFromFacts(facts);
   const patch: Partial<Record<PrefillField, string | number>> = {};
   for (const field of FILLABLE) {
     const value = deed[field];
-    if (empty(value) || !empty(property[field as keyof Property])) continue;
-    patch[field] = value as string | number;
+    const mine = property[field as keyof Property];
+    if (empty(value)) continue;
+    if (empty(mine) || (!sameFactValue(value, mine) && sure(field, facts))) {
+      patch[field] = value as string | number;
+    }
   }
   // An area needs its unit.
   if (patch.area_value !== undefined && empty(property.area_unit) && empty(patch.area_unit)) {
@@ -40,20 +54,24 @@ export function deedFill(
   return patch;
 }
 
-/** Saves the deed's values into the empty fields; returns the updated property, or null. */
-export async function fillEmptyFromDeed(
+/**
+ * Applies a reading once: saves what deedFill decides and records the
+ * reading as applied. Returns the updated row (with `columns`), or null
+ * when it was already applied.
+ */
+export async function syncFromDeed(
   db: SupabaseClient,
   property: Property,
-  facts: { key: string; value: FactValue }[],
+  facts: Fact[],
+  analysisId: string,
   columns: string,
 ): Promise<Property | null> {
   const patch = deedFill(property, facts);
-  if (Object.keys(patch).length === 0) return null;
   const sources: Partial<Record<string, ValueSource>> = { ...(property.field_sources ?? {}) };
   for (const field of Object.keys(patch)) sources[field] = 'sale_deed';
   const { data, error } = await db
     .from('properties')
-    .update({ ...patch, field_sources: sources })
+    .update({ ...patch, field_sources: sources, deed_synced_analysis: analysisId })
     .eq('id', property.id)
     .select(columns)
     .maybeSingle();

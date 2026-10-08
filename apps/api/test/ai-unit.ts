@@ -255,3 +255,23 @@ test('deed fill: empty fields take the deed’s values; typed ones and the name 
     area_unit: 'sqft',
   });
 });
+
+test('deed fill: a difference read with high confidence takes the deed’s value; a doubtful one waits', async () => {
+  const { deedFill } = await import('../src/deedFill.js');
+  const f = (key: string, value: unknown, confidence: string) =>
+    ({ key, value, confidence }) as never;
+  const property = {
+    name: 'One',
+    pincode: '560064',
+    city: 'Bangalore',
+    khata_number: '99/1',
+  } as never;
+  const patch = deedFill(property, [
+    f('pincode', '562106', 'high'),
+    f('khata_number', '123/4', 'medium'),
+    f('city', 'bangalore', 'high'),
+  ]);
+  assert.equal(patch.pincode, '562106', 'high confidence: applied');
+  assert.equal(patch.khata_number, undefined, 'medium confidence: left for the owner');
+  assert.equal(patch.city, undefined, 'same value in different case: nothing to change');
+});
