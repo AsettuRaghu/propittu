@@ -20,6 +20,10 @@ const envSchema = z.object({
 
   // Set on Vercel; Vercel Cron sends it as a Bearer token to /cron/keepalive.
   CRON_SECRET: z.string().min(16).optional(),
+  // Documents by email (Postmark inbound): the inbound address (each account
+  // gets "<local>+<code>@<domain>") and the secret in the webhook URL.
+  INBOUND_EMAIL_ADDRESS: z.email().optional(),
+  INBOUND_EMAIL_SECRET: z.string().min(16).optional(),
 
   // ---- Payments (M7). All optional: without them checkout answers 503. ----
   // Supabase server key — used ONLY to record verified payment events

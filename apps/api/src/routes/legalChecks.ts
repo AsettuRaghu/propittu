@@ -1,12 +1,17 @@
 import { waitUntil } from '@vercel/functions';
 import { Router } from 'express';
-import { disputeReportSchema, type DisputeReport, type PropertyDisputes } from '@propittu/shared';
+import {
+  disputeReportSchema,
+  type DisputeReport,
+  type ProjectPage,
+  type PropertyDisputes,
+} from '@propittu/shared';
 import { audit } from '../audit.js';
 import { auth } from '../auth.js';
 import { must, ok, uuidParam } from '../errors.js';
 import { listChecks } from '../legal/checks.js';
 import { checkDisputes, ownerDisputes } from '../legal/disputes.js';
-import { projectAlerts } from '../legal/projectDisputes.js';
+import { projectAlerts, projectOf, propertiesInProject } from '../legal/projectDisputes.js';
 import { serviceClient } from '../supabase.js';
 import { assertOwnsProperty } from '../ownership.js';
 import { aiAvailableFor } from '../pittu/core/limits.js';
@@ -94,4 +99,56 @@ legalChecksCustomerRouter.post('/properties/:id/disputes/report', async (req, re
   );
   await audit(ctx, 'legal.dispute_reported', { type: 'property', id }, { source: input.source });
   ok(res, row, 201);
+});
+
+/**
+ * GET /properties/:id/project — the property's project on Propittu: how many
+ * owners there use it, alerts our team confirmed for the project, and sales
+ * owners shared (anonymous: no names, no flat numbers). Totals are read with
+ * the server key; nothing about another owner is shown.
+ */
+legalChecksCustomerRouter.get('/properties/:id/project', async (req, res) => {
+  const { db, accountId } = auth(req);
+  const id = uuidParam(req.params.id, 'Property');
+  await assertOwnsProperty(db, accountId, id);
+  const server = serviceClient;
+  const project = server ? await projectOf(server, id) : null;
+  if (!server || !project) {
+    ok(res, null);
+    return;
+  }
+  const [homes, alerts, sales] = await Promise.all([
+    propertiesInProject(server, project.key),
+    projectAlerts(server, id),
+    server
+      .from('known_sales')
+      .select('area_sqft, area_basis, sold_on, price_inr, property_id, share_in_project')
+      .eq('project_key', project.key)
+      .order('sold_on', { ascending: false })
+      .limit(20),
+  ]);
+  const data: ProjectPage = {
+    project_name: project.name,
+    owners: new Set(homes.map((h) => h.account_id)).size,
+    alerts,
+    sales: (
+      (sales.data ?? []) as {
+        area_sqft: number;
+        area_basis: string;
+        sold_on: string;
+        price_inr: number;
+        property_id: string;
+        share_in_project: boolean;
+      }[]
+    )
+      // Shared ones, and this owner's own.
+      .filter((k) => k.share_in_project || k.property_id === id)
+      .map(({ area_sqft, area_basis, sold_on, price_inr }) => ({
+        area_sqft,
+        area_basis,
+        sold_on: sold_on.slice(0, 7),
+        price_inr: Number(price_inr),
+      })),
+  };
+  ok(res, data);
 });

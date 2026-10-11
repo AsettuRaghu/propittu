@@ -683,3 +683,44 @@ export function successionPlan(input: SuccessionInput): {
       : 'Heirs apply to the local body for mutation into their names, with the death certificate and the Will or a legal heir / succession certificate.';
   return { steps, done: steps.filter((s) => s.done).length, process };
 }
+
+/* ---- Documents sent by email ---- */
+
+/** A document that arrived by email, waiting to be filed under a property. */
+export interface InboxDocument {
+  id: string;
+  file_name: string;
+  mime_type: string;
+  file_size: number;
+  subject: string | null;
+  from_email: string | null;
+  guess_type: DocumentType | null;
+  guess_property_id: string | null;
+  received_at: string;
+}
+
+/** GET /inbox — the owner's address (when set up) and what's waiting. */
+export interface Inbox {
+  address: string | null;
+  waiting: InboxDocument[];
+}
+
+const GUESSES: [RegExp, DocumentType][] = [
+  [/encumbrance|\bec\b|form\s*1[56]/i, 'encumbrance_certificate'],
+  [/e-?khata|khata|e-?swathu|form\s*[ab]\b/i, 'khata'],
+  [/property\s*tax|tax\s*receipt|ptin|sas\b|ghmc|bbmp|gba/i, 'property_tax'],
+  [/\brtc\b|pahani|ror|7\/12|land\s*record/i, 'land_record'],
+  [/rent(al)?\s*agreement|lease|leave\s*and\s*licen[cs]e/i, 'rental_agreement'],
+  [/occupancy|\boc\b|completion\s*certificate/i, 'occupancy_certificate'],
+  [/loan\s*closure|\bnoc\b|no\s*objection|closure\s*letter/i, 'loan_closure'],
+  [/electric|bescom|tsspdcl|water\s*bill|bwssb|hmwssb|\bbill\b/i, 'utility_bill'],
+  [/sale\s*deed|conveyance/i, 'sale_deed'],
+  [/plan\s*approv|building\s*plan|sanction/i, 'building_plan'],
+  [/mutation/i, 'mutation'],
+  [/aadhaar|\bpan\b|passport/i, 'owner_id'],
+];
+
+/** A first guess at the document type from its file name and the email subject. */
+export function guessDocumentType(text: string): DocumentType | null {
+  return GUESSES.find(([re]) => re.test(text))?.[1] ?? null;
+}

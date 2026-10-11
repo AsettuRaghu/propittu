@@ -1932,5 +1932,24 @@ select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
 select tst.rows('select * from public.satellite_observations', 0, 'other customers never see them');
 reset role;
 
+-- =====================================================================
+\echo
+\echo '== Documents sent by email =='
+-- =====================================================================
+reset role;
+insert into public.inbox_documents (account_id, file_name, mime_type, file_size, storage_path)
+values ('acc0000a-0000-0000-0000-00000000000a', 'receipt.pdf', 'application/pdf', 1000,
+        'acc0000a-0000-0000-0000-00000000000a/inbox/x.pdf');
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rows('select * from public.inbox_documents', 1, 'the owner sees what arrived by email');
+select tst.rejects($$insert into public.inbox_documents (account_id, file_name, mime_type, file_size, storage_path)
+                     values ('acc0000a-0000-0000-0000-00000000000a', 'fake.pdf', 'application/pdf', 1, 'x')$$,
+  'only the server adds emailed documents');
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.rows('select * from public.inbox_documents', 0, 'other customers never see them');
+select tst.rows('select * from public.account_inboxes', 0, 'or anyone''s inbox code');
+reset role;
+
 \echo
 \echo 'ALL RLS CHECKS PASSED'

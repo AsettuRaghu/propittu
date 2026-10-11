@@ -18,6 +18,7 @@ import { notificationsRouter } from './routes/notifications.js';
 import { askRouter } from './routes/ask.js';
 import { familyRouter } from './routes/family.js';
 import { satelliteRouter } from './routes/satellite.js';
+import { inboundRouter, inboxRouter } from './routes/inbox.js';
 import { backofficeRouter } from './routes/backoffice.js';
 import { billingReturnRouter, billingRouter } from './routes/billing.js';
 import { webhooksRouter } from './routes/webhooks.js';
@@ -92,6 +93,8 @@ export function createApp(): express.Express {
 
   // Payment webhooks need the RAW body for signature checks: before express.json.
   app.use(webhooksRouter);
+  // Emailed documents carry attachments: their own, larger body limit.
+  app.use(inboundRouter);
 
   // JSON bodies are small: files never pass through the API (signed URLs).
   app.use(express.json({ limit: '100kb' }));
@@ -132,6 +135,7 @@ export function createApp(): express.Express {
   app.use(askRouter);
   app.use(familyRouter);
   app.use(satelliteRouter);
+  app.use(inboxRouter);
   app.use(servicesRouter);
   app.use(weatherRouter);
 

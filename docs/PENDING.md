@@ -34,6 +34,12 @@ docs/DECISIONS.md; Pittu's design in docs/PITTU.md.
   adding from a deed, questions that follow the deed (flat / plot, renting, OC, Bengaluru e-Khata),
   the land's story from the deed (sale-deed-v3), Pittu's market range (web search, rules decide),
   Watch news published by Pittu when confident, and four rental services (on quote).
+- Project page (11 Oct): owners in the project on Propittu, project alerts, shared sales, invite
+  neighbours. Counts properties whose deed Pittu read (manual ones without a read deed don't count).
+- Documents by email (11 Oct): per-account private address (Postmark inbound, MailboxHash);
+  webhook /inbound/email/<secret>; one property → filed at once, else "To file"; ~3 MB per email
+  (Vercel request limit). Needs: a Postmark account, its inbound address in INBOUND_EMAIL_ADDRESS and
+  the webhook URL set in Postmark (secret in ~/propittu-postmark-webhook.txt).
 - Built 11 Oct, waiting for the next app publish and a phone test:
   - Notifications: inbox (bell on Home) for request updates, team replies, checks and disputes
     shared, dispute alerts for a project, what Pittu read, local news, satellite changes; push to

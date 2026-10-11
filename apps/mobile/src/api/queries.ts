@@ -11,6 +11,7 @@ import type {
   PropertyDetail,
   PropertyDocument,
   DocumentType,
+  Inbox,
   NameLink,
   PropertySummary,
   PublicPlan,
@@ -271,3 +272,32 @@ export const usePincode = (pin: string) =>
     retry: false,
     queryFn: () => api<PincodeInfo>(`/pincodes/${pin}`).catch(() => null),
   });
+
+/* ---- Documents sent by email ---- */
+
+/** Documents sent by email: the owner's address and what's waiting to be filed. */
+export const useEmailInbox = () =>
+  useQuery({ queryKey: ['inbox'] as const, queryFn: () => api<Inbox>('/inbox') });
+
+export function useFileInbox() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string; property_id: string; document_type: DocumentType }) =>
+      api<{ document_id: string }>(`/inbox/${v.id}/file`, {
+        method: 'POST',
+        body: { property_id: v.property_id, document_type: v.document_type },
+      }),
+    onSuccess: (_r, v) => {
+      void qc.invalidateQueries({ queryKey: ['inbox'] });
+      void qc.invalidateQueries({ queryKey: keys.documents(v.property_id) });
+    },
+  });
+}
+
+export function useDiscardInbox() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api(`/inbox/${id}`, { method: 'DELETE' }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['inbox'] }),
+  });
+}

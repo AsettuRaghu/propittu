@@ -88,6 +88,13 @@ export default function ProfileScreen() {
               }
               onPress={() => router.push('/family')}
             />
+            <ListRow
+              icon="mail"
+              accent="indigo"
+              title="Email documents to Pittu"
+              subtitle="Your private address, and documents waiting to be filed"
+              onPress={() => router.push('/inbox')}
+            />
             {me.accounts.length > 1 ? <AccountSwitch accounts={me.accounts} /> : null}
             {/* The in-app Backoffice link is hidden for now (owner, 8 Oct 2026): the team
                 uses the web portal. The screens stay; decide before go-live whether to

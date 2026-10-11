@@ -10,7 +10,7 @@ import { useDraftProperties } from '@/api/ai';
 import { useNewReplies } from '@/api/support';
 import { ComingUp } from '@/components/ComingUp';
 import { DraftRow } from '@/components/DraftRow';
-import { useMe, useProperties } from '@/api/queries';
+import { useEmailInbox, useMe, useProperties } from '@/api/queries';
 import { remindersKey } from '@/api/reminders';
 import { Icon, type IconName } from '@/components/Icon';
 import { PlanBanner } from '@/components/PlanBanner';
@@ -59,6 +59,7 @@ export default function HomeScreen() {
   const properties = data ?? [];
   const hasProperties = properties.length > 0;
   const firstName = me.data?.full_name?.split(' ')[0];
+  const emailed = useEmailInbox();
 
   const header = (
     <View style={styles.header}>
@@ -107,6 +108,16 @@ export default function HomeScreen() {
           title="Ask Pittu"
           subtitle="Anything about your properties — answered from your locker"
           onPress={() => router.push('/ask')}
+        />
+      ) : null}
+
+      {(emailed.data?.waiting.length ?? 0) > 0 ? (
+        <ListRow
+          icon="mail"
+          accent="amber"
+          title={`${emailed.data!.waiting.length} emailed document${emailed.data!.waiting.length === 1 ? '' : 's'} to file`}
+          subtitle="Choose which property each belongs to"
+          onPress={() => router.push('/inbox')}
         />
       ) : null}
 

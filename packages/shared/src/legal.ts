@@ -229,3 +229,14 @@ export interface DisputeReview extends PropertyDisputes {
   account_id: string;
   pittu_note: string | null;
 }
+
+/** GET /properties/:id/project — the property's project on Propittu (anonymous totals only). */
+export interface ProjectPage {
+  project_name: string;
+  /** Propittu owners whose deeds name this project (including this one). */
+  owners: number;
+  /** Disputes our team confirmed for the project. */
+  alerts: ProjectDispute[];
+  /** Sales owners shared for the project — no names, no flat numbers. */
+  sales: { area_sqft: number; area_basis: string; sold_on: string; price_inr: number }[];
+}

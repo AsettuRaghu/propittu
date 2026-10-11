@@ -9,6 +9,7 @@ import type {
   LegalCheck,
   PittuState,
   PropertyDisputes,
+  ProjectPage,
   SatelliteView,
   AskMessage,
   KnownSale,
@@ -254,5 +255,13 @@ export const useSatellite = (propertyId: string, enabled: boolean) =>
     queryKey: ['properties', propertyId, 'satellite'] as const,
     queryFn: () => api<SatelliteView>(`/properties/${propertyId}/satellite`),
     enabled,
+    staleTime: 10 * 60_000,
+  });
+
+/** The property's project on Propittu: owners there, alerts, sales they shared. */
+export const useProject = (propertyId: string) =>
+  useQuery({
+    queryKey: ['properties', propertyId, 'project'] as const,
+    queryFn: () => api<ProjectPage | null>(`/properties/${propertyId}/project`),
     staleTime: 10 * 60_000,
   });

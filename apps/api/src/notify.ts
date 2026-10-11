@@ -33,7 +33,8 @@ export type NotificationEvent =
   | { type: 'legal.project_dispute'; projectDisputeId: string }
   | { type: 'document.read_by_pittu'; documentId: string; line: string; differs: boolean }
   | { type: 'watch.news'; placeId: string; count: number }
-  | { type: 'satellite.change'; propertyId: string; change: SatelliteChange };
+  | { type: 'satellite.change'; propertyId: string; change: SatelliteChange }
+  | { type: 'inbox.received'; accountId: string; count: number; filed: boolean };
 
 interface Note {
   account_id: string;
@@ -239,6 +240,18 @@ async function compose(db: SupabaseClient, e: NotificationEvent): Promise<Note[]
         ),
       ];
     }
+    case 'inbox.received':
+      return [
+        note(
+          e.accountId,
+          `${e.count} document${e.count === 1 ? '' : 's'} arrived by email`,
+          e.filed
+            ? 'Filed under your property — Pittu is reading it.'
+            : 'Choose which property it belongs to.',
+          e.filed ? null : '/inbox',
+          null,
+        ),
+      ];
     case 'satellite.change': {
       const { data } = await db
         .from('properties')

@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import {
   carePlan,
   checkDocument,
+  guessDocumentType,
   successionPlan,
   comparePeople,
   type BuyerRelation,
@@ -509,4 +510,13 @@ test('ready for your family: what heirs need, and the state’s process', () => 
     code: 'will_succession',
   });
   assert.match(plan.process, /GBA/);
+});
+
+test('emailed documents: a first guess at the type from the name and subject', () => {
+  assert.equal(guessDocumentType('GBA property tax receipt 2026-27.pdf'), 'property_tax');
+  assert.equal(guessDocumentType('eKhata_1535822725.pdf'), 'khata');
+  assert.equal(guessDocumentType('EC Form 15 Yelahanka.pdf'), 'encumbrance_certificate');
+  assert.equal(guessDocumentType('Rental agreement renewal - flat 1102'), 'rental_agreement');
+  assert.equal(guessDocumentType('BESCOM bill Sept.jpg'), 'utility_bill');
+  assert.equal(guessDocumentType('IMG_2041.jpg'), null);
 });

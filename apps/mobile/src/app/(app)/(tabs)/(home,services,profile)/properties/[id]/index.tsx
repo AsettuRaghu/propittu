@@ -20,6 +20,7 @@ import {
   useLegalChecks,
   usePittu,
   usePropertyNews,
+  useProject,
   usePropertyValue,
   useSatellite,
 } from '@/api/ai';
@@ -298,6 +299,7 @@ function PittuSection({ property, withSetup }: { property: PropertyDetail; withS
   const disputes = useDisputes(property.id).data;
   const me = useMe();
   const succession = useSuccession(property.id).data;
+  const project = useProject(property.id).data;
   const sat = useSatellite(
     property.id,
     !!me.data?.features.satellite_watch && property.property_type === 'land',
@@ -321,8 +323,9 @@ function PittuSection({ property, withSetup }: { property: PropertyDetail; withS
     history.length < 2
   )
     return null;
-  const open = (page: 'news' | 'value' | 'legal' | 'history' | 'succession' | 'satellite') =>
-    router.push(`/properties/${property.id}/${page}`);
+  const open = (
+    page: 'news' | 'value' | 'legal' | 'history' | 'succession' | 'satellite' | 'project',
+  ) => router.push(`/properties/${property.id}/${page}`);
   const newsAt = news.reduce<string | null>(
     (latest, n) => (n.reviewed_at && (!latest || n.reviewed_at > latest) ? n.reviewed_at : latest),
     null,
@@ -336,6 +339,20 @@ function PittuSection({ property, withSetup }: { property: PropertyDetail; withS
           title="Ask Pittu about this property"
           subtitle="Tax, Khata, documents, its value, what to do next"
           onPress={() => router.push({ pathname: '/ask', params: { propertyId: property.id } })}
+        />
+      ) : null}
+      {project ? (
+        <ListRow
+          icon="building"
+          accent="teal"
+          title={`${project.project_name} on Propittu`}
+          subtitle={
+            project.owners > 1
+              ? `You and ${project.owners - 1} other owner${project.owners === 2 ? '' : 's'} · alerts and sales for the project`
+              : 'Invite owners in your building — alerts and prices get better for all'
+          }
+          subtitleLines={2}
+          onPress={() => open('project')}
         />
       ) : null}
       {sat?.available ? (
