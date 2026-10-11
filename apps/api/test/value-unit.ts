@@ -1,7 +1,7 @@
 // Pittu Value matching and arithmetic — no network, no AI, no database.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { ValueRate } from '@propittu/shared';
+import { appreciation, type ValueRate } from '@propittu/shared';
 import { computeValue, kindFor, matchRate, type ValueInput } from '../src/value/match.js';
 import { marketRange } from '../src/value/range.js';
 
@@ -145,4 +145,61 @@ test('prices too far apart, or far below the government rate, are not shown', ()
     government_per_sqft: 5000,
   });
   assert.equal(cheap.status, 'not_enough');
+});
+
+test('rents are judged on their own: a monthly range for this home', () => {
+  const rent = (perSqftMonth: number, i: number) => ({
+    ...comp(perSqftMonth, i),
+    kind: 'rent' as const,
+  });
+  const r = marketRange({
+    comparables: [
+      comp(8000, 0),
+      comp(8400, 1),
+      comp(8800, 2),
+      rent(24, 3),
+      rent(26, 4),
+      rent(27.5, 5),
+    ],
+    sources: pages(6),
+    area_sqft: 1240,
+    government_per_sqft: null,
+  });
+  assert.equal(r.status, 'ready');
+  assert.equal(r.rent_low, 30000); // 24 × 1240 = 29,760 → ₹30,000
+  assert.equal(r.rent_high, 34000); // 27.5 × 1240 = 34,100 → ₹34,000
+  assert.equal(r.value_low, 9_900_000);
+  const onlyRents = marketRange({
+    comparables: [rent(24, 0), rent(26, 1), rent(27.5, 2)],
+    sources: pages(3),
+    area_sqft: 1000,
+    government_per_sqft: null,
+  });
+  assert.equal(onlyRents.status, 'ready');
+  assert.equal(onlyRents.value_low, null);
+  assert.equal(onlyRents.rent_low, 24000);
+});
+
+test('appreciation since purchase', () => {
+  const a = appreciation(
+    {
+      paid_per_sqft: 5000,
+      purchase_date: '2016-10-11',
+      estimate: {
+        status: 'ready',
+        per_sqft_low: 9500,
+        per_sqft_high: 10500,
+        value_low: null,
+        value_high: null,
+        rent_low: null,
+        rent_high: null,
+        confidence: 'high',
+        comparables: [],
+        note: null,
+        updated_at: '2026-10-11T00:00:00Z',
+      },
+    },
+    new Date('2026-10-11T00:00:00Z'),
+  );
+  assert.deepEqual(a, { percent: 100, per_year: 7.2, since_year: 2016 });
 });

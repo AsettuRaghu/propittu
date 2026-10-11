@@ -1,5 +1,5 @@
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { propertyCallName, type PittuState } from '@propittu/shared';
+import { appreciation, propertyCallName, type PittuState } from '@propittu/shared';
 import { usePropertyValue } from '@/api/ai';
 import { formatDate, rupeesShort } from '@/lib/format';
 import { colors, space, typography } from '@/theme';
@@ -35,6 +35,7 @@ export function PittuFound({
     s.city,
   ].filter(Boolean);
   const est = value?.estimate;
+  const gain = value ? appreciation(value) : null;
   const history = s.history.length >= 2 ? s.history : [];
 
   return (
@@ -90,9 +91,21 @@ export function PittuFound({
               <KeyValue
                 icon="rupee"
                 label="Similar homes nearby sell for about"
-                value={`${rupeesShort(est.value_low)} – ${rupeesShort(est.value_high)}`}
+                value={`${rupeesShort(est.value_low)} – ${rupeesShort(est.value_high)}${
+                  gain && gain.percent > 0
+                    ? ` — up about ${gain.percent}% since you bought${gain.per_year ? ` (${gain.per_year}% a year)` : ''}`
+                    : ''
+                }`}
               />
-            ) : est?.status === 'working' ? (
+            ) : null}
+            {est?.rent_low && est.rent_high ? (
+              <KeyValue
+                icon="key"
+                label="It would rent for about"
+                value={`${rupeesShort(est.rent_low)} – ${rupeesShort(est.rent_high)} a month`}
+              />
+            ) : null}
+            {est?.status === 'working' ? (
               <View style={styles.working}>
                 <ActivityIndicator size="small" color={colors.primary} />
                 <Text style={typography.small}>Checking prices nearby…</Text>

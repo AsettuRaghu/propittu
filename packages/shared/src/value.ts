@@ -111,9 +111,9 @@ export interface PropertyValue {
 export interface MarketComparable {
   url: string;
   title: string;
-  kind: 'listing' | 'sale' | 'project_price';
+  kind: 'listing' | 'sale' | 'project_price' | 'rent';
   same_project: boolean;
-  /** Rupees per sq ft. */
+  /** Rupees per sq ft (for a rent: rupees per sq ft per month). */
   per_sqft: number;
   /** YYYY-MM or YYYY-MM-DD. */
   date: string | null;
@@ -129,6 +129,9 @@ export interface MarketEstimate {
   per_sqft_high: number | null;
   value_low: number | null;
   value_high: number | null;
+  /** Monthly rent similar homes ask for (flats and houses), when enough rents agree. */
+  rent_low: number | null;
+  rent_high: number | null;
   confidence: 'high' | 'medium' | null;
   comparables: MarketComparable[];
   note: string | null;
@@ -174,4 +177,27 @@ export interface PropertyValueRow extends PropertyValue {
   account_id: string;
   city: string | null;
   pincode: string | null;
+}
+
+/**
+ * How much the property has gained since it was bought: the middle of the
+ * market range against the price paid per sq ft, and per year when it's
+ * been more than a year. Null when either side is missing.
+ */
+export function appreciation(
+  v: Pick<PropertyValue, 'paid_per_sqft' | 'purchase_date' | 'estimate'>,
+  now = new Date(),
+): { percent: number; per_year: number | null; since_year: number | null } | null {
+  const e = v.estimate;
+  if (!e || e.status !== 'ready' || !e.per_sqft_low || !e.per_sqft_high || !v.paid_per_sqft)
+    return null;
+  const mid = (e.per_sqft_low + e.per_sqft_high) / 2;
+  const ratio = mid / v.paid_per_sqft;
+  const since = v.purchase_date ? Date.parse(v.purchase_date) : NaN;
+  const years = Number.isFinite(since) ? (now.getTime() - since) / (365.25 * 86_400_000) : null;
+  return {
+    percent: Math.round((ratio - 1) * 100),
+    per_year: years && years >= 1 ? +((ratio ** (1 / years) - 1) * 100).toFixed(1) : null,
+    since_year: Number.isFinite(since) ? new Date(since).getUTCFullYear() : null,
+  };
 }

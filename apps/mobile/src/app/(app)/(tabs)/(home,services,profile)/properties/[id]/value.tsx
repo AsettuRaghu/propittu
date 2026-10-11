@@ -1,20 +1,21 @@
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   RATE_UNIT_LABELS,
   VALUE_KIND_LABELS,
-  type MarketEstimate,
+  appreciation,
   type PropertyValue,
 } from '@propittu/shared';
-import { usePropertyValue } from '@/api/ai';
+import { usePittu, usePropertyValue } from '@/api/ai';
+import { useServices } from '@/api/queries';
 import { PropertyContext } from '@/components/PropertyContext';
 import { PullRefresh } from '@/components/PullRefresh';
 import { ErrorState, LoadingState } from '@/components/States';
-import { KeyValue, ListGroup } from '@/components/ui';
+import { Button, KeyValue, ListGroup } from '@/components/ui';
 import { Icon } from '@/components/Icon';
 import { formatDate, rupees, rupeesShort } from '@/lib/format';
-import { colors, font, space, typography } from '@/theme';
+import { accents, colors, font, space, typography } from '@/theme';
 
 const MATCHED_ON: Record<NonNullable<PropertyValue['rate']>['matched_on'], string> = {
   survey_number: 'by its survey number',
@@ -40,7 +41,7 @@ export default function PropertyValueScreen() {
     >
       <PropertyContext propertyId={id} />
 
-      <Market estimate={v.estimate ?? null} />
+      <Market value={v} propertyId={id} />
 
       <View style={styles.hero}>
         <Text style={typography.caption}>Government value today</Text>
@@ -129,13 +130,17 @@ const styles = StyleSheet.create({
   facts: { paddingHorizontal: 14, paddingVertical: space.xs, gap: space.sm },
   flex: { flex: 1 },
   range: { fontSize: font(22), fontWeight: '800', color: colors.text },
+  gain: { fontSize: font(14), fontWeight: '700', color: accents.teal.fg },
   working: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   source: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   pressed: { opacity: 0.7 },
 });
 
 /** Pittu's market range: what similar properties nearby sell or are listed for, with its pages. */
-function Market({ estimate: e }: { estimate: MarketEstimate | null }) {
+function Market({ value: v, propertyId }: { value: PropertyValue; propertyId: string }) {
+  const e = v.estimate ?? null;
+  const pittu = usePittu(propertyId).data;
+  const services = useServices();
   if (!e || e.status === 'failed') return null;
   if (e.status === 'working') {
     return (
@@ -145,7 +150,9 @@ function Market({ estimate: e }: { estimate: MarketEstimate | null }) {
       </View>
     );
   }
-  if (e.status !== 'ready' || !e.per_sqft_low || !e.per_sqft_high) {
+  const sale = e.status === 'ready' && e.per_sqft_low && e.per_sqft_high;
+  const rent = e.rent_low && e.rent_high;
+  if (!sale && !rent) {
     return (
       <Text style={typography.small}>
         Pittu couldn’t find enough recent prices nearby to give a range yet. It checks again every
@@ -153,35 +160,89 @@ function Market({ estimate: e }: { estimate: MarketEstimate | null }) {
       </Text>
     );
   }
+  const gain = appreciation(v);
+  const occupancy = pittu?.answers.occupancy;
+  const canLet = occupancy !== 'rented' && occupancy !== 'self' && occupancy !== 'family';
+  const findTenant = () => {
+    const service = (services.data ?? []).find((s) => s.code === 'tenant_search');
+    router.push({
+      pathname: '/services/request',
+      params: { propertyId, ...(service ? { serviceId: service.id } : {}) },
+    });
+  };
+  const prices = e.comparables.filter((c) => c.kind !== 'rent');
   return (
-    <ListGroup title="What similar homes sell for" plain>
-      <View style={styles.facts}>
-        <Text style={styles.range}>
-          {e.value_low && e.value_high
-            ? `${rupeesShort(e.value_low)} – ${rupeesShort(e.value_high)}`
-            : `${rupees(e.per_sqft_low)} – ${rupees(e.per_sqft_high)} per sq ft`}
-        </Text>
-        <Text style={typography.small}>
-          {`${rupees(e.per_sqft_low)} – ${rupees(e.per_sqft_high)} per sq ft, from ${e.comparables.length} recent prices${
-            e.comparables.some((c) => c.same_project) ? ' in the same project' : ' nearby'
-          }. Asking prices are often a little above what homes finally sell for.`}
-        </Text>
-        {e.comparables.slice(0, 6).map((c) => (
-          <Pressable
-            key={c.url}
-            onPress={() => void WebBrowser.openBrowserAsync(c.url)}
-            accessibilityRole="link"
-            style={({ pressed }) => [styles.source, pressed && styles.pressed]}
-          >
-            <Text style={[typography.small, styles.flex]} numberOfLines={1}>
-              {`${rupees(c.per_sqft)}/sq ft · ${c.title}`}
+    <>
+      {sale ? (
+        <ListGroup title="What similar homes sell for" plain>
+          <View style={styles.facts}>
+            <Text style={styles.range}>
+              {e.value_low && e.value_high
+                ? `${rupeesShort(e.value_low)} – ${rupeesShort(e.value_high)}`
+                : `${rupees(e.per_sqft_low!)} – ${rupees(e.per_sqft_high!)} per sq ft`}
             </Text>
-            <Text style={typography.caption}>{hostOf(c.url)}</Text>
-            <Icon name="external" size={12} color={colors.textSubtle} />
-          </Pressable>
-        ))}
-      </View>
-    </ListGroup>
+            {gain && gain.percent > 0 ? (
+              <Text style={styles.gain}>
+                {`Up about ${gain.percent}% since you bought${gain.since_year ? ` in ${gain.since_year}` : ''}${
+                  gain.per_year ? ` · about ${gain.per_year}% a year` : ''
+                }`}
+              </Text>
+            ) : null}
+            <Text style={typography.small}>
+              {`${rupees(e.per_sqft_low!)} – ${rupees(e.per_sqft_high!)} per sq ft, from ${prices.length} recent prices${
+                prices.some((c) => c.same_project) ? ' in the same project' : ' nearby'
+              }. Asking prices are often a little above what homes finally sell for.`}
+            </Text>
+            {prices.slice(0, 6).map((c) => (
+              <Source key={c.url} url={c.url} text={`${rupees(c.per_sqft)}/sq ft · ${c.title}`} />
+            ))}
+          </View>
+        </ListGroup>
+      ) : null}
+      {rent ? (
+        <ListGroup title="What it would rent for" plain>
+          <View style={styles.facts}>
+            <Text style={styles.range}>
+              {`${rupees(e.rent_low!)} – ${rupees(e.rent_high!)} a month`}
+            </Text>
+            <Text style={typography.small}>
+              From rents asked for similar homes nearby — before the society’s maintenance.
+            </Text>
+            {e.comparables
+              .filter((c) => c.kind === 'rent')
+              .slice(0, 4)
+              .map((c) => (
+                <Source key={c.url} url={c.url} text={c.title} />
+              ))}
+            {canLet ? (
+              <Button
+                title="Find a tenant"
+                icon="users"
+                variant="secondary"
+                size="sm"
+                onPress={findTenant}
+              />
+            ) : null}
+          </View>
+        </ListGroup>
+      ) : null}
+    </>
+  );
+}
+
+function Source({ url, text }: { url: string; text: string }) {
+  return (
+    <Pressable
+      onPress={() => void WebBrowser.openBrowserAsync(url)}
+      accessibilityRole="link"
+      style={({ pressed }) => [styles.source, pressed && styles.pressed]}
+    >
+      <Text style={[typography.small, styles.flex]} numberOfLines={1}>
+        {text}
+      </Text>
+      <Text style={typography.caption}>{hostOf(url)}</Text>
+      <Icon name="external" size={12} color={colors.textSubtle} />
+    </Pressable>
   );
 }
 

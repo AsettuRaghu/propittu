@@ -34,6 +34,11 @@ docs/DECISIONS.md; Pittu's design in docs/PITTU.md.
   adding from a deed, questions that follow the deed (flat / plot, renting, OC, Bengaluru e-Khata),
   the land's story from the deed (sale-deed-v3), Pittu's market range (web search, rules decide),
   Watch news published by Pittu when confident, and four rental services (on quote).
+- Pittu reads every document you upload (11 Oct, doc-read-v2): Khata, tax receipt, land record,
+  rental agreement, OC, plans, loan closure, bills — checks each against the deed and acts (tax
+  paid, Khata answered, rental end date as a reminder, differences to the team, one-tap move when
+  filed under the wrong type). Value: "up X% since you bought" and what it would rent for
+  (value-market-v2, ~₹27 a check every 90 days). Waiting for the next app publish.
 - The full property file (11 Oct): 28 document types in 7 groups, named per state (RTC / Pahani,
   e-Khata, NALA…); each property shows its key documents with why, the rest folded away. Waiting for
   the next app publish. Next: Pittu reads the short ones (Khata, tax receipt, land record, loan

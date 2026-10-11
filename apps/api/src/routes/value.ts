@@ -21,6 +21,8 @@ const EMPTY: MarketEstimate = {
   per_sqft_high: null,
   value_low: null,
   value_high: null,
+  rent_low: null,
+  rent_high: null,
   confidence: null,
   comparables: [],
   note: null,

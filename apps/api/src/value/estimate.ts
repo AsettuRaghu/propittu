@@ -68,7 +68,9 @@ export async function estimateMarket(propertyId: string): Promise<void> {
       text('developer') ? `Developer: ${text('developer')}` : null,
       value.area_sqft ? `Area: about ${Math.round(value.area_sqft)} sq ft` : null,
       text('floor') ? `Floor: ${text('floor')}` : null,
-      'Find what similar properties sell or are listed for now.',
+      p.property_type === 'land'
+        ? 'Find what similar plots sell or are listed for now.'
+        : 'Find what similar homes sell or are listed for now, and what they rent for.',
     ]
       .filter(Boolean)
       .join('\n');
@@ -110,11 +112,11 @@ export async function currentEstimate(
   db: SupabaseClient,
   propertyId: string,
 ): Promise<{ estimate: MarketEstimate | null; due: boolean }> {
-  const row = must<(MarketEstimate & { updated_at: string }) | null>(
+  const row = must<(MarketEstimate & { updated_at: string; task_version: string | null }) | null>(
     await db
       .from('value_estimates')
       .select(
-        'status, per_sqft_low, per_sqft_high, value_low, value_high, confidence, comparables, note, updated_at',
+        'status, per_sqft_low, per_sqft_high, value_low, value_high, rent_low, rent_high, confidence, comparables, note, updated_at, task_version',
       )
       .eq('property_id', propertyId)
       .maybeSingle(),
@@ -122,6 +124,8 @@ export async function currentEstimate(
   const age = row ? Date.now() - new Date(row.updated_at).getTime() : Infinity;
   const due =
     !row ||
+    // Pittu learned something new (e.g. rents): check again once.
+    (row.status !== 'working' && row.task_version !== marketTask.version) ||
     (row.status === 'working' ? age > 10 * 60_000 : age > REFRESH_DAYS * 86_400_000) ||
     (row.status === 'failed' && age > 6 * 3_600_000);
   return { estimate: row, due };

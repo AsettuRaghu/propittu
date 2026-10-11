@@ -6,11 +6,13 @@ import {
   KHATA_TYPE_LABELS,
   LAND_USE_LABELS,
   LEGAL_LEVEL_LABELS,
+  appreciation,
   pittuQuestions,
   type CompletionItem,
   type CompletionKey,
   type LegalLevel,
   type PropertyDetail,
+  type PropertyValue,
 } from '@propittu/shared';
 import { useLegalChecks, usePittu, usePropertyNews, usePropertyValue } from '@/api/ai';
 import { useProperty, useServiceRequests, useServices } from '@/api/queries';
@@ -253,6 +255,25 @@ function HealthActions({ property: p }: { property: PropertyDetail }) {
   );
 }
 
+/** "Up 65% since 2021 · rents for ₹30,000 – ₹34,000" (falls back to the government value). */
+function worthLine(v: PropertyValue, worth: number | null): string {
+  const gain = appreciation(v);
+  const e = v.estimate;
+  return (
+    [
+      gain && gain.percent > 0
+        ? `Up ${gain.percent}%${gain.since_year ? ` since ${gain.since_year}` : ''}`
+        : null,
+      e?.rent_low && e.rent_high
+        ? `rents for ${rupeesShort(e.rent_low)} – ${rupeesShort(e.rent_high)}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' · ') ||
+    `From recent prices nearby${worth !== null ? ` · government value ${rupeesShort(worth)}` : ''}`
+  );
+}
+
 const LEVEL_ACCENTS: Record<LegalLevel, Accent> = { green: 'teal', amber: 'amber', red: 'coral' };
 
 /**
@@ -300,7 +321,7 @@ function PittuSection({ property, withSetup }: { property: PropertyDetail; withS
           icon="rupee"
           accent="indigo"
           title={`Worth about ${rupeesShort(est.value_low)} – ${rupeesShort(est.value_high)}`}
-          subtitle={`From recent prices nearby${worth !== null ? ` · government value ${rupeesShort(worth)}` : ''}`}
+          subtitle={worthLine(value!, worth)}
           subtitleLines={2}
           onPress={() => open('value')}
         />

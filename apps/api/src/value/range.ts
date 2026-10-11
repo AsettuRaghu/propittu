@@ -56,46 +56,74 @@ type RangeResult = Pick<
   | 'per_sqft_high'
   | 'value_low'
   | 'value_high'
+  | 'rent_low'
+  | 'rent_high'
   | 'confidence'
   | 'comparables'
 >;
 
-export function marketRange(input: RangeInput): RangeResult {
-  const seen = new Set(input.sources.map(urlKey));
-  const real = input.comparables.filter((c) => seen.has(urlKey(c.url)));
-  const none: RangeResult = {
-    status: 'not_enough',
-    per_sqft_low: null,
-    per_sqft_high: null,
-    value_low: null,
-    value_high: null,
-    confidence: null,
-    comparables: real,
-  };
-  if (real.length < 3) return none;
-  // Enough prices from the same project → only those (the closest match).
-  const pool =
-    real.filter((c) => c.same_project).length >= 3 ? real.filter((c) => c.same_project) : real;
+/**
+ * Do these prices agree? Same-project ones alone when there are 3+, outliers
+ * dropped, at least 3 left (2 in the project, or 4 nearby), and the spread
+ * at most 1.6×. Returns the low and high per sq ft, or the survivors only.
+ */
+function agree(found: MarketComparable[]) {
+  const same = found.filter((c) => c.same_project);
+  const pool = same.length >= 3 ? same : found;
+  if (pool.length < 3) return { kept: pool, low: null, high: null, sameProject: 0 };
   const mid = median(pool.map((c) => c.per_sqft));
   const kept = pool.filter((c) => c.per_sqft >= mid * 0.75 && c.per_sqft <= mid * 1.35);
   const sameProject = kept.filter((c) => c.same_project).length;
   if (kept.length < 3 || (sameProject < 2 && kept.length < 4))
-    return { ...none, comparables: kept };
-
+    return { kept, low: null, high: null, sameProject };
   const rates = kept.map((c) => c.per_sqft);
-  const low = Math.round(kept.length >= 5 ? quantile(rates, 0.2) : Math.min(...rates));
-  const high = Math.round(kept.length >= 5 ? quantile(rates, 0.8) : Math.max(...rates));
-  if (high / low > MAX_SPREAD) return { ...none, comparables: kept };
-  if (input.government_per_sqft && median(rates) < input.government_per_sqft * 0.8) {
-    return { ...none, comparables: kept };
+  const low = kept.length >= 5 ? quantile(rates, 0.2) : Math.min(...rates);
+  const high = kept.length >= 5 ? quantile(rates, 0.8) : Math.max(...rates);
+  if (high / low > MAX_SPREAD) return { kept, low: null, high: null, sameProject };
+  return { kept, low, high, sameProject };
+}
+
+/** Monthly rent rounded to ₹500. */
+const roundRent = (n: number) => Math.round(n / 500) * 500;
+
+export function marketRange(input: RangeInput): RangeResult {
+  const seen = new Set(input.sources.map(urlKey));
+  const real = input.comparables.filter((c) => seen.has(urlKey(c.url)));
+  const sale = agree(real.filter((c) => c.kind !== 'rent'));
+  const rent = agree(real.filter((c) => c.kind === 'rent'));
+  const rentOk = rent.low !== null && rent.high !== null && !!input.area_sqft;
+  const rents = {
+    rent_low: rentOk ? roundRent(rent.low! * input.area_sqft!) : null,
+    rent_high: rentOk ? roundRent(rent.high! * input.area_sqft!) : null,
+  };
+  const comparables = [...sale.kept, ...(rentOk ? rent.kept : [])];
+  const saleOk =
+    sale.low !== null &&
+    sale.high !== null &&
+    // Far below the government rate: the comparables are for something else.
+    !(input.government_per_sqft && (sale.low + sale.high) / 2 < input.government_per_sqft * 0.8);
+  if (!saleOk) {
+    return {
+      status: rentOk ? 'ready' : 'not_enough',
+      per_sqft_low: null,
+      per_sqft_high: null,
+      value_low: null,
+      value_high: null,
+      ...rents,
+      confidence: null,
+      comparables,
+    };
   }
+  const low = Math.round(sale.low!);
+  const high = Math.round(sale.high!);
   return {
     status: 'ready',
     per_sqft_low: low,
     per_sqft_high: high,
     value_low: input.area_sqft ? roundValue(low * input.area_sqft) : null,
     value_high: input.area_sqft ? roundValue(high * input.area_sqft) : null,
-    confidence: sameProject >= 3 && high / low <= 1.35 ? 'high' : 'medium',
-    comparables: kept,
+    ...rents,
+    confidence: sale.sameProject >= 3 && high / low <= 1.35 ? 'high' : 'medium',
+    comparables,
   };
 }
