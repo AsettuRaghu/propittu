@@ -17,6 +17,7 @@ import { nameLinksRouter } from './routes/nameLinks.js';
 import { notificationsRouter } from './routes/notifications.js';
 import { askRouter } from './routes/ask.js';
 import { familyRouter } from './routes/family.js';
+import { satelliteRouter } from './routes/satellite.js';
 import { backofficeRouter } from './routes/backoffice.js';
 import { billingReturnRouter, billingRouter } from './routes/billing.js';
 import { webhooksRouter } from './routes/webhooks.js';
@@ -130,6 +131,7 @@ export function createApp(): express.Express {
   app.use(notificationsRouter);
   app.use(askRouter);
   app.use(familyRouter);
+  app.use(satelliteRouter);
   app.use(servicesRouter);
   app.use(weatherRouter);
 

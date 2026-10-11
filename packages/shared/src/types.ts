@@ -70,6 +70,8 @@ export interface Me {
   features: {
     /** Pittu reads uploaded sale deeds (AI). */
     document_reading: boolean;
+    /** The optional Plot satellite watch module is switched on. */
+    satellite_watch: boolean;
   };
   /** Every account this person can see (their own, and family's), for the switcher. */
   accounts: AccountChoice[];

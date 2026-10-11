@@ -2,7 +2,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { waitUntil } from '@vercel/functions';
 import {
   DOCUMENT_TYPE_LABELS,
+  SATELLITE_CHANGE_LABELS,
   requestStatusLabel,
+  type SatelliteChange,
   type DocumentType,
   type ServiceFulfilment,
   type ServiceRequestStatus,
@@ -30,7 +32,8 @@ export type NotificationEvent =
   | { type: 'legal.dispute_report_replied'; reportId: string }
   | { type: 'legal.project_dispute'; projectDisputeId: string }
   | { type: 'document.read_by_pittu'; documentId: string; line: string; differs: boolean }
-  | { type: 'watch.news'; placeId: string; count: number };
+  | { type: 'watch.news'; placeId: string; count: number }
+  | { type: 'satellite.change'; propertyId: string; change: SatelliteChange };
 
 interface Note {
   account_id: string;
@@ -235,6 +238,24 @@ async function compose(db: SupabaseClient, e: NotificationEvent): Promise<Note[]
           ['document', e.documentId],
         ),
       ];
+    }
+    case 'satellite.change': {
+      const { data } = await db
+        .from('properties')
+        .select('account_id, name')
+        .eq('id', e.propertyId)
+        .maybeSingle();
+      return data
+        ? [
+            note(
+              data.account_id as string,
+              `${data.name as string}: ${SATELLITE_CHANGE_LABELS[e.change]}`,
+              'Seen in the latest satellite picture — worth a site check.',
+              `/properties/${e.propertyId}/satellite`,
+              ['property', e.propertyId],
+            ),
+          ]
+        : [];
     }
     case 'watch.news': {
       const { data: place } = await db

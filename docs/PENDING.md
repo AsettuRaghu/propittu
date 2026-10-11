@@ -34,6 +34,16 @@ docs/DECISIONS.md; Pittu's design in docs/PITTU.md.
   adding from a deed, questions that follow the deed (flat / plot, renting, OC, Bengaluru e-Khata),
   the land's story from the deed (sale-deed-v3), Pittu's market range (web search, rules decide),
   Watch news published by Pittu when confident, and four rental services (on quote).
+- Built 11 Oct, waiting for the next app publish and a phone test:
+  - Notifications: inbox (bell on Home) for request updates, team replies, checks and disputes
+    shared, dispute alerts for a project, what Pittu read, local news, satellite changes; push to
+    phones once the app is a real build (Expo Go can't receive server push).
+  - Ask Pittu (ask-v1): answers from the owner's property file; hands over to the team. Needs
+    Anthropic credit to try.
+  - Family & access: invite family by phone, account switcher, nominees, Ready for your family per
+    property, Will & Succession Help service.
+  - Plot satellite watch — optional module, OFF until a super admin switches it on (portal: Pittu AI
+    → Overview → Modules). Sentinel-2 via Planetary Computer (free); monthly; 10 m pictures.
 - Pittu Value v3 (11 Oct): prices converted to the flat's area basis (carpet / built-up → super
   built-up with the deed's own ratio), similar sizes preferred, and "Know a recent sale in your
   building? Tell Pittu" (counts at once, shared anonymously in the project if the owner agrees;

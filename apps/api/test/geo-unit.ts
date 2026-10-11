@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { locationIssueText, type LocationIssue } from '@propittu/shared';
 import { checkRecord, deedKey, distanceKm, storedIssue } from '../src/locationRecord.js';
+import { changeBetween, cloudyShare, square } from '../src/satellite/rules.js';
 
 const issue: LocationIssue = {
   kind: 'pincode',
@@ -65,4 +66,36 @@ test('locationIssueText says which two places disagree', () => {
     }),
     /sale deed places the property in Bommasandra, Anekal/,
   );
+});
+
+/* ---- Plot satellite watch rules ---- */
+
+test('satellite: a plot cleared or built on is called out; seasons are not', () => {
+  const before = { ndvi_site: 0.43, ndvi_area: 0.39, ndbi_site: -0.11, ndbi_area: -0.12 };
+  assert.equal(changeBetween(null, before), 'baseline');
+  assert.equal(changeBetween(before, { ...before, ndvi_site: 0.37 }), 'none', 'dry season dip');
+  assert.equal(changeBetween(before, { ...before, ndvi_site: 0.2 }), 'site_cleared');
+  assert.equal(changeBetween(before, { ...before, ndbi_site: 0.02 }), 'site_built');
+  assert.equal(changeBetween(before, { ...before, ndbi_area: -0.02 }), 'area_built');
+});
+
+test('satellite: cloudy pixels from the scene classification; a square around the pin', () => {
+  assert.equal(
+    cloudyShare([
+      [15, 291],
+      [4, 5],
+    ]),
+    0,
+  );
+  assert.ok(
+    Math.abs(
+      cloudyShare([
+        [50, 50],
+        [9, 4],
+      ]) - 0.5,
+    ) < 1e-9,
+  );
+  const [w, s, e, n] = square(12.79, 77.7, 150);
+  assert.ok(Math.abs((n - s) * 111_320 - 300) < 1);
+  assert.ok(w < 77.7 && e > 77.7);
 });

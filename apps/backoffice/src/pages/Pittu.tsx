@@ -13,6 +13,7 @@ import { date, dateTime, relative } from '../lib/format';
 import { useUrlState } from '../lib/params';
 import { Feedback, useAction } from '../ui/action';
 import { DataTable, type Column } from '../ui/DataTable';
+import { Modules } from '../ui/Modules';
 
 const usd = (n: number | null) => (n === null ? '—' : `$${n.toFixed(2)}`);
 const CAPABILITY_NAMES: Record<string, string> = {
@@ -170,6 +171,7 @@ export function Pittu() {
         </div>
       </div>
       {summary.error ? <div className="error">{errorText(summary.error)}</div> : null}
+      <Modules />
       <details className="more explain">
         <summary>How these numbers are worked out</summary>
         <p className="sub">

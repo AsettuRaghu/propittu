@@ -231,3 +231,30 @@ export function appreciation(
     since_year: Number.isFinite(since) ? new Date(since).getUTCFullYear() : null,
   };
 }
+
+/* ---- Plot satellite watch (optional module) ---- */
+
+export type SatelliteChange = 'none' | 'baseline' | 'site_cleared' | 'site_built' | 'area_built';
+
+export const SATELLITE_CHANGE_LABELS: Record<SatelliteChange, string> = {
+  none: 'No clear change',
+  baseline: 'First picture',
+  site_cleared: 'The plot looks cleared — greenery gone',
+  site_built: 'Something may be built on the plot',
+  area_built: 'New building close to the plot',
+};
+
+export interface SatelliteObservation {
+  id: string;
+  captured_at: string;
+  change: SatelliteChange;
+  /** True-colour picture of about 600 m around the plot. */
+  picture_url: string;
+}
+
+/** GET /properties/:id/satellite */
+export interface SatelliteView {
+  /** The module is switched on, and this property can be watched (a plot with a confirmed pin). */
+  available: boolean;
+  observations: SatelliteObservation[];
+}

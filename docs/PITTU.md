@@ -62,6 +62,13 @@ New capabilities get their own folder (`watch/`, `value/`, `legal/`) on the same
      (`apps/api/src/value/range.ts`), otherwise just the government value;
    - Legal findings that suggest a problem (amber / red) still go to the team first.
 
+## Ask Pittu
+
+`ask.answer` (apps/api/src/pittu/ask) answers from the owner's PROPERTY FILE
+(apps/api/src/ask/context.ts) and the service catalogue. Facts about the property only from the
+file; general Indian property guidance marked as such; never a legal opinion; `needs_team` hands
+over to support. 40 questions a day per owner; conversations in `ask_messages`.
+
 ## Same person, different name
 
 Records spell one person many ways. `comparePeople()` (packages/shared/src/pittu.ts) grades a name on

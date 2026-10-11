@@ -5,6 +5,7 @@ import { HttpError, ok, unauthenticated } from '../errors.js';
 import { authServerClient, serviceClient } from '../supabase.js';
 import { cleanAbandonedUploads } from '../cleanup.js';
 import { runWatch } from '../watch/watch.js';
+import { runSatellite } from '../satellite/watch.js';
 
 /**
  * GET /cron/keepalive — called once a day by Vercel Cron (also runs the
@@ -41,6 +42,14 @@ cronRouter.get('/cron/watch', (req, res) => {
   if (env.CRON_SECRET && req.get('authorization') !== `Bearer ${env.CRON_SECRET}`) {
     throw unauthenticated('Not allowed');
   }
-  if (serviceClient) waitUntil(runWatch(serviceClient).then(() => undefined));
+  if (serviceClient) {
+    const db = serviceClient;
+    // News first, then the satellite watch (only when the module is switched on).
+    waitUntil(
+      runWatch(db)
+        .then(() => runSatellite(db))
+        .then(() => undefined),
+    );
+  }
   ok(res, { started: !!serviceClient });
 });

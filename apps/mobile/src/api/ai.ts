@@ -9,6 +9,7 @@ import type {
   LegalCheck,
   PittuState,
   PropertyDisputes,
+  SatelliteView,
   AskMessage,
   KnownSale,
   KnownSaleInput,
@@ -246,3 +247,12 @@ export function useAsk(propertyId: string | null) {
       ]),
   });
 }
+
+/** Plot satellite watch (optional module): pictures over time and what changed. */
+export const useSatellite = (propertyId: string, enabled: boolean) =>
+  useQuery({
+    queryKey: ['properties', propertyId, 'satellite'] as const,
+    queryFn: () => api<SatelliteView>(`/properties/${propertyId}/satellite`),
+    enabled,
+    staleTime: 10 * 60_000,
+  });

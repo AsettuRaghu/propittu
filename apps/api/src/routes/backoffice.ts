@@ -3,6 +3,7 @@ import { dashboardRouter } from './backofficeDashboard.js';
 import { catalogueRouter } from './backofficeCatalogue.js';
 import { coverageRouter } from './backofficeCoverage.js';
 import { legalChecksRouter } from './backofficeLegal.js';
+import { modulesRouter } from './satellite.js';
 import { watchRouter } from './backofficeWatch.js';
 import { valueRouter } from './backofficeValue.js';
 import { plansConsoleRouter } from './backofficePlans.js';
@@ -150,6 +151,7 @@ backofficeRouter.use(plansConsoleRouter);
 backofficeRouter.use(catalogueRouter);
 backofficeRouter.use(coverageRouter);
 backofficeRouter.use(legalChecksRouter);
+backofficeRouter.use(modulesRouter);
 backofficeRouter.use(watchRouter);
 backofficeRouter.use(valueRouter);
 

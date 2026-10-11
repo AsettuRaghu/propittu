@@ -6,6 +6,7 @@ import {
   KHATA_TYPE_LABELS,
   LAND_USE_LABELS,
   LEGAL_LEVEL_LABELS,
+  SATELLITE_CHANGE_LABELS,
   appreciation,
   pittuQuestions,
   type CompletionItem,
@@ -14,7 +15,14 @@ import {
   type PropertyDetail,
   type PropertyValue,
 } from '@propittu/shared';
-import { useDisputes, useLegalChecks, usePittu, usePropertyNews, usePropertyValue } from '@/api/ai';
+import {
+  useDisputes,
+  useLegalChecks,
+  usePittu,
+  usePropertyNews,
+  usePropertyValue,
+  useSatellite,
+} from '@/api/ai';
 import { useSuccession } from '@/api/family';
 import { useMe, useProperty, useServiceRequests, useServices } from '@/api/queries';
 import { DocumentSlots } from '@/components/DocumentSlots';
@@ -290,6 +298,10 @@ function PittuSection({ property, withSetup }: { property: PropertyDetail; withS
   const disputes = useDisputes(property.id).data;
   const me = useMe();
   const succession = useSuccession(property.id).data;
+  const sat = useSatellite(
+    property.id,
+    !!me.data?.features.satellite_watch && property.property_type === 'land',
+  ).data;
   const seen = useNewsSeen();
   const unread = !!property.deed_reading && property.deed_reading.status !== 'ready';
   const setup = withSetup && (!!pittu.data || unread);
@@ -309,7 +321,7 @@ function PittuSection({ property, withSetup }: { property: PropertyDetail; withS
     history.length < 2
   )
     return null;
-  const open = (page: 'news' | 'value' | 'legal' | 'history' | 'succession') =>
+  const open = (page: 'news' | 'value' | 'legal' | 'history' | 'succession' | 'satellite') =>
     router.push(`/properties/${property.id}/${page}`);
   const newsAt = news.reduce<string | null>(
     (latest, n) => (n.reviewed_at && (!latest || n.reviewed_at > latest) ? n.reviewed_at : latest),
@@ -324,6 +336,26 @@ function PittuSection({ property, withSetup }: { property: PropertyDetail; withS
           title="Ask Pittu about this property"
           subtitle="Tax, Khata, documents, its value, what to do next"
           onPress={() => router.push({ pathname: '/ask', params: { propertyId: property.id } })}
+        />
+      ) : null}
+      {sat?.available ? (
+        <ListRow
+          icon="satellite"
+          accent="sky"
+          title={
+            sat.observations[0] &&
+            sat.observations[0].change !== 'none' &&
+            sat.observations[0].change !== 'baseline'
+              ? `From space · ${SATELLITE_CHANGE_LABELS[sat.observations[0].change]}`
+              : 'From space · no clear change'
+          }
+          subtitle={
+            sat.observations[0]
+              ? `Latest clear satellite picture ${formatDate(sat.observations[0].captured_at)}`
+              : 'Pittu is looking for a clear satellite picture'
+          }
+          subtitleLines={2}
+          onPress={() => open('satellite')}
         />
       ) : null}
       {succession ? (

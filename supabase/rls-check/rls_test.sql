@@ -1917,5 +1917,20 @@ select tst.rejects($$select public.answer_account_invite(
   'an invitation can''t be accepted by the wrong person');
 reset role;
 
+-- =====================================================================
+\echo
+\echo '== Modules and the plot satellite watch =='
+-- =====================================================================
+reset role;
+insert into public.satellite_observations (property_id, account_id, item_id, captured_at, bbox)
+values ('a1a1a1a1-0000-0000-0000-0000000000e1', 'acc0000a-0000-0000-0000-00000000000a', 'S2X_TEST', now(), '{77.69,12.78,77.71,12.80}');
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rows('select * from public.satellite_observations', 1, 'the owner sees their plot''s pictures');
+select tst.rows($$update public.app_modules set enabled = true$$, 0, 'customers cannot switch modules on');
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.rows('select * from public.satellite_observations', 0, 'other customers never see them');
+reset role;
+
 \echo
 \echo 'ALL RLS CHECKS PASSED'

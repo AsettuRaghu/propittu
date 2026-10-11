@@ -13,6 +13,7 @@ import { audit } from '../audit.js';
 import { HttpError, must, ok } from '../errors.js';
 import { logger } from '../logger.js';
 import { serviceClient } from '../supabase.js';
+import { moduleOn } from '../satellite/watch.js';
 import { canStartReading } from '../pittu/index.js';
 import { loadPlanState, planSummary } from '../plan.js';
 
@@ -62,7 +63,11 @@ meRouter.get('/me', async (req, res) => {
     account: { id: acc.id, status: acc.status, role: accountRole },
     staff_role: staffRow?.is_active ? staffRow.role : null,
     plan: planSummary(plan),
-    features: { document_reading: documentReading },
+    features: {
+      document_reading: documentReading,
+      // Module switches are readable by any signed-in user: no server key needed.
+      satellite_watch: await moduleOn(db, 'satellite_watch'),
+    },
     ...(await accessFor(db, userId, accountId)),
   };
 
