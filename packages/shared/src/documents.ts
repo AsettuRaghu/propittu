@@ -572,3 +572,114 @@ export function checkDocument(
     r.document_kind === 'other' && r.note ? r.note : parts.filter(Boolean).join(' · ') || r.note;
   return { summary, findings };
 }
+
+/* ------------------------------------------------------------------ *
+ * Ready for your family (succession). What heirs would need to take over
+ * this property smoothly, and what's already in place. Fixed rules; the
+ * state's process is general guidance, never legal advice.
+ * ------------------------------------------------------------------ */
+
+export interface SuccessionInput {
+  ctx: PittuContext;
+  /** People who can already see the account (besides the owner). */
+  family_members: number;
+  nominees: number;
+  loan_on_property: boolean | null;
+}
+
+export interface SuccessionStep {
+  key: string;
+  title: string;
+  why: string;
+  done: boolean;
+  /** What the app offers: add a document of this type, people, or a service. */
+  action:
+    | { kind: 'document'; type: DocumentType }
+    | { kind: 'family' }
+    | { kind: 'nominee' }
+    | { kind: 'service'; code: string }
+    | null;
+}
+
+export function successionPlan(input: SuccessionInput): {
+  steps: SuccessionStep[];
+  done: number;
+  /** How heirs take over in this state, in plain words (general guidance). */
+  process: string;
+} {
+  const { ctx } = input;
+  const has = (t: DocumentType) => ctx.documents.includes(t);
+  const place = { state: ctx.state, bengaluru_city: inBengaluruCity(ctx) };
+  const steps: SuccessionStep[] = [
+    {
+      key: 'nominee',
+      title: 'A nominee recorded',
+      why: 'Who we should give access to if something happens to you.',
+      done: input.nominees > 0,
+      action: { kind: 'nominee' },
+    },
+    {
+      key: 'family',
+      title: 'Family can see it',
+      why: 'Someone you trust already knows where everything is.',
+      done: input.family_members > 0,
+      action: { kind: 'family' },
+    },
+    {
+      key: 'will',
+      title: 'A Will in the locker',
+      why: 'Without one, heirs need a legal heir or succession certificate — slower and costlier.',
+      done: has('will_succession'),
+      action: has('will_succession')
+        ? { kind: 'document', type: 'will_succession' }
+        : { kind: 'service', code: 'will_succession' },
+    },
+    {
+      key: 'deed',
+      title: 'The sale deed',
+      why: 'The proof of ownership your heirs build on.',
+      done: has('sale_deed'),
+      action: { kind: 'document', type: 'sale_deed' },
+    },
+    {
+      key: 'ec',
+      title: 'An Encumbrance Certificate',
+      why: 'Shows the property is free of loans and claims when it passes on.',
+      done: has('encumbrance_certificate'),
+      action: { kind: 'document', type: 'encumbrance_certificate' },
+    },
+    {
+      key: 'khata',
+      title: ka(place) ? documentLabel('khata', place) : 'Property tax receipt',
+      why: 'The city record your heirs transfer into their names.',
+      done: ka(place) ? has('khata') : has('property_tax'),
+      action: { kind: 'document', type: ka(place) ? 'khata' : 'property_tax' },
+    },
+  ];
+  if (input.loan_on_property) {
+    steps.push({
+      key: 'loan',
+      title: 'Loan papers',
+      why: 'Heirs need to know the bank and the balance — or the closure letter if it’s paid off.',
+      done: has('loan_papers') || has('loan_closure'),
+      action: { kind: 'document', type: 'loan_papers' },
+    });
+  }
+  if (ctx.buyers.length > 1) {
+    steps.push({
+      key: 'joint',
+      title: 'Joint owners know the plan',
+      why: `The deed names ${ctx.buyers.length} owners: each one’s share passes by their own Will or to their own heirs.`,
+      done: input.family_members > 0,
+      action: { kind: 'family' },
+    });
+  }
+  const process = ka(place)
+    ? place.bengaluru_city
+      ? 'In Bengaluru, heirs apply to the city corporation (GBA) to move the e-Khata into their names, with the death certificate and the Will or a legal heir / succession certificate. The EC then shows the change after any registered transfer.'
+      : 'In Karnataka, heirs apply to the local body (or the Tahsildar for land records) to change the Khata and RTC, with the death certificate and the Will or a legal heir / succession certificate.'
+    : tg(place)
+      ? 'In Telangana, heirs apply for mutation with the city body (e.g. GHMC) or the Tahsildar for land, with the death certificate and the Will or a family member / legal heir certificate.'
+      : 'Heirs apply to the local body for mutation into their names, with the death certificate and the Will or a legal heir / succession certificate.';
+  return { steps, done: steps.filter((s) => s.done).length, process };
+}

@@ -15,6 +15,7 @@ import {
   type PropertyValue,
 } from '@propittu/shared';
 import { useDisputes, useLegalChecks, usePittu, usePropertyNews, usePropertyValue } from '@/api/ai';
+import { useSuccession } from '@/api/family';
 import { useMe, useProperty, useServiceRequests, useServices } from '@/api/queries';
 import { DocumentSlots } from '@/components/DocumentSlots';
 import type { IconName } from '@/components/Icon';
@@ -288,6 +289,7 @@ function PittuSection({ property, withSetup }: { property: PropertyDetail; withS
   const check = useLegalChecks(property.id).data?.[0];
   const disputes = useDisputes(property.id).data;
   const me = useMe();
+  const succession = useSuccession(property.id).data;
   const seen = useNewsSeen();
   const unread = !!property.deed_reading && property.deed_reading.status !== 'ready';
   const setup = withSetup && (!!pittu.data || unread);
@@ -297,6 +299,7 @@ function PittuSection({ property, withSetup }: { property: PropertyDetail; withS
   const canAsk = !!me.data?.features.document_reading;
   if (
     !canAsk &&
+    !succession &&
     !setup &&
     !news.length &&
     worth === null &&
@@ -306,7 +309,7 @@ function PittuSection({ property, withSetup }: { property: PropertyDetail; withS
     history.length < 2
   )
     return null;
-  const open = (page: 'news' | 'value' | 'legal' | 'history') =>
+  const open = (page: 'news' | 'value' | 'legal' | 'history' | 'succession') =>
     router.push(`/properties/${property.id}/${page}`);
   const newsAt = news.reduce<string | null>(
     (latest, n) => (n.reviewed_at && (!latest || n.reviewed_at > latest) ? n.reviewed_at : latest),
@@ -321,6 +324,16 @@ function PittuSection({ property, withSetup }: { property: PropertyDetail; withS
           title="Ask Pittu about this property"
           subtitle="Tax, Khata, documents, its value, what to do next"
           onPress={() => router.push({ pathname: '/ask', params: { propertyId: property.id } })}
+        />
+      ) : null}
+      {succession ? (
+        <ListRow
+          icon="users"
+          accent={succession.done === succession.steps.length ? 'teal' : 'amber'}
+          title={`Ready for your family · ${succession.done} of ${succession.steps.length}`}
+          subtitle="What your heirs would need — nominee, Will, key papers"
+          subtitleLines={2}
+          onPress={() => open('succession')}
         />
       ) : null}
       {setup ? <DeedReadRow property={property} /> : null}

@@ -93,18 +93,26 @@ export const requireAuth: RequestHandler = async (req, _res, next) => {
   const token = match[1];
   const identity = await verifyAccessToken(token);
   const requestId = String(req.id ?? '');
-  const db = userClient(token, requestId || undefined);
+  const probe = userClient(token, requestId || undefined);
 
-  // User → Account (M1). RLS lets a user read only their own membership.
-  const { data: membership, error } = await db
+  // User → Account (M1). A person may belong to several accounts (their own,
+  // and family they were invited to): the app says which with a header; else
+  // their own. RLS lets a user read only their own memberships.
+  const { data: memberships, error } = await probe
     .from('account_members')
-    .select('account_id, role, account:accounts(status)')
+    .select('account_id, role, created_at, account:accounts(status)')
     .eq('user_id', identity.userId)
-    .maybeSingle();
+    .order('created_at', { ascending: true });
   if (error) throw fromDbError(error);
+  const asked = req.get('x-propittu-account');
+  const membership =
+    memberships?.find((m) => m.account_id === asked) ??
+    memberships?.find((m) => m.role === 'owner') ??
+    memberships?.[0];
   if (!membership) {
     throw new HttpError(403, 'FORBIDDEN', 'No Propittu account is linked to this login');
   }
+  const db = userClient(token, requestId || undefined, membership.account_id as string);
 
   req.auth = {
     ...identity,
@@ -122,4 +130,11 @@ export const requireAuth: RequestHandler = async (req, _res, next) => {
 export function auth(req: Request): AuthContext {
   if (!req.auth) throw new Error('requireAuth must run before this handler');
   return req.auth;
+}
+
+/** Only the account's owner (not invited family) may do this. */
+export function requireOwner(ctx: Pick<AuthContext, 'accountRole'>): void {
+  if (ctx.accountRole !== 'owner') {
+    throw new HttpError(403, 'FORBIDDEN', 'Only the owner of this account can do that');
+  }
 }

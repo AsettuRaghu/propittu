@@ -1,8 +1,10 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { Router } from 'express';
 import {
   deleteAccountSchema,
   updateProfileSchema,
   type AccountStatus,
+  type AccountRole,
   type Me,
   type StaffRole,
 } from '@propittu/shared';
@@ -61,6 +63,7 @@ meRouter.get('/me', async (req, res) => {
     staff_role: staffRow?.is_active ? staffRow.role : null,
     plan: planSummary(plan),
     features: { document_reading: documentReading },
+    ...(await accessFor(db, userId, accountId)),
   };
 
   ok(res, data);
@@ -136,3 +139,64 @@ meRouter.post('/me/delete', async (req, res) => {
   );
   res.status(204).end();
 });
+
+/** The accounts this person can switch between, and invitations waiting for them. */
+async function accessFor(
+  db: SupabaseClient,
+  userId: string,
+  current: string,
+): Promise<Pick<Me, 'accounts' | 'invites'>> {
+  const [memberships, invites] = await Promise.all([
+    db.from('account_members').select('account_id, role, created_at').eq('user_id', userId),
+    db.rpc('my_account_invites'),
+  ]);
+  const rows = (memberships.data ?? []) as {
+    account_id: string;
+    role: AccountRole;
+    created_at: string;
+  }[];
+  // Whose account each one is (the owner's first name), read with the server key.
+  const others = rows.filter((r) => r.role !== 'owner').map((r) => r.account_id);
+  const owners = new Map<string, string | null>();
+  if (others.length && serviceClient) {
+    const { data: own } = await serviceClient
+      .from('account_members')
+      .select('account_id, user_id')
+      .in('account_id', others)
+      .eq('role', 'owner');
+    const ids = ((own ?? []) as { user_id: string }[]).map((o) => o.user_id);
+    const { data: names } = ids.length
+      ? await serviceClient.from('profiles').select('id, full_name').in('id', ids)
+      : { data: [] };
+    const nameOf = new Map(
+      ((names ?? []) as { id: string; full_name: string | null }[]).map((p) => [p.id, p.full_name]),
+    );
+    for (const o of (own ?? []) as { account_id: string; user_id: string }[])
+      owners.set(o.account_id, nameOf.get(o.user_id) ?? null);
+  }
+  const first = (n: string | null | undefined) => n?.trim().split(/\s+/)[0] ?? null;
+  return {
+    accounts: rows.map((r) => ({
+      id: r.account_id,
+      label:
+        r.role === 'owner'
+          ? 'My properties'
+          : `${first(owners.get(r.account_id)) ?? 'Family'}’s properties`,
+      role: r.role,
+      current: r.account_id === current,
+    })),
+    invites: (
+      (invites.data ?? []) as {
+        id: string;
+        account_id: string;
+        invited_by_name: string | null;
+        created_at: string;
+      }[]
+    ).map((i) => ({
+      id: i.id,
+      account_id: i.account_id,
+      from: i.invited_by_name,
+      created_at: i.created_at,
+    })),
+  };
+}

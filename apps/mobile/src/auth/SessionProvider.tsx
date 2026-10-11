@@ -12,6 +12,7 @@ import {
 } from 'react';
 import { setSessionExpiredHandler } from '@/api/client';
 import { authStorage } from '@/lib/authStorage';
+import { loadCurrentAccount, setCurrentAccount } from '@/lib/currentAccount';
 import { forgetThisPhone } from '@/lib/push';
 import { AUTH_STORAGE_KEY, supabase } from '@/lib/supabase';
 
@@ -37,7 +38,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data }) => {
+    Promise.all([supabase.auth.getSession(), loadCurrentAccount()]).then(([{ data }]) => {
       if (!mounted) return;
       userIdRef.current = data.session?.user.id ?? null;
       setSession(data.session);
@@ -65,6 +66,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
    */
   const signOut = useCallback(async () => {
     await forgetThisPhone();
+    await setCurrentAccount(null);
     const { error } = await supabase.auth.signOut();
     if (error) {
       await authStorage.removeItem(AUTH_STORAGE_KEY);

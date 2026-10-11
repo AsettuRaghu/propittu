@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   isValidAnswer,
   reviewReasons,
+  successionPlan,
   type PittuAnswers,
   type PittuContext,
   type PittuState,
@@ -189,3 +190,40 @@ export async function refreshReview(
     logger.warn({ err, propertyId }, 'Pittu review refresh failed');
   }
 }
+
+/**
+ * GET /properties/:id/succession — "Ready for your family": what heirs
+ * would need for this property and what's in place (shared rules:
+ * successionPlan). People and nominees are counted with the server key.
+ */
+pittuRouter.get('/properties/:id/succession', async (req, res) => {
+  const ctx = auth(req);
+  const id = uuidParam(req.params.id, 'Property');
+  const state = await loadState(ctx, id);
+  const db = serviceClient;
+  const [members, nominees, prop] = await Promise.all([
+    db
+      ? db
+          .from('account_members')
+          .select('user_id', { count: 'exact', head: true })
+          .eq('account_id', ctx.accountId)
+          .eq('role', 'member')
+      : Promise.resolve({ count: 0 }),
+    db
+      ? db
+          .from('account_nominees')
+          .select('id', { count: 'exact', head: true })
+          .eq('account_id', ctx.accountId)
+      : Promise.resolve({ count: 0 }),
+    ctx.db.from('properties').select('loan_on_property').eq('id', id).maybeSingle(),
+  ]);
+  ok(
+    res,
+    successionPlan({
+      ctx: state.context,
+      family_members: members.count ?? 0,
+      nominees: nominees.count ?? 0,
+      loan_on_property: (prop.data?.loan_on_property as boolean | null) ?? null,
+    }),
+  );
+});

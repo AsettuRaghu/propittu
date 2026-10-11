@@ -1,6 +1,7 @@
 import type { ApiErrorCode, ApiFailure, ApiSuccess } from '@propittu/shared';
 import { env } from '@/lib/env';
 import { supabase } from '@/lib/supabase';
+import { currentAccount } from '@/lib/currentAccount';
 
 /** API error codes plus the two failures that never reach the server. */
 export type ClientErrorCode = ApiErrorCode | 'NETWORK' | 'TIMEOUT';
@@ -76,6 +77,8 @@ async function send(
         Accept: 'application/json',
         ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        // Which account (own or family's) this request is about.
+        ...(currentAccount() ? { 'x-propittu-account': currentAccount()! } : {}),
       },
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
     });

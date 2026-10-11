@@ -5,7 +5,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { withoutCodes, type DraftProperty } from '@propittu/shared';
+import { withoutCodes, type DraftProperty, type InviteForMe } from '@propittu/shared';
 import { useDraftProperties } from '@/api/ai';
 import { useNewReplies } from '@/api/support';
 import { ComingUp } from '@/components/ComingUp';
@@ -20,6 +20,7 @@ import { ErrorState, LimitedAccessState } from '@/components/States';
 import { Badge, Button, IconButton, ListGroup, ListRow } from '@/components/ui';
 import { greeting } from '@/lib/format';
 import { Bell } from '@/components/Bell';
+import { useAnswerInvite } from '@/api/family';
 import { accents, colors, font, gradients, radius, shadow, space, typography } from '@/theme';
 
 function greetingIcon(now = new Date()): IconName {
@@ -81,6 +82,19 @@ export default function HomeScreen() {
           />
         ) : null}
       </View>
+
+      {me.data?.invites.map((i) => (
+        <InviteBanner key={i.id} invite={i} />
+      ))}
+      {me.data && me.data.accounts.length > 1 && me.data.account.role === 'member' ? (
+        <ListRow
+          icon="users"
+          accent="sky"
+          title={me.data.accounts.find((a) => a.current)?.label ?? 'Family’s properties'}
+          subtitle="You’re seeing these as family · switch in Profile"
+          onPress={() => router.push('/profile')}
+        />
+      ) : null}
 
       {me.data && !limited ? <PlanBanner plan={me.data.plan} /> : null}
 
@@ -295,6 +309,13 @@ function Welcome() {
 }
 
 const styles = StyleSheet.create({
+  invite: {
+    gap: space.sm,
+    padding: space.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primarySoft,
+  },
+  inviteRow: { flexDirection: 'row', gap: space.sm },
   safe: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1, minWidth: 0 },
   pad: { paddingHorizontal: space.lg },
@@ -329,3 +350,29 @@ const styles = StyleSheet.create({
   heroTitle: { fontSize: font(26), fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5 },
   heroText: { fontSize: font(15), lineHeight: font(21), color: 'rgba(255,255,255,0.9)' },
 });
+
+/** Someone invited this person to see their properties. */
+function InviteBanner({ invite }: { invite: InviteForMe }) {
+  const answer = useAnswerInvite();
+  return (
+    <View style={styles.invite}>
+      <Text style={typography.bodyStrong}>
+        {`${invite.from ?? 'Someone'} invited you to see their properties on Propittu`}
+      </Text>
+      <View style={styles.inviteRow}>
+        <Button
+          title="Accept"
+          size="sm"
+          loading={answer.isPending}
+          onPress={() => answer.mutate({ id: invite.id, accept: true })}
+        />
+        <Button
+          title="Not now"
+          size="sm"
+          variant="ghost"
+          onPress={() => answer.mutate({ id: invite.id, accept: false })}
+        />
+      </View>
+    </View>
+  );
+}

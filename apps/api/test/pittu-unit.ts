@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import {
   carePlan,
   checkDocument,
+  successionPlan,
   comparePeople,
   type BuyerRelation,
   type NameLink,
@@ -480,4 +481,32 @@ test('Ask Pittu: answers are checked — no made-up service codes, no phone numb
   assert.deepEqual(a.sources, ['sale_deed', 'general_guidance']);
   assert.equal(a.service_code, null);
   assert.equal(a.follow_ups.length, 3);
+});
+
+test('ready for your family: what heirs need, and the state’s process', () => {
+  const plan = successionPlan({
+    ctx: { ...BLR_FLAT, documents: ['sale_deed', 'khata'], buyers: ['Ananya Rao', 'Karthik Rao'] },
+    family_members: 0,
+    nominees: 1,
+    loan_on_property: true,
+  });
+  assert.deepEqual(
+    plan.steps.map((s) => [s.key, s.done]),
+    [
+      ['nominee', true],
+      ['family', false],
+      ['will', false],
+      ['deed', true],
+      ['ec', false],
+      ['khata', true],
+      ['loan', false],
+      ['joint', false],
+    ],
+  );
+  assert.equal(plan.done, 3);
+  assert.deepEqual(plan.steps.find((s) => s.key === 'will')!.action, {
+    kind: 'service',
+    code: 'will_succession',
+  });
+  assert.match(plan.process, /GBA/);
 });

@@ -17,7 +17,11 @@ const serverAuthOptions = {
  *
  * Built per request; it holds no state beyond the token.
  */
-export function userClient(accessToken: string, requestId?: string): SupabaseClient {
+export function userClient(
+  accessToken: string,
+  requestId?: string,
+  accountId?: string,
+): SupabaseClient {
   return createClient(env.SUPABASE_URL, env.SUPABASE_PUBLISHABLE_KEY, {
     auth: serverAuthOptions,
     global: {
@@ -25,6 +29,8 @@ export function userClient(accessToken: string, requestId?: string): SupabaseCli
         Authorization: `Bearer ${accessToken}`,
         // The database stamps it on audit entries, so they join the API logs.
         ...(requestId ? { 'x-request-id': requestId } : {}),
+        // Which of the person's accounts this request acts on (current_account_id()).
+        ...(accountId ? { 'x-propittu-account': accountId } : {}),
       },
     },
   });

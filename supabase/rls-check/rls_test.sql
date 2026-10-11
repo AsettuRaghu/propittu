@@ -161,7 +161,7 @@ values ('acc0000a-0000-0000-0000-00000000000a', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaa
 select tst.rows('select * from public.properties', 1, 'A sees its account''s property');
 select tst.ok((select reference from public.service_requests limit 1) = 'PR-000123',
   'first service request reference is PR-000123');
-select tst.rows('select * from public.services', 18, 'A sees the 18 catalogue services');
+select tst.rows('select * from public.services', 19, 'A sees the 19 catalogue services');
 select tst.ok(
   (select document_count from public.property_summaries
    where id = 'a1a1a1a1-0000-0000-0000-000000000001') = 1,
@@ -1893,6 +1893,28 @@ select tst.rows('select * from public.push_tokens', 1, 'the owner registers thei
 select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
 select tst.rows('select * from public.notifications', 0, 'other customers never see it');
 select tst.rows('select * from public.push_tokens', 0, 'or anyone else''s phone');
+reset role;
+
+-- =====================================================================
+\echo
+\echo '== Family access: invites, members, nominees =='
+-- =====================================================================
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+insert into public.account_invites (account_id, phone, name, invited_by)
+values ('acc0000a-0000-0000-0000-00000000000a', '+919000000002', 'Family B', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+insert into public.account_nominees (account_id, name, created_by)
+values ('acc0000a-0000-0000-0000-00000000000a', 'A nominee', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rows('select * from public.account_invites', 1, 'the owner sees their invitation');
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.rows('select * from public.account_invites', 0, 'others never read the owner''s invitations');
+select tst.rows('select * from public.account_nominees', 0, 'or their nominees');
+select tst.rejects($$insert into public.account_invites (account_id, phone, name)
+                     values ('acc0000a-0000-0000-0000-00000000000a', '+919000000009', 'Sneaky')$$,
+  'nobody invites people into someone else''s account');
+select tst.rejects($$select public.answer_account_invite(
+                       (select id from public.account_invites limit 1), true)$$,
+  'an invitation can''t be accepted by the wrong person');
 reset role;
 
 \echo

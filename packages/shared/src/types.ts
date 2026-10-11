@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { AnalysisStatus, DeedGap } from './ai';
 import type { DocumentPittu } from './documents';
 import type { CompletionItem, PropertyCompletion } from './completion';
@@ -70,6 +71,66 @@ export interface Me {
     /** Pittu reads uploaded sale deeds (AI). */
     document_reading: boolean;
   };
+  /** Every account this person can see (their own, and family's), for the switcher. */
+  accounts: AccountChoice[];
+  /** Family invitations waiting for this person's phone number. */
+  invites: InviteForMe[];
+}
+
+export interface AccountChoice {
+  id: string;
+  /** "My properties", or "Amma’s properties" (the owner's name). */
+  label: string;
+  role: AccountRole;
+  current: boolean;
+}
+
+export interface InviteForMe {
+  id: string;
+  account_id: string;
+  /** Who invited them (the account owner's name). */
+  from: string | null;
+  created_at: string;
+}
+
+/* ---- Family and helpers ---- */
+
+export const familyInviteSchema = z.object({
+  name: z.string().trim().min(1, 'Their name').max(80),
+  phone: z.string().trim().min(8, 'Their mobile number').max(20),
+  relation: z.string().trim().max(40).nullable().optional(),
+});
+
+export const nomineeSchema = z.object({
+  name: z.string().trim().min(1, 'Their name').max(80),
+  relation: z.string().trim().max(40).nullable().optional(),
+  phone: z.string().trim().max(20).nullable().optional(),
+  note: z.string().trim().max(500).nullable().optional(),
+});
+
+/** GET /account/people (owner only). */
+export interface AccountPeople {
+  members: {
+    user_id: string;
+    name: string | null;
+    phone: string | null;
+    role: AccountRole;
+    since: string;
+  }[];
+  invites: {
+    id: string;
+    name: string;
+    phone: string;
+    relation: string | null;
+    created_at: string;
+  }[];
+  nominees: {
+    id: string;
+    name: string;
+    relation: string | null;
+    phone: string | null;
+    note: string | null;
+  }[];
 }
 
 /* ------------------------------------------------------------------ *

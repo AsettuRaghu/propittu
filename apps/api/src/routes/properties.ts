@@ -16,7 +16,7 @@ import {
   type ServiceRequestStatus,
   type ValueSource,
 } from '@propittu/shared';
-import { auth } from '../auth.js';
+import { auth, requireOwner } from '../auth.js';
 import { audit } from '../audit.js';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { invalid, must, notFound, ok, uuidParam } from '../errors.js';
@@ -552,7 +552,10 @@ const toNum = (v: unknown) => (v === null || v === undefined ? null : Number(v))
 
 /* DELETE /properties/:id */
 propertiesRouter.delete('/properties/:id', async (req, res) => {
-  const { db, accountId } = auth(req);
+  const ctx = auth(req);
+  // Family members can use the property; only the owner removes it.
+  requireOwner(ctx);
+  const { db, accountId } = ctx;
   const id = uuidParam(req.params.id, 'Property');
   await assertOwnsProperty(db, accountId, id);
   await removeProperty(db, accountId, id);

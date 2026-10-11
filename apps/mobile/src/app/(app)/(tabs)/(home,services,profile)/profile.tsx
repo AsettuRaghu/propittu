@@ -3,13 +3,15 @@ import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { formatIndianMobile, updateProfileSchema } from '@propittu/shared';
+import { formatIndianMobile, updateProfileSchema, type AccountChoice } from '@propittu/shared';
 import { useMe } from '@/api/queries';
 import { useNewReplies, useUpdateProfile } from '@/api/support';
 import { InlineEdit } from '@/components/InlineEdit';
 import { PullRefresh } from '@/components/PullRefresh';
 import { ErrorState, LoadingState } from '@/components/States';
 import { Badge, LinkButton, ListGroup, ListRow } from '@/components/ui';
+import { useSwitchAccount } from '@/api/family';
+import { dialog } from '@/components/Dialog';
 import { env } from '@/lib/env';
 import { planBadge } from '@/lib/plans';
 import { useLogout } from '@/lib/useLogout';
@@ -75,6 +77,18 @@ export default function ProfileScreen() {
               }
               onPress={() => router.push('/plan')}
             />
+            <ListRow
+              icon="users"
+              accent="sky"
+              title="Family & access"
+              subtitle={
+                me.account.role === 'owner'
+                  ? 'Family who can see your properties, and nominees'
+                  : 'You’re seeing these properties as family'
+              }
+              onPress={() => router.push('/family')}
+            />
+            {me.accounts.length > 1 ? <AccountSwitch accounts={me.accounts} /> : null}
             {/* The in-app Backoffice link is hidden for now (owner, 8 Oct 2026): the team
                 uses the web portal. The screens stay; decide before go-live whether to
                 bring the link back or remove the in-app Backoffice. */}
@@ -128,3 +142,25 @@ const styles = StyleSheet.create({
   footer: { alignItems: 'center', gap: space.md, marginTop: space.xl },
   logout: { alignSelf: 'stretch' },
 });
+
+/** More than one account (own + family's): which properties the app shows. */
+function AccountSwitch({ accounts }: { accounts: AccountChoice[] }) {
+  const switchTo = useSwitchAccount();
+  const current = accounts.find((a) => a.current);
+  return (
+    <ListRow
+      icon="home"
+      accent="teal"
+      title={`Showing: ${current?.label ?? 'My properties'}`}
+      subtitle="Switch to another family’s properties"
+      onPress={() =>
+        void dialog
+          .actions<string>({
+            title: 'Whose properties?',
+            actions: accounts.map((a) => ({ label: a.label, value: a.id, selected: a.current })),
+          })
+          .then((id) => (id && id !== current?.id ? switchTo(id) : undefined))
+      }
+    />
+  );
+}
