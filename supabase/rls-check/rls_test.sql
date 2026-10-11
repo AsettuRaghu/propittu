@@ -161,7 +161,7 @@ values ('acc0000a-0000-0000-0000-00000000000a', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaa
 select tst.rows('select * from public.properties', 1, 'A sees its account''s property');
 select tst.ok((select reference from public.service_requests limit 1) = 'PR-000123',
   'first service request reference is PR-000123');
-select tst.rows('select * from public.services', 17, 'A sees the 17 catalogue services');
+select tst.rows('select * from public.services', 18, 'A sees the 18 catalogue services');
 select tst.ok(
   (select document_count from public.property_summaries
    where id = 'a1a1a1a1-0000-0000-0000-000000000001') = 1,
@@ -1788,6 +1788,24 @@ select tst.rejects($$insert into public.value_estimates (property_id, account_id
   'owners cannot write estimates');
 select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
 select tst.rows('select * from public.value_estimates', 0, 'other customers never see it');
+reset role;
+
+-- =====================================================================
+\echo
+\echo '== Same person, different name: name links =='
+-- =====================================================================
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+insert into public.name_links (account_id, deed_name, other_name, reason, created_by)
+values ('acc0000a-0000-0000-0000-00000000000a', 'B.H. Deepthi', 'Deepthi Prashanth', 'married_name',
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rows('select * from public.name_links', 1, 'the owner saves and sees their name link');
+select tst.rejects($$insert into public.name_links (account_id, deed_name, other_name, reason, created_by)
+                     values ('acc0000b-0000-0000-0000-00000000000b', 'x', 'y', 'other',
+                             'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')$$,
+  'nobody saves a link into another account');
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.rows('select * from public.name_links', 0, 'other customers never see it');
 reset role;
 
 \echo

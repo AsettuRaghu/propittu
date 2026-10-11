@@ -52,6 +52,7 @@ const SERVICE_ICONS: Record<string, { icon: IconName; accent: Accent }> = {
   document_verification: { icon: 'document-check', accent: 'indigo' },
   khata_mutation_assistance: { icon: 'deed', accent: 'violet' },
   compliance_alert_assistance: { icon: 'bell', accent: 'coral' },
+  name_correction: { icon: 'user', accent: 'amber' },
   tenant_search: { icon: 'users', accent: 'sky' },
   rental_agreement: { icon: 'document', accent: 'indigo' },
   tenant_verification: { icon: 'verified', accent: 'teal' },

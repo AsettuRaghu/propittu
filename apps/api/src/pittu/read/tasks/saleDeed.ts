@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { TitleEvent, TitleEventKind } from '@propittu/shared';
+import type { BuyerRelation, TitleEvent, TitleEventKind } from '@propittu/shared';
 import { scrub } from '../../core/privacy.js';
 import {
   AiOutputError,
@@ -13,7 +13,9 @@ import {
  *
  * Version sale-deed-v2 is the exact instruction set + schema measured in the
  * trial (6 Oct 2026: 76/76 fields on 4 real deeds, ~$0.085 / deed); v3 adds
- * the deed's own account of the property's history (title_history). ANY change
+ * the deed's own account of the property's history (title_history); v4 keeps
+ * each buyer's relation clause (buyer_relations: W/o, S/o…) to recognise a
+ * married name on other records. ANY change
  * to SYSTEM, FIELDS or USER_TEXT must bump VERSION and be re-scored against
  * the test set first (docs/AI_DOCUMENT_INTELLIGENCE.md §8).
  *
@@ -21,7 +23,7 @@ import {
  * in code — not in the prompt — so they are deterministic and testable.
  */
 
-const VERSION = 'sale-deed-v3';
+const VERSION = 'sale-deed-v4';
 const MODEL = 'claude-sonnet-5-5';
 
 const str = (description: string) => ({
@@ -126,7 +128,14 @@ const NUMERIC: readonly SaleDeedField[] = [
 const SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['document_type', ...SALE_DEED_FIELDS, 'title_history', 'evidence', 'skipped_pages'],
+  required: [
+    'document_type',
+    ...SALE_DEED_FIELDS,
+    'title_history',
+    'buyer_relations',
+    'evidence',
+    'skipped_pages',
+  ],
   properties: {
     document_type: {
       type: 'string',
@@ -162,6 +171,24 @@ const SCHEMA = {
             description:
               'At most 15 words: what happened, e.g. "converted from agricultural to residential use". Else empty.',
           },
+        },
+      },
+    },
+    buyer_relations: {
+      type: 'array',
+      description:
+        'For each purchaser, the relation clause written with their name (W/o, S/o, D/o, H/o), e.g. Smt Deepthi W/o Prashanth Kumar. Empty list if none.',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['name', 'relation', 'relative'],
+        properties: {
+          name: { type: 'string', description: 'The purchaser, as in buyers.' },
+          relation: {
+            type: 'string',
+            enum: ['wife_of', 'husband_of', 'son_of', 'daughter_of', 'other'],
+          },
+          relative: { type: 'string', description: 'The relative named, without titles.' },
         },
       },
     },
@@ -239,6 +266,16 @@ const rawSchema = z.object({
     )
     .max(40)
     .default([]),
+  buyer_relations: z
+    .array(
+      z.object({
+        name: z.string().max(300),
+        relation: z.enum(['wife_of', 'husband_of', 'son_of', 'daughter_of', 'other']),
+        relative: z.string().max(300),
+      }),
+    )
+    .max(20)
+    .default([]),
   evidence: z
     .array(
       z.object({
@@ -264,6 +301,8 @@ export interface SaleDeedResult {
   fields: Record<SaleDeedField, SaleDeedFact>;
   /** The deed's own account of earlier owners, oldest first (sale-deed-v3+). */
   title_history: TitleEvent[];
+  /** Who each buyer is related to, as the deed says (sale-deed-v4+). */
+  buyer_relations: BuyerRelation[];
   skipped_pages: { page: number; reason: string }[];
   privacy_removed: number;
 }
@@ -339,6 +378,12 @@ function parse(raw: unknown): SaleDeedResult {
     document_type: a.document_type,
     fields: safe,
     title_history: scrub(history, report),
+    buyer_relations: scrub(
+      a.buyer_relations
+        .map((r) => ({ name: r.name.trim(), relation: r.relation, relative: r.relative.trim() }))
+        .filter((r) => r.name && r.relative),
+      report,
+    ),
     skipped_pages: a.skipped_pages,
     privacy_removed: report.removed,
   };
@@ -371,6 +416,7 @@ const FIXTURE = {
   area_value: '1200',
   buyers: ['Ananya Rao'],
   registration_date: '2005-08-17',
+  buyer_relations: [{ name: 'Ananya Rao', relation: 'wife_of', relative: 'Karthik Rao' }],
   title_history: [
     {
       date: '1998',

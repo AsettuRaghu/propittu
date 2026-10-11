@@ -142,6 +142,128 @@ export function matchBuyerName(accountName: string | null, buyers: string[]): Na
 }
 
 /* ------------------------------------------------------------------ *
+ * Is it the same person? (documents vs the deed; owner, 11 Oct 2026)
+ *
+ * Indian records spell the same person many ways: initials written out
+ * ("B.H. Deepthi" / "Bandi Hanumantha Deepthi"), transliteration (Lakshmi /
+ * Laxmi, Srinivas / Shrinivas, Venkata / Venkat), part of the name, and —
+ * very often in South India — a married name made from the husband's first
+ * name ("Deepthi Prashanth", W/o Prashanth). The owner can also confirm once
+ * that two names are the same person (a name link).
+ * ------------------------------------------------------------------ */
+
+export type PersonVerdict = 'same' | 'likely' | 'possible' | 'different';
+export type PersonReason =
+  | 'exact'
+  | 'spelling'
+  | 'initials'
+  | 'partial'
+  | 'married_name'
+  | 'father_name'
+  | 'confirmed'
+  | 'none';
+
+/** A buyer's relation clause on the deed ("W/o Prashanth Kumar"). */
+export interface BuyerRelation {
+  name: string;
+  relation: 'wife_of' | 'husband_of' | 'son_of' | 'daughter_of' | 'other';
+  relative: string;
+}
+
+/** The owner said these two names are (or aren't) the same person. */
+export interface NameLink {
+  deed_name: string;
+  other_name: string;
+  reason: 'married_name' | 'spelling' | 'initials' | 'other' | 'not_same';
+}
+
+/** A spoken-alike key: th/t, ee/i, w/v, x/ks, doubled letters, a final a. */
+function sound(t: string): string {
+  return t
+    .replace(/([bcdgkpst])h/g, '$1')
+    .replace(/ee|ii/g, 'i')
+    .replace(/oo|uu/g, 'u')
+    .replace(/aa/g, 'a')
+    .replace(/w/g, 'v')
+    .replace(/x/g, 'ks')
+    .replace(/z/g, 'j')
+    .replace(/y$/, 'i')
+    .replace(/(.)\1+/g, '$1')
+    .replace(/a$/, '');
+}
+const sameWord = (a: string, b: string) => a === b || sound(a) === sound(b) || close(a, b);
+const sameName = (a: string, b: string) => {
+  const x = tokens(a).join(' ');
+  const y = tokens(b).join(' ');
+  return !!x && x === y;
+};
+
+export function comparePeople(
+  docName: string,
+  deedName: string,
+  relations: BuyerRelation[] = [],
+  links: NameLink[] = [],
+): { verdict: PersonVerdict; reason: PersonReason } {
+  const link = links.find(
+    (l) => sameName(l.deed_name, deedName) && sameName(l.other_name, docName),
+  );
+  if (link) {
+    return link.reason === 'not_same'
+      ? { verdict: 'different', reason: 'confirmed' }
+      : { verdict: 'same', reason: 'confirmed' };
+  }
+  const a = tokens(docName);
+  const b = tokens(deedName);
+  const aw = a.filter((t) => t.length > 1);
+  const bw = b.filter((t) => t.length > 1);
+  if (!aw.length || !bw.length) return { verdict: 'different', reason: 'none' };
+  const aHit = aw.filter((t) => bw.some((u) => sameWord(t, u)));
+  const bHit = bw.filter((t) => aw.some((u) => sameWord(t, u)));
+  const aLeft = aw.filter((t) => !aHit.includes(t));
+  const bLeft = bw.filter((t) => !bHit.includes(t));
+  const initialsOf = (xs: string[]) => xs.filter((t) => t.length === 1);
+  const fits = (ini: string, words: string[], inis: string[]) =>
+    words.some((w) => w[0] === ini) || inis.includes(ini);
+  const initialsOk =
+    initialsOf(a).every((i) => fits(i, bw, initialsOf(b))) &&
+    initialsOf(b).every((i) => fits(i, aw, initialsOf(a)));
+  const exact = aw.every((t) => bw.includes(t)) && bw.every((t) => aw.includes(t));
+
+  if (!aLeft.length && !bLeft.length && initialsOk) {
+    return { verdict: 'same', reason: exact ? 'exact' : 'spelling' };
+  }
+  // Initials on one side written out as words on the other.
+  const expands = (left: string[], inis: string[]) => left.every((w) => inis.includes(w[0]!));
+  if (
+    aHit.length &&
+    ((!aLeft.length && expands(bLeft, initialsOf(a))) ||
+      (!bLeft.length && expands(aLeft, initialsOf(b))))
+  ) {
+    return { verdict: 'same', reason: 'initials' };
+  }
+  if (!aHit.length) return { verdict: 'different', reason: 'none' };
+  // The extra words are a relative's name (married name, father's name).
+  const rel = relations.find(
+    (r) =>
+      sameName(r.name, deedName) &&
+      aLeft.length > 0 &&
+      aLeft.every((w) => tokens(r.relative).some((u) => u.length > 1 && sameWord(w, u))),
+  );
+  if (rel) {
+    return {
+      verdict: 'possible',
+      reason: rel.relation === 'wife_of' ? 'married_name' : 'father_name',
+    };
+  }
+  if ((!aLeft.length || !bLeft.length) && aHit.length >= 2) {
+    return { verdict: 'likely', reason: 'partial' };
+  }
+  return aHit.some((t) => t.length >= 4)
+    ? { verdict: 'possible', reason: 'partial' }
+    : { verdict: 'different', reason: 'none' };
+}
+
+/* ------------------------------------------------------------------ *
  * The questions
  * ------------------------------------------------------------------ */
 

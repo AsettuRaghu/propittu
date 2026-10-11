@@ -11,6 +11,7 @@ import type {
   PropertyDetail,
   PropertyDocument,
   DocumentType,
+  NameLink,
   PropertySummary,
   PublicPlan,
   ServiceRequest,
@@ -181,6 +182,21 @@ export function useMoveDocument(propertyId: string) {
       void qc.invalidateQueries({ queryKey: keys.documents(propertyId) });
       void qc.invalidateQueries({ queryKey: keys.property(propertyId), exact: true });
     },
+  });
+}
+
+/**
+ * The owner confirms a name on a document is (or isn't) the deed's buyer;
+ * Pittu re-checks every document in the account with it.
+ */
+export function useSaveNameLink() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (link: NameLink) => api<NameLink>('/name-links', { method: 'POST', body: link }),
+    onSuccess: () =>
+      void qc.invalidateQueries({
+        predicate: (q) => q.queryKey[0] === 'properties' && q.queryKey[2] === 'documents',
+      }),
   });
 }
 

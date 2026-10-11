@@ -7,6 +7,8 @@ import {
   type DocumentPittu,
   type DocumentReading,
   type DocumentType,
+  type BuyerRelation,
+  type NameLink,
 } from '@propittu/shared';
 import { deedFactValues, factList, factText } from '../deeds/facts.js';
 import { logger } from '../logger.js';
@@ -33,16 +35,31 @@ const SQFT: Record<string, number> = {
 };
 
 async function deedSide(db: SupabaseClient, propertyId: string): Promise<DeedSide | null> {
-  const [{ values }, { data: p }] = await Promise.all([
+  const [{ values }, { data: p }, { data: deedRead }] = await Promise.all([
     deedFactValues(db, propertyId),
     db
       .from('properties')
-      .select('property_type, khata_number, area_value, area_unit')
+      .select('account_id, property_type, khata_number, area_value, area_unit')
       .eq('id', propertyId)
+      .maybeSingle(),
+    db
+      .from('document_analyses')
+      .select('result')
+      .eq('property_id', propertyId)
+      .eq('task', 'sale_deed.extract')
+      .eq('status', 'ready')
+      .order('finished_at', { ascending: false })
+      .limit(1)
       .maybeSingle(),
   ]);
   if (!p) return null;
+  const { data: links } = await db
+    .from('name_links')
+    .select('deed_name, other_name, reason')
+    .eq('account_id', p.account_id as string);
   const area = (p.area_value as number | null) ?? null;
+  const relations = (deedRead?.result as { buyer_relations?: BuyerRelation[] } | null)
+    ?.buyer_relations;
   return {
     buyers: factList(values.get('buyers')),
     sellers: factList(values.get('sellers')),
@@ -50,6 +67,8 @@ async function deedSide(db: SupabaseClient, propertyId: string): Promise<DeedSid
     khata_number: (p.khata_number as string | null) ?? factText(values.get('khata_number')),
     area_sqft: area ? area * (SQFT[(p.area_unit as string) ?? 'sqft'] ?? 1) : null,
     property_type: p.property_type as string,
+    relations: Array.isArray(relations) ? relations : [],
+    links: (links ?? []) as NameLink[],
   };
 }
 

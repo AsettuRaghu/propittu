@@ -34,6 +34,8 @@ docs/DECISIONS.md; Pittu's design in docs/PITTU.md.
   adding from a deed, questions that follow the deed (flat / plot, renting, OC, Bengaluru e-Khata),
   the land's story from the deed (sale-deed-v3), Pittu's market range (web search, rules decide),
   Watch news published by Pittu when confident, and four rental services (on quote).
+- Same person, different name (11 Oct): spelling / initials / partial / married-name matching,
+  "Same person?" asked once and remembered, Name Correction service; sale-deed-v4 keeps W/o, S/o.
 - Pittu reads every document you upload (11 Oct, doc-read-v2): Khata, tax receipt, land record,
   rental agreement, OC, plans, loan closure, bills — checks each against the deed and acts (tax
   paid, Khata answered, rental end date as a reminder, differences to the team, one-tap move when

@@ -133,6 +133,7 @@ export default function DocumentsScreen() {
                 {item.pittu ? (
                   <DocumentPittuLine
                     pittu={item.pittu}
+                    propertyId={id}
                     onMove={(type) =>
                       moveDocument.mutate(
                         { id: item.id, type },

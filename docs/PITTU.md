@@ -62,6 +62,16 @@ New capabilities get their own folder (`watch/`, `value/`, `legal/`) on the same
      (`apps/api/src/value/range.ts`), otherwise just the government value;
    - Legal findings that suggest a problem (amber / red) still go to the team first.
 
+## Same person, different name
+
+Records spell one person many ways. `comparePeople()` (packages/shared/src/pittu.ts) grades a name on
+a document against the deed's buyers: **same** (spelling variants such as Lakshmi / Laxmi, initials
+written out), **likely** (part of the name), **possible** (a married name made from the husband's
+first name, using the deed's "W/o" clause — sale-deed-v4 keeps buyer relations; or one shared word),
+**different**. Possible / likely ones ask the owner once ("Same person?"); the answer is a name link
+for the whole account. Same person but different names on the records → the Name Correction
+service is offered.
+
 ## The journey after adding from a deed
 
 Reading → check the details → **"Here's what I found"** (what and where it is, who it was bought

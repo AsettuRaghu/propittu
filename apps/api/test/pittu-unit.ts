@@ -4,6 +4,9 @@ import { test } from 'node:test';
 import {
   carePlan,
   checkDocument,
+  comparePeople,
+  type BuyerRelation,
+  type NameLink,
   taxCoversThisYear,
   type DeedSide,
   type DocumentReading,
@@ -395,4 +398,71 @@ test('something that isn’t a property document says so, and can be moved to Ot
   assert.deepEqual(findings, [
     { level: 'note', text: 'This doesn’t look like a tax receipt', move_to: 'other' },
   ]);
+});
+
+/* ---- Same person, different name ---- */
+
+test('same person: spelling, initials written out, partial and married names', () => {
+  const v = (a: string, b: string, rel: BuyerRelation[] = [], links: NameLink[] = []) =>
+    comparePeople(a, b, rel, links);
+  assert.deepEqual(v('Laxmi Narayana', 'Lakshmi Narayan'), { verdict: 'same', reason: 'spelling' });
+  assert.deepEqual(v('Shrinivas Rao', 'Srinivasa Rao'), { verdict: 'same', reason: 'spelling' });
+  assert.deepEqual(v('Bandi Hanumantha Deepthi', 'B.H. Deepthi'), {
+    verdict: 'same',
+    reason: 'initials',
+  });
+  assert.deepEqual(v('Raghavendra Verma', 'Raghavendra Verma Venkata Kalidindi'), {
+    verdict: 'likely',
+    reason: 'partial',
+  });
+  const wife: BuyerRelation[] = [
+    { name: 'B.H. Deepthi', relation: 'wife_of', relative: 'Prashanth Kumar' },
+  ];
+  assert.deepEqual(v('Deepthi Prashanth', 'B.H. Deepthi', wife), {
+    verdict: 'possible',
+    reason: 'married_name',
+  });
+  assert.deepEqual(v('Deepthi Reddy', 'B.H. Deepthi'), { verdict: 'possible', reason: 'partial' });
+  assert.deepEqual(v('Ravi Kumar', 'Ananya Rao'), { verdict: 'different', reason: 'none' });
+  const link: NameLink = {
+    deed_name: 'B.H. Deepthi',
+    other_name: 'Deepthi Reddy',
+    reason: 'married_name',
+  };
+  assert.deepEqual(v('Smt. Deepthi Reddy', 'B.H. Deepthi', [], [link]), {
+    verdict: 'same',
+    reason: 'confirmed',
+  });
+  assert.deepEqual(
+    v('Deepthi Reddy', 'B.H. Deepthi', [], [{ ...link, reason: 'not_same' }]).verdict,
+    'different',
+  );
+});
+
+test('documents: a married name is asked about once, then remembered', () => {
+  const deed: DeedSide = {
+    ...DEED,
+    buyers: ['B.H. Deepthi'],
+    relations: [{ name: 'B.H. Deepthi', relation: 'wife_of', relative: 'Prashanth Kumar' }],
+  };
+  const khata = reading({ owner_names: ['Deepthi Prashanth'], khata_number: '1452' });
+  const ask = checkDocument('khata', khata, deed, NOW).findings[0]!;
+  assert.match(ask.text, /married name/);
+  assert.deepEqual(ask.confirm_name, {
+    deed_name: 'B.H. Deepthi',
+    other_name: 'Deepthi Prashanth',
+  });
+  const after = checkDocument(
+    'khata',
+    khata,
+    {
+      ...deed,
+      links: [
+        { deed_name: 'B.H. Deepthi', other_name: 'Deepthi Prashanth', reason: 'married_name' },
+      ],
+    },
+    NOW,
+  ).findings;
+  assert.equal(after[0]!.level, 'ok');
+  assert.equal(after[1]!.service, 'name_correction', 'records still differ → offer to fix');
 });

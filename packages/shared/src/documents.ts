@@ -1,9 +1,12 @@
 import { DOCUMENT_TYPE_LABELS, type DocumentType } from './constants';
 import {
+  comparePeople,
   fromBuilder,
   inBengaluruCity,
-  matchBuyerName,
-  type NameMatch,
+  type BuyerRelation,
+  type NameLink,
+  type PersonReason,
+  type PersonVerdict,
   type PittuAnswers,
   type PittuContext,
 } from './pittu';
@@ -252,6 +255,10 @@ export interface DeedSide {
   khata_number: string | null;
   area_sqft: number | null;
   property_type: string;
+  /** Buyers' relation clauses from the deed (W/o, S/o…), for married names. */
+  relations?: BuyerRelation[];
+  /** Names the owner confirmed are (or aren't) the same person. */
+  links?: NameLink[];
 }
 
 export interface DocumentFinding {
@@ -259,6 +266,10 @@ export interface DocumentFinding {
   text: string;
   /** Filed under the wrong type: where it belongs (the app offers a one-tap move). */
   move_to?: DocumentType;
+  /** Not sure it's the same person: the owner is asked once ("Same person?"). */
+  confirm_name?: { deed_name: string; other_name: string };
+  /** A service that fixes it (catalogue code), offered next to the finding. */
+  service?: string;
 }
 
 /** Pittu's line on one document (GET /properties/:id/documents). */
@@ -389,27 +400,65 @@ export function checkDocument(
   }
 
   if (deed && r.owner_names.length && deed.buyers.length) {
-    const owners = r.owner_names.join(', ');
-    const best = r.owner_names
-      .map((o) => matchBuyerName(o, deed.buyers))
-      .reduce<NameMatch>(
-        (b, m) => (m === 'match' || b === 'match' ? 'match' : m === 'likely' ? 'likely' : b),
-        'no_match',
+    // The best match of any name on the document with any buyer on the deed.
+    const rank: Record<PersonVerdict, number> = { same: 3, likely: 2, possible: 1, different: 0 };
+    let best = {
+      verdict: 'different' as PersonVerdict,
+      reason: 'none' as PersonReason,
+      other: r.owner_names[0]!,
+      deed: deed.buyers[0]!,
+    };
+    for (const o of r.owner_names) {
+      for (const b of deed.buyers) {
+        const c = comparePeople(o, b, deed.relations, deed.links);
+        if (rank[c.verdict] > rank[best.verdict]) best = { ...c, other: o, deed: b };
+      }
+    }
+    const seller = r.owner_names.some((o) =>
+      deed.sellers.some((x) => comparePeople(o, x).verdict === 'same'),
+    );
+    const fix = { service: 'name_correction' };
+    if (best.verdict === 'same') {
+      findings.push(
+        best.reason === 'exact'
+          ? { level: 'ok', text: 'In the owner’s name, as on the deed' }
+          : {
+              level: 'ok',
+              text: `In the owner’s name — written “${best.other}” here, “${best.deed}” on the deed`,
+            },
       );
-    const seller = r.owner_names.some((o) => matchBuyerName(o, deed.sellers) === 'match');
-    if (best === 'match') {
-      findings.push({ level: 'ok', text: `In the owner’s name, as on the deed` });
+      if (best.reason === 'confirmed' || best.reason === 'initials') {
+        // Same person, but the records disagree: it can hold up a sale or loan.
+        findings.push({
+          level: 'note',
+          text: 'The records show the name differently — worth making them match before a sale or loan',
+          ...fix,
+        });
+      }
     } else if (seller) {
       findings.push({
         level: 'differs',
-        text: `Still in the previous owner’s name (${owners}) — the transfer may not be done`,
+        text: `Still in the previous owner’s name (${r.owner_names.join(', ')}) — the transfer may not be done`,
+        service: 'khata_mutation_assistance',
       });
-    } else if (best === 'likely') {
-      findings.push({ level: 'note', text: `Owner name is close to the deed’s: ${owners}` });
+    } else if (best.verdict === 'likely' || best.verdict === 'possible') {
+      findings.push({
+        level: 'note',
+        text:
+          best.reason === 'married_name'
+            ? `“${best.other}” here, “${best.deed}” on the deed — the same person under her married name?`
+            : best.reason === 'father_name'
+              ? `“${best.other}” here, “${best.deed}” on the deed — the same person with the family name?`
+              : `“${best.other}” here, “${best.deed}” on the deed — the same person?`,
+        confirm_name: { deed_name: best.deed, other_name: best.other },
+      });
     } else {
       findings.push({
         level: 'differs',
-        text: `Owner here: ${owners}; on the deed: ${deed.buyers.join(', ')}`,
+        text: `Owner here: ${r.owner_names.join(', ')}; on the deed: ${deed.buyers.join(', ')}`,
+        ...(best.reason === 'confirmed'
+          ? {}
+          : { confirm_name: { deed_name: best.deed, other_name: best.other } }),
       });
     }
   }
