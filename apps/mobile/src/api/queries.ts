@@ -70,6 +70,7 @@ export const useProperty = (id: string) =>
   useQuery({
     queryKey: keys.property(id),
     queryFn: () => api<PropertyDetail>(`/properties/${id}`),
+    enabled: !!id,
   });
 
 export const useDocuments = (propertyId: string) =>

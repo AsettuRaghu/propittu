@@ -55,6 +55,7 @@ const SCREENS: { name: string; options: Record<string, unknown> }[] = [
   { name: 'account-delete', options: { title: 'Delete account' } },
   { name: 'receipts/[id]', options: { title: 'Receipt' } },
   { name: 'notifications', options: { title: 'Notifications' } },
+  { name: 'ask', options: { title: 'Ask Pittu' } },
   { name: 'support/index', options: { title: 'Help & Support' } },
   { name: 'support/new', options: { title: 'Raise a ticket' } },
   { name: 'support/[id]', options: { title: 'Support ticket' } },

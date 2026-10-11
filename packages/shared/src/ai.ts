@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { DocumentType } from './constants';
 
 /**
@@ -587,3 +588,23 @@ export interface TitleEvent {
   document_number: string | null;
   note: string | null;
 }
+
+/* ---- Ask Pittu ---- */
+
+export interface AskMessage {
+  id: string;
+  role: 'owner' | 'pittu';
+  text: string;
+  meta: {
+    sources?: string[];
+    service_code?: string | null;
+    needs_team?: boolean;
+    follow_ups?: string[];
+  };
+  created_at: string;
+}
+
+export const askSchema = z.object({
+  property_id: z.guid().nullable().optional(),
+  question: z.string().trim().min(2, 'Ask Pittu something').max(1000),
+});

@@ -86,6 +86,16 @@ export default function HomeScreen() {
 
       <NewReplies />
 
+      {hasProperties && me.data?.features.document_reading ? (
+        <ListRow
+          icon="sparkles"
+          accent="violet"
+          title="Ask Pittu"
+          subtitle="Anything about your properties — answered from your locker"
+          onPress={() => router.push('/ask')}
+        />
+      ) : null}
+
       {hasProperties ? <ComingUp /> : null}
 
       {unfinished.length > 0 ? (

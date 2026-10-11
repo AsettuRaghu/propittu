@@ -20,6 +20,7 @@ import {
   type PropertyReach,
   type PittuContext,
 } from '@propittu/shared';
+import { askTask } from '../src/pittu/ask/tasks/answer.js';
 
 const KA_PLOT: PittuContext = {
   state: 'Karnataka',
@@ -465,4 +466,18 @@ test('documents: a married name is asked about once, then remembered', () => {
   ).findings;
   assert.equal(after[0]!.level, 'ok');
   assert.equal(after[1]!.service, 'name_correction', 'records still differ → offer to fix');
+});
+
+test('Ask Pittu: answers are checked — no made-up service codes, no phone numbers', () => {
+  const a = askTask.parse({
+    answer: 'Call 9876543210 for help. Your Khata is 1452.',
+    sources: ['sale_deed', 'sale_deed', 'general_guidance'],
+    service_code: 'Khata Help!!',
+    needs_team: false,
+    follow_ups: ['a', 'b', 'c', 'd'],
+  });
+  assert.doesNotMatch(a.answer, /9876543210/);
+  assert.deepEqual(a.sources, ['sale_deed', 'general_guidance']);
+  assert.equal(a.service_code, null);
+  assert.equal(a.follow_ups.length, 3);
 });

@@ -33,6 +33,7 @@ export default function NewTicketScreen() {
   const params = useLocalSearchParams<{
     category?: string;
     subject?: string;
+    description?: string;
     requestId?: string;
     propertyId?: string;
   }>();
@@ -47,7 +48,7 @@ export default function NewTicketScreen() {
       ? (params.category as TicketCategory)
       : null,
   );
-  const [description, setDescription] = useState('');
+  const [description, setDescription] = useState(params.description ?? '');
   const [propertyId, setPropertyId] = useState<string | null>(params.propertyId ?? null);
   const [requestId, setRequestId] = useState<string | null>(params.requestId ?? null);
   const [errors, setErrors] = useState<Record<string, string>>({});

@@ -15,6 +15,7 @@ import { watchCustomerRouter } from './routes/watch.js';
 import { valueCustomerRouter } from './routes/value.js';
 import { nameLinksRouter } from './routes/nameLinks.js';
 import { notificationsRouter } from './routes/notifications.js';
+import { askRouter } from './routes/ask.js';
 import { backofficeRouter } from './routes/backoffice.js';
 import { billingReturnRouter, billingRouter } from './routes/billing.js';
 import { webhooksRouter } from './routes/webhooks.js';
@@ -126,6 +127,7 @@ export function createApp(): express.Express {
   app.use(valueCustomerRouter);
   app.use(nameLinksRouter);
   app.use(notificationsRouter);
+  app.use(askRouter);
   app.use(servicesRouter);
   app.use(weatherRouter);
 

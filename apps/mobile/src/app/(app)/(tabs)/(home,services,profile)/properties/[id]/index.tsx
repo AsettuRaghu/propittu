@@ -15,7 +15,7 @@ import {
   type PropertyValue,
 } from '@propittu/shared';
 import { useDisputes, useLegalChecks, usePittu, usePropertyNews, usePropertyValue } from '@/api/ai';
-import { useProperty, useServiceRequests, useServices } from '@/api/queries';
+import { useMe, useProperty, useServiceRequests, useServices } from '@/api/queries';
 import { DocumentSlots } from '@/components/DocumentSlots';
 import type { IconName } from '@/components/Icon';
 import { PhotoSection, type PhotoSectionHandle } from '@/components/PhotoSection';
@@ -287,13 +287,24 @@ function PittuSection({ property, withSetup }: { property: PropertyDetail; withS
   const value = usePropertyValue(property.id).data;
   const check = useLegalChecks(property.id).data?.[0];
   const disputes = useDisputes(property.id).data;
+  const me = useMe();
   const seen = useNewsSeen();
   const unread = !!property.deed_reading && property.deed_reading.status !== 'ready';
   const setup = withSetup && (!!pittu.data || unread);
   const worth = value?.government_value_inr ?? null;
   const est = value?.estimate?.status === 'ready' ? value.estimate : null;
   const history = pittu.data?.story?.history ?? [];
-  if (!setup && !news.length && worth === null && !est && !check && !disputes && history.length < 2)
+  const canAsk = !!me.data?.features.document_reading;
+  if (
+    !canAsk &&
+    !setup &&
+    !news.length &&
+    worth === null &&
+    !est &&
+    !check &&
+    !disputes &&
+    history.length < 2
+  )
     return null;
   const open = (page: 'news' | 'value' | 'legal' | 'history') =>
     router.push(`/properties/${property.id}/${page}`);
@@ -303,6 +314,15 @@ function PittuSection({ property, withSetup }: { property: PropertyDetail; withS
   );
   return (
     <ListGroup title="From Pittu" plain>
+      {canAsk ? (
+        <ListRow
+          icon="sparkles"
+          accent="violet"
+          title="Ask Pittu about this property"
+          subtitle="Tax, Khata, documents, its value, what to do next"
+          onPress={() => router.push({ pathname: '/ask', params: { propertyId: property.id } })}
+        />
+      ) : null}
       {setup ? <DeedReadRow property={property} /> : null}
       {setup ? <PittuRow propertyId={property.id} /> : null}
       {news.length ? (

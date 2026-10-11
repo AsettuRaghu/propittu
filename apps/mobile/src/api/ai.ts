@@ -9,6 +9,7 @@ import type {
   LegalCheck,
   PittuState,
   PropertyDisputes,
+  AskMessage,
   KnownSale,
   KnownSaleInput,
   DisputeReport,
@@ -215,5 +216,33 @@ export function useAddKnownSale(propertyId: string) {
     mutationFn: (input: KnownSaleInput) =>
       api<KnownSale>(`/properties/${propertyId}/known-sales`, { method: 'POST', body: input }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['properties', propertyId, 'value'] }),
+  });
+}
+
+/* ---- Ask Pittu ---- */
+
+const askKey = (propertyId: string | null) => ['ask', propertyId ?? 'all'] as const;
+
+/** The conversation with Pittu about a property (or all of them). */
+export const useAskThread = (propertyId: string | null) =>
+  useQuery({
+    queryKey: askKey(propertyId),
+    queryFn: () => api<AskMessage[]>(`/ask${propertyId ? `?property_id=${propertyId}` : ''}`),
+  });
+
+export function useAsk(propertyId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (question: string) =>
+      api<{ question: AskMessage; answer: AskMessage }>('/ask', {
+        method: 'POST',
+        body: { property_id: propertyId, question },
+      }),
+    onSuccess: ({ question, answer }) =>
+      qc.setQueryData<AskMessage[]>(askKey(propertyId), (old) => [
+        ...(old ?? []),
+        question,
+        answer,
+      ]),
   });
 }
