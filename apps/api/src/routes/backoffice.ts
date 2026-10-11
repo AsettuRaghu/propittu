@@ -1433,6 +1433,7 @@ backofficeRouter.post('/tickets/:id/messages', allow('support.manage'), async (r
     type: 'support_ticket',
     id,
   });
+  notify({ type: 'support_ticket.staff_replied', ticketId: id });
   ok(res, await loadTicketDetail(ctx.db, id), 201);
 });
 

@@ -25,6 +25,7 @@ import {
   reviewFinding,
   updateCheck,
 } from '../legal/checks.js';
+import { notify } from '../notify.js';
 
 /** Pittu Legal in the Backoffice portal: EC checks and their review. Staff only (mounted in backofficeRouter). */
 export const legalChecksRouter = Router();
@@ -158,6 +159,7 @@ legalChecksRouter.patch('/disputes/:propertyId', canReview, async (req, res) => 
     },
     'staff',
   );
+  if (input.share && kept) notify({ type: 'legal.disputes_shared', propertyId });
   ok(res, { status: update.status ?? null, kept });
 });
 
@@ -211,6 +213,8 @@ legalChecksRouter.patch('/dispute-reports/:id', canReview, async (req, res) => {
     .parse(req.body);
   must(await ctx.db.from('dispute_reports').update(input).eq('id', id));
   await audit(ctx, 'legal.dispute_report_updated', { type: 'dispute_report', id }, input, 'staff');
+  if (input.status === 'not_found' || input.staff_note)
+    notify({ type: 'legal.dispute_report_replied', reportId: id });
   ok(res, { id, ...input });
 });
 
@@ -252,6 +256,7 @@ legalChecksRouter.post('/project-disputes', canReview, async (req, res) => {
     );
   }
   const reach = (await propertiesByProject(ctx.db)).get(key) ?? 0;
+  notify({ type: 'legal.project_dispute', projectDisputeId: row.id });
   await audit(
     ctx,
     'legal.project_dispute_created',

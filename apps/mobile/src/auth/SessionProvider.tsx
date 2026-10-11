@@ -12,6 +12,7 @@ import {
 } from 'react';
 import { setSessionExpiredHandler } from '@/api/client';
 import { authStorage } from '@/lib/authStorage';
+import { forgetThisPhone } from '@/lib/push';
 import { AUTH_STORAGE_KEY, supabase } from '@/lib/supabase';
 
 interface SessionContextValue {
@@ -63,6 +64,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
    * user unable to log out.
    */
   const signOut = useCallback(async () => {
+    await forgetThisPhone();
     const { error } = await supabase.auth.signOut();
     if (error) {
       await authStorage.removeItem(AUTH_STORAGE_KEY);

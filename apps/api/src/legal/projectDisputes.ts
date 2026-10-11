@@ -76,4 +76,27 @@ export async function propertiesByProject(db: SupabaseClient): Promise<Map<strin
   return new Map([...seen].map(([k, ids]) => [k, ids.size]));
 }
 
+/** Every Propittu property (and its account) whose deed names this project. */
+export async function propertiesInProject(
+  db: SupabaseClient,
+  key: string,
+): Promise<{ property_id: string; account_id: string }[]> {
+  const facts = must<
+    { property_id: string; account_id: string; value: unknown; final_value: unknown }[]
+  >(
+    await db
+      .from('property_facts')
+      .select('property_id, account_id, value, final_value')
+      .eq('key', 'project_name')
+      .neq('status', 'rejected')
+      .limit(20_000),
+  );
+  const out = new Map<string, string>();
+  for (const f of facts) {
+    const name = (f.final_value ?? f.value) as unknown;
+    if (typeof name === 'string' && projectKey(name) === key) out.set(f.property_id, f.account_id);
+  }
+  return [...out].map(([property_id, account_id]) => ({ property_id, account_id }));
+}
+
 export { PROJECT_COLUMNS };

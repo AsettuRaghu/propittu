@@ -19,6 +19,7 @@ import { PullRefresh } from '@/components/PullRefresh';
 import { ErrorState, LimitedAccessState } from '@/components/States';
 import { Badge, Button, IconButton, ListGroup, ListRow } from '@/components/ui';
 import { greeting } from '@/lib/format';
+import { Bell } from '@/components/Bell';
 import { accents, colors, font, gradients, radius, shadow, space, typography } from '@/theme';
 
 function greetingIcon(now = new Date()): IconName {
@@ -69,6 +70,7 @@ export default function HomeScreen() {
             {firstName ? `${greeting()}, ${firstName}` : greeting()}
           </Text>
         </View>
+        <Bell />
         {!limited && hasProperties ? (
           <IconButton
             icon="add"

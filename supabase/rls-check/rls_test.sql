@@ -1873,5 +1873,27 @@ select tst.rejects($$insert into public.known_sales (account_id, property_id, pr
   'nobody adds a sale to a property that isn''t theirs');
 reset role;
 
+-- =====================================================================
+\echo
+\echo '== Notifications and push tokens =='
+-- =====================================================================
+reset role;
+insert into public.notifications (account_id, kind, title, url)
+values ('acc0000a-0000-0000-0000-00000000000a', 'support_ticket.staff_replied', 'Our team replied', '/support/x');
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rows('select * from public.notifications', 1, 'the owner sees their notification');
+select tst.rows($$update public.notifications set read_at = now()$$, 1, 'and can mark it read');
+select tst.rejects($$insert into public.notifications (account_id, kind, title)
+                     values ('acc0000a-0000-0000-0000-00000000000a', 'fake.kind', 'Spoofed')$$,
+  'only the server creates notifications');
+insert into public.push_tokens (user_id, account_id, token, platform)
+values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'acc0000a-0000-0000-0000-00000000000a', 'ExponentPushToken[test-a]', 'ios');
+select tst.rows('select * from public.push_tokens', 1, 'the owner registers their phone');
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.rows('select * from public.notifications', 0, 'other customers never see it');
+select tst.rows('select * from public.push_tokens', 0, 'or anyone else''s phone');
+reset role;
+
 \echo
 \echo 'ALL RLS CHECKS PASSED'

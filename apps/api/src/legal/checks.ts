@@ -3,6 +3,7 @@ import { overallLevel, type EcReading, type LegalCheck, type LegalFinding } from
 import { HttpError, must, notFound } from '../errors.js';
 import { deedFactValues, factList, factText } from '../deeds/facts.js';
 import { checkEc, RULES_VERSION, type DeedFacts } from './ecRules.js';
+import { notify } from '../notify.js';
 
 /**
  * Pittu Legal EC checks — the application layer. Takes Pittu Read's EC
@@ -204,4 +205,5 @@ export async function updateCheck(
       })
       .eq('id', id),
   );
+  if (input.status === 'shared') notify({ type: 'legal.check_shared', checkId: id });
 }

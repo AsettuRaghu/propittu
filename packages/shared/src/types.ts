@@ -335,3 +335,20 @@ export interface ServiceRequest {
   /** Null when the property was deleted after the request was made. */
   property: Pick<Property, 'id' | 'name' | 'city'> | null;
 }
+
+/** GET /notifications — the owner's inbox (the bell on Home). */
+export interface AppNotification {
+  id: string;
+  kind: string;
+  title: string;
+  body: string | null;
+  /** Where tapping it goes in the app. */
+  url: string | null;
+  created_at: string;
+  read_at: string | null;
+}
+
+export interface NotificationInbox {
+  items: AppNotification[];
+  unread: number;
+}

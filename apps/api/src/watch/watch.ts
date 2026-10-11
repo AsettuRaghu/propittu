@@ -5,6 +5,7 @@ import { runTask } from '../pittu/core/run.js';
 import { newsPrompt, newsTask } from '../pittu/watch/tasks/news.js';
 import { searchNews, type Headline } from './gdelt.js';
 import { feedsFor, fetchFeed, localNewsUrl, mentions, spellings, type FeedItem } from './rss.js';
+import { notify } from '../notify.js';
 
 /**
  * Pittu Watch — the application layer (docs/PITTU.md): collect headlines per
@@ -171,7 +172,16 @@ export async function runWatch(
   for (const place of (data ?? []) as Place[]) {
     try {
       collected += await collectPlace(db, place, feeds);
+      const since = new Date().toISOString();
       read += await readPlace(db, place);
+      // News Pittu published in this run: tell the owners there (once per place per run).
+      const { count } = await db
+        .from('watch_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('place_id', place.id)
+        .eq('auto_approved', true)
+        .gte('reviewed_at', since);
+      if (count) notify({ type: 'watch.news', placeId: place.id, count });
     } catch (err) {
       logger.warn({ err: String(err), place: place.id }, 'watch: collecting failed');
     }

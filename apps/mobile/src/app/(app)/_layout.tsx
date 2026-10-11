@@ -1,4 +1,5 @@
 import { Stack } from 'expo-router';
+import { useNotifications } from '@/lib/push';
 import { colors } from '@/theme';
 
 /**
@@ -7,6 +8,8 @@ import { colors } from '@/theme';
  * is visible on every screen.
  */
 export default function AppLayout() {
+  // Push registration, notification taps, pop-ups for new inbox items.
+  useNotifications();
   return (
     <Stack
       screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}

@@ -13,6 +13,7 @@ import {
 import { deedFactValues, factList, factText } from '../deeds/facts.js';
 import { auditPittu } from '../audit.js';
 import { logger } from '../logger.js';
+import { notify } from '../notify.js';
 
 /**
  * What Pittu's reading of a short document means (application layer).
@@ -207,6 +208,24 @@ export async function actOnReading(
         ...from,
       });
     }
+    // Tell the owner what Pittu read (and anything to look at).
+    const { data: doc } = await db
+      .from('property_documents')
+      .select('document_type')
+      .eq('id', job.document_id)
+      .maybeSingle();
+    const shown = checkDocument(
+      (doc?.document_type as DocumentType) ?? (reading.document_kind as DocumentType),
+      reading,
+      deed,
+    );
+    const differs = shown.findings.find((f) => f.level === 'differs');
+    notify({
+      type: 'document.read_by_pittu',
+      documentId: job.document_id,
+      line: (differs?.text ?? shown.summary ?? 'See what it says').slice(0, 300),
+      differs: !!differs,
+    });
   } catch (err) {
     logger.warn({ err: String(err), documentId: job.document_id }, 'acting on a reading failed');
   }
