@@ -51,3 +51,15 @@ export function rupeesShort(n: number): string {
   if (n >= 1e5) return `₹${(n / 1e5).toFixed(1).replace(/\.0$/, '')} lakh`;
   return rupees(n);
 }
+
+/** "2.7 Cr", "270 lakh", "₹2,70,00,000" → 27000000; anything else → null. */
+export function parseRupees(text: string): number | null {
+  const t = text.toLowerCase().replace(/[₹,\s]/g, '');
+  const m = t.match(/^(\d+(?:\.\d+)?)(cr|crore|crores|l|lakh|lakhs|lac|k)?$/);
+  if (!m) return null;
+  const n = Number(m[1]);
+  const unit = m[2] ?? '';
+  const mult = unit.startsWith('c') ? 1e7 : unit.startsWith('l') ? 1e5 : unit === 'k' ? 1e3 : 1;
+  const v = Math.round(n * mult);
+  return v > 0 ? v : null;
+}

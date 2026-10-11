@@ -1855,5 +1855,23 @@ values ('legalcheckplot', 'Legal check plot', 'Staff confirm a project alert');
 select tst.rows('select * from public.project_disputes', 1, 'staff create and read project alerts');
 reset role;
 
+-- =====================================================================
+\echo
+\echo '== Sales owners know of =='
+-- =====================================================================
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+insert into public.known_sales (account_id, property_id, price_inr, area_sqft, area_basis, sold_on, created_by)
+values ('acc0000a-0000-0000-0000-00000000000a', 'a1a1a1a1-0000-0000-0000-0000000000e1', 27000000, 2030,
+        'super_built_up', '2024-10-01', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rows('select * from public.known_sales', 1, 'the owner adds a sale they know of and sees it');
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.rows('select * from public.known_sales', 0, 'other customers never read it (shared only inside ranges)');
+select tst.rejects($$insert into public.known_sales (account_id, property_id, price_inr, area_sqft, area_basis, sold_on, created_by)
+                     values ('acc0000b-0000-0000-0000-00000000000b', 'a1a1a1a1-0000-0000-0000-0000000000e1', 100000000,
+                             1000, 'carpet', '2024-01-01', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb')$$,
+  'nobody adds a sale to a property that isn''t theirs');
+reset role;
+
 \echo
 \echo 'ALL RLS CHECKS PASSED'

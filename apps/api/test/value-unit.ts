@@ -203,3 +203,47 @@ test('appreciation since purchase', () => {
   );
   assert.deepEqual(a, { percent: 100, per_year: 7.2, since_year: 2016 });
 });
+
+test('a flat: prices on carpet / built-up are converted, similar sizes kept, an owner’s sale counts', () => {
+  const c = (
+    per_sqft: number,
+    i: number,
+    area_sqft: number | null,
+    area_basis: 'super_built_up' | 'built_up' | 'carpet' | null,
+    kind: 'listing' | 'project_price' = 'listing',
+  ) => ({ ...comp(per_sqft, i), kind, area_sqft, area_basis });
+  // Like NCC Urban Mayfair: a 2,030 sq ft (super built-up) flat, carpet 1,302.
+  const found = [
+    c(10694, 0, 1730, 'super_built_up'),
+    c(11286, 1, 1205, 'super_built_up'), // much smaller: left out once 3 similar exist
+    c(6517, 2, 1734, 'built_up'), // → ~5,667 on super built-up: an outlier
+    c(10693, 3, null, null, 'project_price'),
+    c(16900, 4, 1302, 'carpet'), // carpet → ~10,840 on super built-up
+  ];
+  const ownerSale = {
+    url: 'owner-sale:1',
+    title: 'told by an owner',
+    kind: 'sale' as const,
+    same_project: true,
+    per_sqft: 13300,
+    date: '2024-10',
+    area_basis: 'super_built_up' as const,
+    area_sqft: 2030,
+    from_owner: true,
+  };
+  const r = marketRange({
+    comparables: found,
+    sources: pages(5),
+    known: [ownerSale],
+    flat: true,
+    carpet_ratio: 2030 / 1302,
+    area_sqft: 2030,
+    government_per_sqft: null,
+  });
+  assert.equal(r.status, 'ready');
+  assert.equal(r.per_sqft_low, 10693);
+  assert.equal(r.per_sqft_high, 13300, 'the owner’s sale is always inside the range');
+  assert.equal(r.value_low, 21_700_000);
+  assert.equal(r.value_high, 27_000_000);
+  assert.ok(!r.comparables.some((x) => x.per_sqft < 6000), 'the built-up outlier is out');
+});

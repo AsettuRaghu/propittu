@@ -134,6 +134,7 @@ const styles = StyleSheet.create({
   working: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   source: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   pressed: { opacity: 0.7 },
+  tell: { color: colors.primary, fontWeight: '700', fontSize: font(14) },
 });
 
 /** Pittu's market range: what similar properties nearby sell or are listed for, with its pages. */
@@ -154,10 +155,13 @@ function Market({ value: v, propertyId }: { value: PropertyValue; propertyId: st
   const rent = e.rent_low && e.rent_high;
   if (!sale && !rent) {
     return (
-      <Text style={typography.small}>
-        Pittu couldn’t find enough recent prices nearby to give a range yet. It checks again every
-        few months.
-      </Text>
+      <View style={styles.facts}>
+        <Text style={typography.small}>
+          Pittu couldn’t find enough recent prices nearby to give a range yet. It checks again every
+          few months.
+        </Text>
+        <TellPittu propertyId={propertyId} />
+      </View>
     );
   }
   const gain = appreciation(v);
@@ -193,6 +197,7 @@ function Market({ value: v, propertyId }: { value: PropertyValue; propertyId: st
                 prices.some((c) => c.same_project) ? ' in the same project' : ' nearby'
               }. Asking prices are often a little above what homes finally sell for.`}
             </Text>
+            <TellPittu propertyId={propertyId} />
             {prices.slice(0, 6).map((c) => (
               <Source key={c.url} url={c.url} text={`${rupees(c.per_sqft)}/sq ft · ${c.title}`} />
             ))}
@@ -230,7 +235,26 @@ function Market({ value: v, propertyId }: { value: PropertyValue; propertyId: st
   );
 }
 
+/** "Know a recent sale in your building? Tell Pittu" — a real sale beats asking prices. */
+function TellPittu({ propertyId }: { propertyId: string }) {
+  return (
+    <Text style={styles.tell} onPress={() => router.push(`/properties/${propertyId}/known-sale`)}>
+      Know a recent sale in your building? Tell Pittu
+    </Text>
+  );
+}
+
 function Source({ url, text }: { url: string; text: string }) {
+  if (url.startsWith('owner-sale:')) {
+    return (
+      <View style={styles.source}>
+        <Icon name="users" size={12} color={colors.textSubtle} />
+        <Text style={[typography.small, styles.flex]} numberOfLines={2}>
+          {text}
+        </Text>
+      </View>
+    );
+  }
   return (
     <Pressable
       onPress={() => void WebBrowser.openBrowserAsync(url)}

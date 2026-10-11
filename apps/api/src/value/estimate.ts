@@ -1,11 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { MarketEstimate } from '@propittu/shared';
+import type { AreaBasis, MarketComparable, MarketEstimate } from '@propittu/shared';
 import { auditPittu } from '../audit.js';
 import { logger } from '../logger.js';
 import { aiAvailableFor, server } from '../pittu/core/limits.js';
 import { runTask } from '../pittu/core/run.js';
 import { marketTask } from '../pittu/value/tasks/market.js';
-import { deedFactValues, factText } from '../deeds/facts.js';
+import { deedFactValues, factNumber, factText } from '../deeds/facts.js';
+import { projectOf } from '../legal/projectDisputes.js';
 import { must } from '../errors.js';
 import { marketRange } from './range.js';
 import { propertyValue } from './value.js';
@@ -81,34 +82,18 @@ export async function estimateMarket(propertyId: string): Promise<void> {
       { documents: [], text: brief },
       { capability: 'value', accountId: p.account_id },
     );
-    const range = marketRange({
-      comparables: result.comparables,
-      sources,
-      area_sqft: value.area_sqft,
-      government_per_sqft: value.rate?.per_sqft ?? null,
-    });
+    // Keep every price found, so the range can be worked out again for free.
     await db.from('value_estimates').upsert({
       property_id: propertyId,
       account_id: p.account_id,
-      ...range,
+      status: 'working',
+      raw_comparables: result.comparables,
+      sources,
       note: result.note,
       task_version: marketTask.version,
       model,
     });
-    await auditPittu(
-      db,
-      p.account_id,
-      'value.estimated',
-      { type: 'property', id: propertyId },
-      {
-        status: range.status,
-        value_low: range.value_low,
-        value_high: range.value_high,
-        rent_low: range.rent_low,
-        rent_high: range.rent_high,
-        prices_used: range.comparables.length,
-      },
-    );
+    await rerange(propertyId);
   } catch (err) {
     logger.warn({ err, propertyId }, 'Market estimate failed');
     await db
@@ -119,6 +104,99 @@ export async function estimateMarket(propertyId: string): Promise<void> {
         () => undefined,
         () => undefined,
       );
+  }
+}
+
+/** A sale an owner told us about, as one more price (it has no web page). */
+function knownToComparable(k: {
+  id: string;
+  price_inr: number;
+  area_sqft: number;
+  area_basis: AreaBasis;
+  sold_on: string;
+}): MarketComparable {
+  return {
+    url: `owner-sale:${k.id}`,
+    title: `${k.area_sqft.toLocaleString('en-IN')} sq ft sold for ₹${(k.price_inr / 1e7).toFixed(2)} Cr — told by an owner`,
+    kind: 'sale',
+    same_project: true,
+    per_sqft: Math.round(k.price_inr / k.area_sqft),
+    date: k.sold_on.slice(0, 7),
+    area_basis: k.area_basis,
+    area_sqft: k.area_sqft,
+    from_owner: true,
+  };
+}
+
+/**
+ * Works out the range from what's stored — the prices Pittu found (no new
+ * search) and sales owners in the project told us about — and saves it.
+ * Run after a search, and whenever an owner adds a sale. Never throws.
+ */
+export async function rerange(propertyId: string): Promise<void> {
+  const db = server();
+  try {
+    const [{ data: p }, { data: row }, value, { values }, project] = await Promise.all([
+      db.from('properties').select('account_id, property_type').eq('id', propertyId).maybeSingle(),
+      db
+        .from('value_estimates')
+        .select('raw_comparables, sources')
+        .eq('property_id', propertyId)
+        .maybeSingle(),
+      propertyValue(db, propertyId),
+      deedFactValues(db, propertyId),
+      projectOf(db, propertyId),
+    ]);
+    if (!p) return;
+    const mine = db
+      .from('known_sales')
+      .select('id, price_inr, area_sqft, area_basis, sold_on')
+      .eq('property_id', propertyId);
+    const shared = project
+      ? db
+          .from('known_sales')
+          .select('id, price_inr, area_sqft, area_basis, sold_on')
+          .eq('project_key', project.key)
+          .eq('share_in_project', true)
+          .neq('property_id', propertyId)
+      : null;
+    const [a, b] = await Promise.all([mine, shared ?? Promise.resolve({ data: [] })]);
+    const known = [...(a.data ?? []), ...(b.data ?? [])].map((k) =>
+      knownToComparable(k as Parameters<typeof knownToComparable>[0]),
+    );
+    const sba = factNumber(values.get('super_built_up_sqft'));
+    const carpet = factNumber(values.get('carpet_sqft'));
+    const range = marketRange({
+      comparables: (row?.raw_comparables as MarketComparable[]) ?? [],
+      sources: (row?.sources as string[]) ?? [],
+      known,
+      flat: p.property_type === 'apartment',
+      carpet_ratio: sba && carpet ? sba / carpet : null,
+      area_sqft: value.area_sqft,
+      government_per_sqft: value.rate?.per_sqft ?? null,
+    });
+    await db.from('value_estimates').upsert({
+      property_id: propertyId,
+      account_id: p.account_id as string,
+      ...range,
+    });
+    await auditPittu(
+      db,
+      p.account_id as string,
+      'value.estimated',
+      { type: 'property', id: propertyId },
+      {
+        status: range.status,
+        value_low: range.value_low,
+        value_high: range.value_high,
+        rent_low: range.rent_low,
+        rent_high: range.rent_high,
+        prices_used: range.comparables.length,
+        owner_sales: known.length,
+      },
+    );
+  } catch (err) {
+    logger.warn({ err: String(err), propertyId }, 'working out the market range failed');
   }
 }
 

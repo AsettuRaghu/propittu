@@ -117,6 +117,36 @@ export interface MarketComparable {
   per_sqft: number;
   /** YYYY-MM or YYYY-MM-DD. */
   date: string | null;
+  /** What the quoted area measures (prices per sq ft differ a lot between them). */
+  area_basis?: AreaBasis | null;
+  /** Size of the home quoted, in sq ft on that basis. */
+  area_sqft?: number | null;
+  /** A sale an owner in the project told us about (no page; counts as real). */
+  from_owner?: boolean;
+}
+
+export type AreaBasis = 'super_built_up' | 'built_up' | 'carpet' | 'plot';
+export const AREA_BASIS_LABELS: Record<AreaBasis, string> = {
+  super_built_up: 'Super built-up',
+  built_up: 'Built-up',
+  carpet: 'Carpet',
+  plot: 'Plot / site',
+};
+
+/** A sale an owner knows of in their project (POST /properties/:id/known-sales). */
+export const knownSaleSchema = z.object({
+  price_inr: z.number().int().min(100_000).max(10_000_000_000),
+  area_sqft: z.number().int().min(100).max(100_000),
+  area_basis: z.enum(['super_built_up', 'built_up', 'carpet', 'plot']),
+  sold_on: z.iso.date(),
+  note: z.string().trim().max(300).nullable().optional(),
+  share_in_project: z.boolean().default(true),
+});
+export type KnownSaleInput = z.infer<typeof knownSaleSchema>;
+
+export interface KnownSale extends KnownSaleInput {
+  id: string;
+  created_at: string;
 }
 
 /**

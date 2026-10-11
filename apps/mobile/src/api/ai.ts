@@ -9,6 +9,8 @@ import type {
   LegalCheck,
   PittuState,
   PropertyDisputes,
+  KnownSale,
+  KnownSaleInput,
   DisputeReport,
   DisputeReportInput,
   Property,
@@ -203,5 +205,15 @@ export function useReportDispute(propertyId: string) {
       }),
     onSuccess: () =>
       void qc.invalidateQueries({ queryKey: ['properties', propertyId, 'disputes'] }),
+  });
+}
+
+/** A sale the owner knows of in the project: counted in the value at once. */
+export function useAddKnownSale(propertyId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: KnownSaleInput) =>
+      api<KnownSale>(`/properties/${propertyId}/known-sales`, { method: 'POST', body: input }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['properties', propertyId, 'value'] }),
   });
 }

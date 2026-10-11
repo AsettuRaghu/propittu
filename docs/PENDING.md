@@ -34,6 +34,10 @@ docs/DECISIONS.md; Pittu's design in docs/PITTU.md.
   adding from a deed, questions that follow the deed (flat / plot, renting, OC, Bengaluru e-Khata),
   the land's story from the deed (sale-deed-v3), Pittu's market range (web search, rules decide),
   Watch news published by Pittu when confident, and four rental services (on quote).
+- Pittu Value v3 (11 Oct): prices converted to the flat's area basis (carpet / built-up → super
+  built-up with the deed's own ratio), similar sizes preferred, and "Know a recent sale in your
+  building? Tell Pittu" (counts at once, shared anonymously in the project if the owner agrees;
+  recalculated without a new search). Mayfair test: with the owner's ₹2.7 Cr sale → ₹2.17–2.70 Cr.
 - Owners report disputes; alerts for a whole project (11 Oct): "Heard about a dispute? Tell us" on
   the Records check → the team (portal: Legal → Owner reports) replies, or confirms it for the
   project; every owner whose deed names that project sees it (Legal → Project alerts, with reach).
