@@ -43,7 +43,8 @@ export async function createEcCheck(
   db: SupabaseClient,
   propertyId: string,
   ecDocumentId: string,
-  staffUserId: string,
+  /** Null when Pittu runs it by itself after reading an uploaded EC. */
+  staffUserId: string | null,
 ): Promise<string> {
   const doc = must<{
     id: string;

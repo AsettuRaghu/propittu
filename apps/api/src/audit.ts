@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AuthContext } from './auth.js';
 import { logger } from './logger.js';
 
@@ -35,6 +36,32 @@ export async function audit(
     entity_type: entity?.type ?? null,
     entity_id: entity?.id ?? null,
     data,
+  });
+  if (error) logger.warn({ err: error, action }, 'audit event not recorded');
+}
+
+/**
+ * Something Pittu did by itself (no person asked): marked tax paid from a
+ * receipt, answered a question from a document, filled a record number,
+ * started an EC check, priced a property… Recorded as actor "system" with
+ * the server key, so the owner's and the team's history shows it.
+ */
+export async function auditPittu(
+  db: SupabaseClient,
+  accountId: string,
+  action: string,
+  entity: { type: string; id: string },
+  data: Record<string, unknown> = {},
+): Promise<void> {
+  logger.info({ audit: { action, actor: 'system', accountId, entity } }, `audit ${action}`);
+  const { error } = await db.from('audit_events').insert({
+    account_id: accountId,
+    actor_user_id: null,
+    actor_type: 'system',
+    action,
+    entity_type: entity.type,
+    entity_id: entity.id,
+    data: { by: 'pittu', ...data },
   });
   if (error) logger.warn({ err: error, action }, 'audit event not recorded');
 }

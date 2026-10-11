@@ -552,8 +552,9 @@ export function checkDocument(
                 : r.khata_kind === 'b_khata'
                   ? 'B-Khata'
                   : 'Khata',
-              r.khata_number,
+              r.khata_number ?? (r.property_id ? `Property ID ${r.property_id}` : null),
               r.owner_names.length ? `in ${r.owner_names.join(', ')}` : null,
+              r.authority ? `from ${r.authority}` : null,
             ]
           : r.document_kind === 'loan_closure'
             ? [

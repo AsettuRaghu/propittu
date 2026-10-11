@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { MarketEstimate } from '@propittu/shared';
+import { auditPittu } from '../audit.js';
 import { logger } from '../logger.js';
 import { aiAvailableFor, server } from '../pittu/core/limits.js';
 import { runTask } from '../pittu/core/run.js';
@@ -94,6 +95,20 @@ export async function estimateMarket(propertyId: string): Promise<void> {
       task_version: marketTask.version,
       model,
     });
+    await auditPittu(
+      db,
+      p.account_id,
+      'value.estimated',
+      { type: 'property', id: propertyId },
+      {
+        status: range.status,
+        value_low: range.value_low,
+        value_high: range.value_high,
+        rent_low: range.rent_low,
+        rent_high: range.rent_high,
+        prices_used: range.comparables.length,
+      },
+    );
   } catch (err) {
     logger.warn({ err, propertyId }, 'Market estimate failed');
     await db

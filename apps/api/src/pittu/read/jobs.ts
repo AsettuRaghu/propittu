@@ -76,6 +76,8 @@ export interface ReadHooks {
     task: AiTask<unknown>,
     finish: (fields: Record<string, unknown>) => PromiseLike<unknown>,
   ): Promise<boolean>;
+  /** Once the reading is marked ready (e.g. run the EC check on it). */
+  afterReady?(db: SupabaseClient, job: AnalysisRow, result: unknown): Promise<void>;
   /** After a reading is saved: extra fields for the job (e.g. duplicate_of). */
   afterRead?(
     db: SupabaseClient,
@@ -474,6 +476,7 @@ export async function processAnalysis(analysisId: string, hooks: ReadHooks = {})
     }
     const extra = hooks.afterRead ? await hooks.afterRead(db, job, facts, result) : {};
     await finish({ status: 'ready', error_code: null, model, result, ...extra });
+    if (hooks.afterReady) await hooks.afterReady(db, job, result);
     log.info({ facts: facts.length }, 'document reading ready');
   } catch (err) {
     const e =
@@ -493,8 +496,9 @@ export async function processAnalysis(analysisId: string, hooks: ReadHooks = {})
 }
 
 /**
- * Queue Pittu's own reading of a just-uploaded short document (Khata, tax
- * receipt, land record…; AUTO_READ_TYPES). No request from the owner: it
+ * Queue Pittu's own reading of a just-uploaded document — a short one
+ * (Khata, tax receipt, land record…; AUTO_READ_TYPES) or an EC (then the EC
+ * check runs, for the team to review). No request from the owner: it
  * happens for every pilot account while the daily cap and budget allow.
  * Returns the job id to run, or null when it shouldn't be read now.
  */
@@ -510,8 +514,10 @@ export async function queueAutoReading(documentId: string): Promise<string | nul
       .eq('id', documentId)
       .maybeSingle(),
   );
-  if (!doc || doc.upload_status !== 'ready' || !AUTO_READ_TYPES.includes(doc.document_type))
-    return null;
+  const auto = AUTO_READ_TYPES.includes(doc?.document_type as DocumentType);
+  const ec = doc?.document_type === 'encumbrance_certificate';
+  if (!doc || doc.upload_status !== 'ready' || (!auto && !ec)) return null;
+  if (doc.mime_type !== 'application/pdf' && !auto) return null;
   if (!aiAvailableFor(doc.account_id) || !(await budgetLeft(db))) return null;
   if (doc.file_size > MAX_DIRECT_PDF_BYTES) return null;
   try {
@@ -519,7 +525,7 @@ export async function queueAutoReading(documentId: string): Promise<string | nul
   } catch {
     return null;
   }
-  const task = propertyDocumentTask;
+  const task = TASKS[doc.document_type]!;
   const { data, error } = await db
     .from('document_analyses')
     .upsert(

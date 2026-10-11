@@ -108,3 +108,41 @@ export const legalCheckUpdateSchema = z
   })
   .partial()
   .refine((v) => Object.keys(v).length > 0, { message: 'Nothing to update' });
+
+/* ------------------------------------------------------------------ *
+ * Court cases and disputes about the project or the land (Pittu searches
+ * the web; the team reviews anything found before the owner sees it).
+ * ------------------------------------------------------------------ */
+
+export interface DisputeItem {
+  url: string;
+  title: string;
+  source_kind: 'court' | 'news' | 'rera' | 'government' | 'other';
+  about: 'this_project' | 'this_land' | 'developer_elsewhere' | 'area_general';
+  status: 'pending' | 'decided' | 'unknown';
+  date: string | null;
+  /** Plain words, organisations only (no individual names). */
+  summary: string;
+  /** Staff: keep it for the owner, or dismiss it (not about this property). */
+  review: 'open' | 'kept' | 'dismissed';
+}
+
+export const DISPUTE_STATUSES = ['working', 'in_review', 'shared', 'clear', 'failed'] as const;
+export type DisputeStatus = (typeof DISPUTE_STATUSES)[number];
+
+/** GET /properties/:id/disputes (items only once the team has shared them). */
+export interface PropertyDisputes {
+  status: DisputeStatus;
+  items: DisputeItem[];
+  /** The team's note to the owner. */
+  note: string | null;
+  checked_at: string | null;
+}
+
+/** GET /backoffice/disputes — properties where Pittu found something. */
+export interface DisputeReview extends PropertyDisputes {
+  property_id: string;
+  property_name: string;
+  account_id: string;
+  pittu_note: string | null;
+}

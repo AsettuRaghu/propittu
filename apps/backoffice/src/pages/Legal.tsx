@@ -8,11 +8,13 @@ import {
   type LegalCheck,
   type LegalFinding,
   type LegalLevel,
+  type DisputeReview,
 } from '@propittu/shared';
 import { api, errorText } from '../lib/api';
 import { date, dateTime } from '../lib/format';
 import { useUrlState } from '../lib/params';
 import { DataTable, type Column } from '../ui/DataTable';
+import { Disputes } from './Disputes';
 import { Tiles } from '../ui/Tiles';
 import { useEscape } from '../ui/useEscape';
 
@@ -36,6 +38,10 @@ export function Legal() {
   const view = params.get('status') ?? 'in_review';
   const selected = params.get('id');
   const { data, error, isPending } = useLegalChecks();
+  const disputes = useQuery({
+    queryKey: ['bo-disputes', 'in_review'],
+    queryFn: () => api<DisputeReview[]>('/backoffice/disputes?status=in_review'),
+  });
   const close = () => set({ id: null, full: null });
   const count = (s: string) => data?.filter((c) => s === 'all' || c.status === s).length ?? '–';
   const rows = data?.filter((c) => view === 'all' || c.status === view);
@@ -107,26 +113,36 @@ export function Legal() {
           { value: 'ready', label: 'Ready to share', count: count('ready'), tone: 'good' },
           { value: 'shared', label: 'Shared', count: count('shared') },
           { value: 'all', label: 'Everything', count: count('all') },
+          {
+            value: 'disputes',
+            label: 'Court cases & disputes',
+            count: disputes.data?.length ?? '–',
+            tone: 'warn',
+          },
         ]}
       />
-      <DataTable
-        rows={rows}
-        columns={columns}
-        rowKey={(c) => c.id}
-        selected={selected}
-        onRowClick={(c) => set({ id: c.id })}
-        onClose={close}
-        detail={selected ? <CheckPane id={selected} onClose={close} /> : null}
-        searchText={(c) =>
-          `${c.property_name ?? ''} ${c.customer_name ?? ''} ${c.customer_phone ?? ''}`
-        }
-        searchPlaceholder="Search property or customer"
-        defaultSort={{ key: 'updated', dir: 'desc' }}
-        exportName="legal-checks"
-        loading={isPending}
-        error={error ? errorText(error) : null}
-        empty="No checks here."
-      />
+      {view === 'disputes' ? (
+        <Disputes status="in_review" />
+      ) : (
+        <DataTable
+          rows={rows}
+          columns={columns}
+          rowKey={(c) => c.id}
+          selected={selected}
+          onRowClick={(c) => set({ id: c.id })}
+          onClose={close}
+          detail={selected ? <CheckPane id={selected} onClose={close} /> : null}
+          searchText={(c) =>
+            `${c.property_name ?? ''} ${c.customer_name ?? ''} ${c.customer_phone ?? ''}`
+          }
+          searchPlaceholder="Search property or customer"
+          defaultSort={{ key: 'updated', dir: 'desc' }}
+          exportName="legal-checks"
+          loading={isPending}
+          error={error ? errorText(error) : null}
+          empty="No checks here."
+        />
+      )}
     </div>
   );
 }

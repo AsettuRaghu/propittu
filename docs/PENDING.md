@@ -34,6 +34,12 @@ docs/DECISIONS.md; Pittu's design in docs/PITTU.md.
   adding from a deed, questions that follow the deed (flat / plot, renting, OC, Bengaluru e-Khata),
   the land's story from the deed (sale-deed-v3), Pittu's market range (web search, rules decide),
   Watch news published by Pittu when confident, and four rental services (on quote).
+- Court cases and disputes (11 Oct, legal-disputes-v1): Pittu searches court sites, RERA and news
+  for the project, developer and survey numbers (never people's names); nothing found → owner told
+  at once; something found → team reviews (Pittu AI → Legal → Court cases & disputes) before the
+  owner sees it. Web search can't see eCourts registers (captcha) — a provider or manual search is
+  still needed for a full search. ECs are now read on upload and the EC check starts by itself.
+  Pittu's own actions are in audit_events (actor "system").
 - Same person, different name (11 Oct): spelling / initials / partial / married-name matching,
   "Same person?" asked once and remembered, Name Correction service; sale-deed-v4 keeps W/o, S/o.
 - Pittu reads every document you upload (11 Oct, doc-read-v2): Khata, tax receipt, land record,

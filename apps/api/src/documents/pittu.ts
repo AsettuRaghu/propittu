@@ -11,6 +11,7 @@ import {
   type NameLink,
 } from '@propittu/shared';
 import { deedFactValues, factList, factText } from '../deeds/facts.js';
+import { auditPittu } from '../audit.js';
 import { logger } from '../logger.js';
 
 /**
@@ -91,20 +92,27 @@ export async function actOnReading(
         ).data ?? []
       ).map((a) => [a.question_id as string, a.answer as string]),
     );
-    const answer = (question: string, value: string, overwrite = false) =>
-      !overwrite && answered.has(question)
-        ? null
-        : db.from('property_answers').upsert(
-            {
-              property_id: job.property_id,
-              account_id: job.account_id,
-              question_id: question,
-              answer: value,
-              answered_by: null,
-              answered_at: new Date().toISOString(),
-            },
-            { onConflict: 'property_id,question_id' },
-          );
+    const property = { type: 'property', id: job.property_id };
+    const from = { document_id: job.document_id, document_kind: reading.document_kind };
+    const answer = async (question: string, value: string, overwrite = false) => {
+      if ((!overwrite && answered.has(question)) || answered.get(question) === value) return;
+      await db.from('property_answers').upsert(
+        {
+          property_id: job.property_id,
+          account_id: job.account_id,
+          question_id: question,
+          answer: value,
+          answered_by: null,
+          answered_at: new Date().toISOString(),
+        },
+        { onConflict: 'property_id,question_id' },
+      );
+      await auditPittu(db, job.account_id, 'property.pittu_answered', property, {
+        question,
+        answer: value,
+        ...from,
+      });
+    };
 
     const ownerMatches = findings.some(
       (f) => f.level === 'ok' && f.text.startsWith('In the owner'),
@@ -137,7 +145,11 @@ export async function actOnReading(
           ptin: null,
         },
       });
-      const isEkhata = reading.khata_kind === 'e_khata';
+      // In Bengaluru the city corporation's record (Form A/B extract, e-Khata) is the e-Khata.
+      const isEkhata =
+        reading.khata_kind === 'e_khata' ||
+        /corporation|gba|bbmp/i.test(reading.authority ?? '') ||
+        !!reading.property_id;
       if (bengaluru && isEkhata) await answer('ekhata', 'yes', true);
       else if (!bengaluru) await answer('khata_name', 'yes', true);
     }
@@ -156,8 +168,9 @@ export async function actOnReading(
       .select('khata_number, field_sources')
       .eq('id', job.property_id)
       .maybeSingle();
-    if (reading.khata_number && !current?.khata_number && reading.document_kind === 'khata') {
-      fill.khata_number = reading.khata_number;
+    const recordNo = reading.khata_number ?? reading.property_id;
+    if (recordNo && !current?.khata_number && reading.document_kind === 'khata') {
+      fill.khata_number = recordNo;
     }
     if (Object.keys(fill).length) {
       const sources = { ...((current?.field_sources as Record<string, string>) ?? {}) };
@@ -166,6 +179,10 @@ export async function actOnReading(
         .from('properties')
         .update({ ...fill, field_sources: sources })
         .eq('id', job.property_id);
+      await auditPittu(db, job.account_id, 'property.filled_by_pittu', property, {
+        fields: Object.keys(fill),
+        ...from,
+      });
     }
 
     // Something differs from the deed: the team takes a look.
@@ -185,6 +202,10 @@ export async function actOnReading(
         },
         { onConflict: 'property_id' },
       );
+      await auditPittu(db, job.account_id, 'property.review_flagged', property, {
+        reason: 'document_differs',
+        ...from,
+      });
     }
   } catch (err) {
     logger.warn({ err: String(err), documentId: job.document_id }, 'acting on a reading failed');

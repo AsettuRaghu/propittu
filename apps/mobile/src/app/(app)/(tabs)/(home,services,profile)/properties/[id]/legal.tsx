@@ -1,7 +1,9 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LEGAL_LEVEL_LABELS, type LegalLevel } from '@propittu/shared';
-import { useLegalChecks } from '@/api/ai';
+import { useDisputes, useLegalChecks } from '@/api/ai';
+import { useDocuments } from '@/api/queries';
+import { DisputesSection } from '@/components/DisputesSection';
 import { PropertyContext } from '@/components/PropertyContext';
 import { PullRefresh } from '@/components/PullRefresh';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
@@ -30,17 +32,39 @@ const LEVEL_COLOURS: Record<LegalLevel, string> = {
 export default function PropertyLegalScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, isPending, error, refetch } = useLegalChecks(id);
+  const disputes = useDisputes(id);
+  const hasEc = (useDocuments(id).data ?? []).some(
+    (d) => d.document_type === 'encumbrance_certificate',
+  );
   if (isPending) return <LoadingState />;
   if (error) return <ErrorState error={error} onRetry={() => void refetch()} />;
   const c = data[0];
   if (!c) {
     return (
-      <EmptyState
-        icon="verified"
-        accent="teal"
-        title="No records check yet"
-        message="Our team checks the Encumbrance Certificate against your sale deed and shares what the records show."
-      />
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <PullRefresh onRefresh={() => Promise.all([refetch(), disputes.refetch()])} />
+        }
+      >
+        <PropertyContext propertyId={id} />
+        <DisputesSection disputes={disputes.data ?? null} />
+        {hasEc ? (
+          <EmptyState
+            icon="hourglass"
+            accent="amber"
+            title="Your EC is with our team"
+            message="Pittu has read your Encumbrance Certificate. Our team is checking it against your sale deed and will share what the records show here."
+          />
+        ) : (
+          <EmptyState
+            icon="verified"
+            accent="teal"
+            title="No EC check yet"
+            message="Add the Encumbrance Certificate under Documents — Pittu reads it and our team checks it against your sale deed."
+          />
+        )}
+      </ScrollView>
     );
   }
   const findings = c.findings.filter((f) => f.review !== 'dismissed');
@@ -62,6 +86,8 @@ export default function PropertyLegalScreen() {
           <Text style={typography.caption}>Shared by our team on {formatDate(c.shared_at)}</Text>
         ) : null}
       </View>
+
+      <DisputesSection disputes={disputes.data ?? null} />
 
       <ListGroup title="What we checked" plain>
         <Text style={[typography.small, styles.inner]}>

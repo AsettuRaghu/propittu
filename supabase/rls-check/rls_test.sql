@@ -1808,5 +1808,25 @@ select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
 select tst.rows('select * from public.name_links', 0, 'other customers never see it');
 reset role;
 
+-- =====================================================================
+\echo
+\echo '== Court cases and disputes: owners see them only after review =='
+-- =====================================================================
+reset role;
+insert into public.property_disputes (property_id, account_id, status, items)
+values ('a1a1a1a1-0000-0000-0000-0000000000e1', 'acc0000a-0000-0000-0000-00000000000a', 'in_review',
+        '[{"url":"https://example.com","summary":"x","review":"open"}]');
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rows('select * from public.property_disputes', 0, 'the owner cannot read findings still in review');
+select tst.rows($$update public.property_disputes set status = 'shared'$$, 0, 'the owner cannot share them');
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+update public.property_disputes set status = 'shared' where property_id = 'a1a1a1a1-0000-0000-0000-0000000000e1';
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rows('select * from public.property_disputes', 1, 'once shared, the owner sees them');
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.rows('select * from public.property_disputes', 0, 'other customers never see them');
+reset role;
+
 \echo
 \echo 'ALL RLS CHECKS PASSED'

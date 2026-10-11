@@ -14,7 +14,7 @@ import {
   type PropertyDetail,
   type PropertyValue,
 } from '@propittu/shared';
-import { useLegalChecks, usePittu, usePropertyNews, usePropertyValue } from '@/api/ai';
+import { useDisputes, useLegalChecks, usePittu, usePropertyNews, usePropertyValue } from '@/api/ai';
 import { useProperty, useServiceRequests, useServices } from '@/api/queries';
 import { DocumentSlots } from '@/components/DocumentSlots';
 import type { IconName } from '@/components/Icon';
@@ -286,13 +286,15 @@ function PittuSection({ property, withSetup }: { property: PropertyDetail; withS
   const news = usePropertyNews(property.id).data ?? [];
   const value = usePropertyValue(property.id).data;
   const check = useLegalChecks(property.id).data?.[0];
+  const disputes = useDisputes(property.id).data;
   const seen = useNewsSeen();
   const unread = !!property.deed_reading && property.deed_reading.status !== 'ready';
   const setup = withSetup && (!!pittu.data || unread);
   const worth = value?.government_value_inr ?? null;
   const est = value?.estimate?.status === 'ready' ? value.estimate : null;
   const history = pittu.data?.story?.history ?? [];
-  if (!setup && !news.length && worth === null && !est && !check && history.length < 2) return null;
+  if (!setup && !news.length && worth === null && !est && !check && !disputes && history.length < 2)
+    return null;
   const open = (page: 'news' | 'value' | 'legal' | 'history') =>
     router.push(`/properties/${property.id}/${page}`);
   const newsAt = news.reduce<string | null>(
@@ -343,6 +345,26 @@ function PittuSection({ property, withSetup }: { property: PropertyDetail; withS
           subtitle={`From ${history[0]!.from[0] ?? history[0]!.to[0] ?? 'the first owner'} to you, as your deed tells it`}
           subtitleLines={2}
           onPress={() => open('history')}
+        />
+      ) : null}
+      {!check && disputes && disputes.status !== 'failed' ? (
+        <ListRow
+          icon="verified"
+          accent={
+            disputes.status === 'clear' ? 'teal' : disputes.status === 'working' ? 'slate' : 'amber'
+          }
+          title={
+            disputes.status === 'working'
+              ? 'Records check · checking court cases…'
+              : disputes.status === 'clear'
+                ? 'Records check · no disputes found online'
+                : disputes.status === 'in_review'
+                  ? 'Records check · our team is checking'
+                  : 'Records check · see what we found'
+          }
+          subtitle="Court cases, ownership claims and RERA complaints about this project and its land"
+          subtitleLines={2}
+          onPress={() => open('legal')}
         />
       ) : null}
       {check ? (

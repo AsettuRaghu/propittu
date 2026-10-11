@@ -108,6 +108,8 @@ export function spellings(name: string): string[] {
   if (/palli$/i.test(n)) out.add(n.replace(/palli$/i, 'pally'));
   if (/pally$/i.test(n)) out.add(n.replace(/pally$/i, 'palli'));
   if (/halli$/i.test(n)) out.add(n.replace(/halli$/i, 'hally'));
+  if (/enahalli$/i.test(n)) out.add(n.replace(/enahalli$/i, 'anahalli'));
+  if (/anahalli$/i.test(n)) out.add(n.replace(/anahalli$/i, 'enahalli'));
   if (/pet$/i.test(n)) out.add(n.replace(/pet$/i, 'pete'));
   if (/pete$/i.test(n)) out.add(n.replace(/pete$/i, 'pet'));
   return [...out];

@@ -8,6 +8,7 @@ import type {
   DraftProperty,
   LegalCheck,
   PittuState,
+  PropertyDisputes,
   Property,
   PropertyValue,
   WatchItem,
@@ -178,4 +179,13 @@ export const useLegalChecks = (propertyId: string) =>
     queryKey: ['properties', propertyId, 'legal-checks'] as const,
     queryFn: () => api<LegalCheck[]>(`/properties/${propertyId}/legal-checks`),
     staleTime: 10 * 60_000,
+  });
+
+/** Court cases and disputes Pittu checked (items only once our team shared them). */
+export const useDisputes = (propertyId: string) =>
+  useQuery({
+    queryKey: ['properties', propertyId, 'disputes'] as const,
+    queryFn: () => api<PropertyDisputes | null>(`/properties/${propertyId}/disputes`),
+    staleTime: 10 * 60_000,
+    refetchInterval: (q) => (q.state.data?.status === 'working' ? 5000 : false),
   });

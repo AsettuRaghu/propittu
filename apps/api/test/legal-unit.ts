@@ -5,6 +5,8 @@ import { test } from 'node:test';
 import type { EcEntry, EcReading } from '@propittu/shared';
 import { overallLevel } from '@propittu/shared';
 import { checkEc, sameName, type DeedFacts } from '../src/legal/ecRules.js';
+import type { DisputeItem } from '@propittu/shared';
+import { relevantDisputes } from '../src/legal/disputeRules.js';
 
 const today = new Date('2026-10-08T00:00:00Z');
 const entry = (e: Partial<EcEntry>): EcEntry => ({
@@ -187,4 +189,30 @@ test('dismissed findings do not count towards the overall level', () => {
     review: 'dismissed' as const,
   }));
   assert.equal(overallLevel(f), null);
+});
+
+test('disputes: only this project or land, only pages the search returned', () => {
+  const item = (url: string, about: DisputeItem['about']): DisputeItem => ({
+    url,
+    title: 't',
+    source_kind: 'court',
+    about,
+    status: 'pending',
+    date: null,
+    summary: 's',
+    review: 'open',
+  });
+  const kept = relevantDisputes(
+    [
+      item('https://a.example/case', 'this_project'),
+      item('https://b.example/land', 'this_land'),
+      item('https://c.example/other', 'developer_elsewhere'),
+      item('https://d.example/invented', 'this_project'),
+    ],
+    ['https://a.example/case/', 'https://b.example/land', 'https://c.example/other'],
+  );
+  assert.deepEqual(
+    kept.map((k) => k.url),
+    ['https://a.example/case', 'https://b.example/land'],
+  );
 });
