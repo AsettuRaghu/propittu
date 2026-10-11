@@ -156,24 +156,81 @@ export const AREA_UNIT_LABELS: Record<AreaUnit, string> = {
  * Document types (§20) — "The list should remain extensible."
  * ------------------------------------------------------------------ */
 
-/** M3 V1 categories. Sale Deed is first-class (future M12 extraction source). */
+/**
+ * Everything a property's file can hold (owner, 11 Oct 2026), in the order
+ * the app groups them (DOCUMENT_GROUPS in documents.ts). Names follow the
+ * state where they differ (documentLabel). Values are stored, so existing
+ * ones never change.
+ */
 export const DOCUMENT_TYPES = [
+  // Ownership
   'sale_deed',
+  'link_deed',
+  'gift_partition',
+  'will_succession',
+  'power_of_attorney',
+  'court_order',
   'registration',
-  'property_tax',
-  'khata',
+  // Land and title records
   'encumbrance_certificate',
+  'land_record',
+  'mutation',
+  'survey_sketch',
+  'conversion_order',
+  // City records and approvals
+  'khata',
+  'property_tax',
+  'building_plan',
+  'occupancy_certificate',
+  'layout_approval',
+  // Flats and new buildings
+  'sale_agreement',
+  'possession_letter',
+  'rera',
+  'association',
+  // Loans
+  'loan_papers',
+  'loan_closure',
+  // Use and upkeep
+  'rental_agreement',
+  'utility_bill',
+  'insurance',
+  // Owners
+  'owner_id',
   'other',
 ] as const;
 
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 
+/** General names; see documentLabel() for the state's own name. */
 export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   sale_deed: 'Sale Deed',
+  link_deed: 'Earlier deeds (mother / link deeds)',
+  gift_partition: 'Gift, partition or settlement deed',
+  will_succession: 'Will, probate or legal heir papers',
+  power_of_attorney: 'Power of attorney',
+  court_order: 'Court order or decree',
   registration: 'Registration',
-  property_tax: 'Property Tax',
-  khata: 'Khata',
   encumbrance_certificate: 'Encumbrance Certificate (EC)',
+  land_record: 'Land record',
+  mutation: 'Mutation record',
+  survey_sketch: 'Survey sketch',
+  conversion_order: 'Land conversion order',
+  khata: 'Khata',
+  property_tax: 'Property Tax',
+  building_plan: 'Approved building plan',
+  occupancy_certificate: 'Occupancy / completion certificate',
+  layout_approval: 'Layout approval',
+  sale_agreement: 'Agreement for sale / construction',
+  possession_letter: 'Allotment or possession letter',
+  rera: 'RERA registration',
+  association: 'Association membership / no-dues',
+  loan_papers: 'Home loan papers',
+  loan_closure: 'Loan closure / release',
+  rental_agreement: 'Rental agreement',
+  utility_bill: 'Electricity or water bill',
+  insurance: 'Property insurance',
+  owner_id: 'Owner ID (masked Aadhaar / PAN)',
   other: 'Other',
 };
 
@@ -259,6 +316,12 @@ export const LONG_DOCUMENT_TYPES = [
   'sale_deed',
   'registration',
   'encumbrance_certificate',
+  'link_deed',
+  'gift_partition',
+  'will_succession',
+  'court_order',
+  'sale_agreement',
+  'loan_papers',
 ] as const;
 export const maxDocumentBytes = (type: string): number =>
   (LONG_DOCUMENT_TYPES as readonly string[]).includes(type)

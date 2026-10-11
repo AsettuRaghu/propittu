@@ -10,6 +10,7 @@ export * from './billing';
 export * from './support';
 export * from './ai';
 export * from './pittu';
+export * from './documents';
 export * from './reach';
 export * from './weather';
 export * from './dashboard';

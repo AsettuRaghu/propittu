@@ -34,6 +34,10 @@ docs/DECISIONS.md; Pittu's design in docs/PITTU.md.
   adding from a deed, questions that follow the deed (flat / plot, renting, OC, Bengaluru e-Khata),
   the land's story from the deed (sale-deed-v3), Pittu's market range (web search, rules decide),
   Watch news published by Pittu when confident, and four rental services (on quote).
+- The full property file (11 Oct): 28 document types in 7 groups, named per state (RTC / Pahani,
+  e-Khata, NALA…); each property shows its key documents with why, the rest folded away. Waiting for
+  the next app publish. Next: Pittu reads the short ones (Khata, tax receipt, land record, loan
+  closure) and cross-checks them with the deed.
 - Pittu Watch (11 Oct): each place now has its own news search (Google News RSS) besides the city
   feeds; spellings (palli / pally) searched together; the same story from several papers shown once.
   First run: 74 stories, 16 published by Pittu, 15 for the team.

@@ -18,15 +18,10 @@ import { TextField } from '@/components/Field';
 import { Icon } from '@/components/Icon';
 import { Select } from '@/components/Select';
 import { Banner, Button, LinkButton, ProgressBar } from '@/components/ui';
+import { useDocumentPlan } from '@/lib/documentPlan';
 import { DOCUMENT_TYPE_VISUALS } from '@/lib/icons';
 import { errorMessage } from '@/lib/errors';
 import { colors, radius, space, typography } from '@/theme';
-
-const TYPE_OPTIONS = DOCUMENT_TYPES.map((t) => ({
-  value: t,
-  label: DOCUMENT_TYPE_LABELS[t],
-  icon: DOCUMENT_TYPE_VISUALS[t].icon,
-}));
 
 type Status =
   | { kind: 'idle' }
@@ -50,6 +45,24 @@ export default function AddDocumentScreen() {
   const [fileError, setFileError] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
   const uploading = status.kind === 'uploading';
+  const docs = useDocumentPlan(id);
+  // This property's documents first (with why), then every other type under its group.
+  const planned = docs?.plan ?? [];
+  const typeOptions = [
+    ...planned.map((d) => ({
+      value: d.type,
+      label: d.label,
+      description: d.why,
+      icon: DOCUMENT_TYPE_VISUALS[d.type].icon,
+    })),
+    ...DOCUMENT_TYPES.filter((t) => !planned.some((d) => d.type === t)).map((t) => ({
+      value: t,
+      label: docs?.label(t) ?? DOCUMENT_TYPE_LABELS[t],
+      description: docs?.groupOf(t),
+      icon: DOCUMENT_TYPE_VISUALS[t].icon,
+    })),
+  ];
+  const typeLabel = (t: DocumentType) => docs?.label(t) ?? DOCUMENT_TYPE_LABELS[t];
 
   const chooseFile = async () => {
     setFileError(null);
@@ -99,7 +112,7 @@ export default function AddDocumentScreen() {
         </View>
         <Text style={typography.title}>Document saved</Text>
         <Text style={[typography.small, styles.center]}>
-          {documentType ? DOCUMENT_TYPE_LABELS[documentType] : ''} · {file?.name}
+          {documentType ? typeLabel(documentType) : ''} · {file?.name}
         </Text>
         <View style={styles.doneActions}>
           <Button title="Done" onPress={() => router.back()} />
@@ -128,7 +141,7 @@ export default function AddDocumentScreen() {
             label="Document type"
             placeholder="Choose the type"
             value={documentType}
-            options={TYPE_OPTIONS}
+            options={typeOptions}
             onChange={(t) => !uploading && t && setDocumentType(t)}
           />
         </FormSection>

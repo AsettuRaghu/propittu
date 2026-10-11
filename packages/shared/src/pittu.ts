@@ -167,7 +167,7 @@ export function inBengaluruCity(ctx: PittuContext): boolean {
 }
 
 /** Bought from a company (a developer or builder), so the building came with papers. */
-function fromBuilder(ctx: PittuContext): boolean {
+export function fromBuilder(ctx: PittuContext): boolean {
   return !!ctx.deed?.developer || (ctx.deed?.sellers ?? []).some((s) => COMPANY.test(s));
 }
 
@@ -554,40 +554,6 @@ export function isValidAnswer(
 /* ------------------------------------------------------------------ *
  * Documents checklist and care plan
  * ------------------------------------------------------------------ */
-
-export interface ChecklistItem {
-  document_type: string;
-  label: string;
-  have: boolean;
-  hint: string;
-}
-
-export function documentChecklist(ctx: PittuContext): ChecklistItem[] {
-  const has = (t: string) => ctx.documents.includes(t);
-  const items: ChecklistItem[] = [
-    {
-      document_type: 'sale_deed',
-      label: 'Sale Deed',
-      have: has('sale_deed'),
-      hint: has('sale_deed') ? 'Read by Pittu' : 'The key document',
-    },
-    {
-      document_type: 'property_tax',
-      label: 'Property tax receipt',
-      have: has('property_tax'),
-      hint: has('property_tax') ? 'Uploaded' : 'The latest one',
-    },
-  ];
-  if (isKarnataka(ctx.state)) {
-    items.push({
-      document_type: 'khata',
-      label: inBengaluruCity(ctx) ? 'e-Khata' : 'Khata certificate',
-      have: has('khata'),
-      hint: has('khata') ? 'Uploaded' : 'Or the e-Khata',
-    });
-  }
-  return items;
-}
 
 export interface CareItem {
   /** Catalogue service code it books. */

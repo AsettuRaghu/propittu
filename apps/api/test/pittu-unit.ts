@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import {
   carePlan,
   documentChecklist,
+  documentPlan,
   isValidAnswer,
   matchBuyerName,
   pittuQuestions,
@@ -116,16 +117,43 @@ test('care plan: every answer leads to a service, most important first, max 4', 
   );
 });
 
-test('documents checklist follows the state', () => {
+test('documents checklist follows the property and the state', () => {
   assert.deepEqual(
     documentChecklist(KA_PLOT).map((d) => [d.document_type, d.have]),
     [
       ['sale_deed', true],
-      ['property_tax', false],
+      ['encumbrance_certificate', false],
       ['khata', false],
+      ['property_tax', false],
+      ['land_record', false],
+      ['conversion_order', false],
     ],
   );
-  assert.equal(documentChecklist({ ...KA_PLOT, state: 'Telangana' }).length, 2);
+  assert.equal(
+    documentChecklist(KA_PLOT).find((d) => d.document_type === 'land_record')!.label,
+    'RTC (Pahani)',
+  );
+  const tg = documentChecklist({ ...KA_PLOT, state: 'Telangana' });
+  assert.ok(!tg.some((d) => d.document_type === 'khata'), 'no Khata in Telangana');
+  assert.equal(
+    tg.find((d) => d.document_type === 'conversion_order')!.label,
+    'NALA conversion order',
+  );
+});
+
+test('document plan: a Bengaluru builder flat, rented out', () => {
+  const plan = documentPlan(BLR_FLAT, { occupancy: 'rented' });
+  const key = plan.filter((d) => d.key).map((d) => d.type);
+  assert.deepEqual(key, [
+    'sale_deed',
+    'encumbrance_certificate',
+    'khata',
+    'property_tax',
+    'occupancy_certificate',
+    'rental_agreement',
+  ]);
+  assert.equal(plan.find((d) => d.type === 'khata')!.label, 'e-Khata');
+  assert.ok(plan.some((d) => d.type === 'rera' && !d.key));
 });
 
 test('Review list: who goes on it and why', () => {

@@ -49,7 +49,7 @@ export function PittuCarePlan({
     const service = (services.data ?? []).find((s) => s.code === item.service_code);
     return !service || !reachProblem(service, property.data?.reach);
   });
-  const missing = documentChecklist(state.context).filter((d) => !d.have);
+  const missing = documentChecklist(state.context, state.answers).filter((d) => !d.have);
   const [off, setOff] = useState<Record<string, boolean>>({});
   const [sending, setSending] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
