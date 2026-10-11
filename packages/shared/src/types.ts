@@ -70,6 +70,8 @@ export interface Me {
   features: {
     /** Pittu reads uploaded sale deeds (AI). */
     document_reading: boolean;
+    /** Switched on, but today's deed readings are used up (back tomorrow). */
+    document_reading_limited: boolean;
     /** The optional Plot satellite watch module is switched on. */
     satellite_watch: boolean;
   };

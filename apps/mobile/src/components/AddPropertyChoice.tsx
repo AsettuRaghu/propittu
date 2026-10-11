@@ -37,7 +37,14 @@ type Phase =
  * done its magic"). Only "Check and save" moves on — to the form.
  * A failed upload removes the draft.
  */
-export function AddPropertyChoice({ onManual }: { onManual: () => void }) {
+export function AddPropertyChoice({
+  onManual,
+  limited = false,
+}: {
+  onManual: () => void;
+  /** Today's deed readings are used up: shown, but paused until tomorrow. */
+  limited?: boolean;
+}) {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const [problem, setProblem] = useState<string | null>(null);
   const busy = phase.kind !== 'idle';
@@ -88,7 +95,8 @@ export function AddPropertyChoice({ onManual }: { onManual: () => void }) {
   };
 
   const waiting = (drafts.data ?? []).filter((d) => d.document_id || d.status);
-  const full = (drafts.data?.length ?? 0) >= MAX_UNFINISHED;
+  const atCap = (drafts.data?.length ?? 0) >= MAX_UNFINISHED;
+  const full = atCap || limited;
 
   return (
     <LinearGradient
@@ -168,9 +176,11 @@ export function AddPropertyChoice({ onManual }: { onManual: () => void }) {
             <View style={styles.privacy}>
               <Icon name="lock" size={12} color="rgba(255,255,255,0.8)" />
               <Text style={styles.note}>
-                {full
-                  ? 'Finish or remove an unfinished property below first'
-                  : `PDF up to ${formatFileSize(MAX_LONG_DOCUMENT_BYTES)}, or photos · stored privately`}
+                {limited
+                  ? 'Pittu has read several deeds today — back tomorrow, or add it by hand below'
+                  : atCap
+                    ? 'Finish or remove an unfinished property below first'
+                    : `PDF up to ${formatFileSize(MAX_LONG_DOCUMENT_BYTES)}, or photos · stored privately`}
               </Text>
             </View>
           </View>

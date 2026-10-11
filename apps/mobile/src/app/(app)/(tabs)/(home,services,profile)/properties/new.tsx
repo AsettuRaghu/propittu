@@ -63,9 +63,15 @@ export default function AddPropertyScreen() {
       />
     );
   }
-  // Pittu is offered only where it will work right now; everyone else sees the form.
+  // Pittu is offered wherever it's switched on; when today's readings are used up it
+  // still shows, saying so (never silently swapped for the form).
   if (mode === 'choose' && me.data?.features.document_reading) {
-    return <AddPropertyChoice onManual={() => setMode('form')} />;
+    return (
+      <AddPropertyChoice
+        onManual={() => setMode('form')}
+        limited={me.data.features.document_reading_limited}
+      />
+    );
   }
   return <AddPropertyForm />;
 }

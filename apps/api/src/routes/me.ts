@@ -64,7 +64,8 @@ meRouter.get('/me', async (req, res) => {
     staff_role: staffRow?.is_active ? staffRow.role : null,
     plan: planSummary(plan),
     features: {
-      document_reading: documentReading,
+      document_reading: documentReading.available,
+      document_reading_limited: documentReading.limited,
       // Module switches are readable by any signed-in user: no server key needed.
       satellite_watch: await moduleOn(db, 'satellite_watch'),
     },

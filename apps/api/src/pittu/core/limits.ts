@@ -43,17 +43,35 @@ export async function budgetLeft(db: SupabaseClient): Promise<boolean> {
 }
 
 /** Document readings per account per day (failed "too large" ones don't count). */
-export async function enforceDailyLimit(db: SupabaseClient, accountId: string): Promise<void> {
+/** Readings Pittu does by itself (other documents, ECs) have their own, higher cap. */
+const AUTO_READS_PER_DAY = 30;
+
+/**
+ * Daily caps per account (cost safety). `owner`: deeds the owner asks Pittu
+ * to read (AI_DAILY_READS_PER_ACCOUNT). `auto`: what Pittu reads by itself on
+ * upload. Re-reads by the team count towards neither.
+ */
+export async function enforceDailyLimit(
+  db: SupabaseClient,
+  accountId: string,
+  kind: 'owner' | 'auto' = 'owner',
+): Promise<void> {
   const since = new Date(Date.now() - 24 * 3600_000).toISOString();
-  const res = await db
+  let q = db
     .from('document_analyses')
     .select('id', { count: 'exact', head: true })
     .eq('account_id', accountId)
     .gte('updated_at', since)
     // (neq alone would drop rows whose error_code is NULL)
     .or('error_code.is.null,error_code.neq.too_large');
+  q =
+    kind === 'owner'
+      ? q.not('requested_by', 'is', null)
+      : q.is('requested_by', null).in('task', ['document.read', 'encumbrance.extract']);
+  const res = await q;
   must(res);
-  if ((res.count ?? 0) >= env.AI_DAILY_READS_PER_ACCOUNT) {
+  const cap = kind === 'owner' ? env.AI_DAILY_READS_PER_ACCOUNT : AUTO_READS_PER_DAY;
+  if ((res.count ?? 0) >= cap) {
     throw new HttpError(
       429,
       'AI_LIMIT_REACHED',

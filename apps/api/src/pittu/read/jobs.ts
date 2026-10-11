@@ -123,14 +123,18 @@ interface DocRow {
  * daily readings left and the monthly budget not used up. Used by GET /me so
  * the app offers the Sale Deed path only when it will actually work.
  */
-export async function canStartReading(accountId: string): Promise<boolean> {
-  if (!aiAvailableFor(accountId) || !serviceClient) return false;
+export async function canStartReading(
+  accountId: string,
+): Promise<{ available: boolean; limited: boolean }> {
+  if (!aiAvailableFor(accountId) || !serviceClient || !(await budgetLeft(serviceClient)))
+    return { available: false, limited: false };
   try {
     await enforceDailyLimit(serviceClient, accountId);
+    return { available: true, limited: false };
   } catch {
-    return false;
+    // Switched on, but today's deeds are used up: the app says so (never hides it).
+    return { available: true, limited: true };
   }
-  return budgetLeft(serviceClient);
 }
 
 /* ------------------------------------------------------------------ */
@@ -521,7 +525,7 @@ export async function queueAutoReading(documentId: string): Promise<string | nul
   if (!aiAvailableFor(doc.account_id) || !(await budgetLeft(db))) return null;
   if (doc.file_size > MAX_DIRECT_PDF_BYTES) return null;
   try {
-    await enforceDailyLimit(db, doc.account_id);
+    await enforceDailyLimit(db, doc.account_id, 'auto');
   } catch {
     return null;
   }
