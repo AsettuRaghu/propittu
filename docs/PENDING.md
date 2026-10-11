@@ -30,10 +30,13 @@ docs/DECISIONS.md; Pittu's design in docs/PITTU.md.
 
 ## Next that needs no decision (Claude)
 
-- Built 8 Oct 2026, waiting for the next app publish and a phone test: the property page's "From
-  Pittu" rows (Around your property, Government value, Records check) with their screens, the news dot
-  on Home cards, and S1 secure login storage. ("Let Pittu read this deed" was already in the app.)
-- Check that the live server reaches the GDELT news index after the first daily Watch run.
+- Built 11 Oct 2026, waiting for the next app publish and a phone test: "Here's what I found" after
+  adding from a deed, questions that follow the deed (flat / plot, renting, OC, Bengaluru e-Khata),
+  the land's story from the deed (sale-deed-v3), Pittu's market range (web search, rules decide),
+  Watch news published by Pittu when confident, and four rental services (on quote).
+- Existing test properties were read with sale-deed-v2 (no story): re-read them to see "Its story".
+- Pittu Watch finds almost nothing (1 item by 11 Oct): widen the sources (area searches, more feeds,
+  nearby place names) and check GDELT from the server.
 - Portal lists: move search and filters to the server when they pass a few hundred rows.
 
 ## Parked (owner's priorities)

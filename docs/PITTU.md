@@ -44,12 +44,31 @@ New capabilities get their own folder (`watch/`, `value/`, `legal/`) on the same
    owner, suggest a service, charge.
 2. **Never from the model's memory.** Every capability runs: **collect** from trusted sources (no
    AI) → **read** each item once (AI) → **match** to properties by survey number / village / PIN
-   (database) → **verify** in the team review queue → **explain** in plain words (AI).
+   (database) → **verify** (rules, and the team where it matters) → **explain** in plain words (AI).
+   Web search (market prices) counts as collecting: Pittu may only report prices on pages the
+   search really returned, and our code checks each URL against the search results.
 3. **Every call goes through `runTask()`** and is logged in `ai_operations` with its capability, so
    cost is reported per capability, customer and (later) PIN. One monthly budget for all.
 4. **Area work is done once and shared** (a notice, a guidance value per village/PIN); only
    per-property work (EC, court search) is charged per property, inside paid products.
 5. **Tasks are versioned**; results record the task version and model; changes are scored with
    `apps/api/scripts/ai-eval.ts` first. Use a separate API key for evals and tests.
+
+6. **Pittu goes first (owner, 11 Oct 2026).** Confident results reach owners without waiting for
+   the team; the team can still hide or correct them afterwards:
+   - what the owner's own deed says (details, the land's story) — straight away;
+   - Watch news that is relevant with high confidence (not safety news) — published by Pittu;
+   - the market range — shown only when our rules find enough real prices that agree
+     (`apps/api/src/value/range.ts`), otherwise just the government value;
+   - Legal findings that suggest a problem (amber / red) still go to the team first.
+
+## The journey after adding from a deed
+
+Reading → check the details → **"Here's what I found"** (what and where it is, who it was bought
+from and for how much, the land's story from the deed, the record numbers, the government value and
+Pittu's market range) → **questions that follow the deed** (a flat gets flat questions — who lives
+there, the rental agreement, renting it out, the OC from the builder; a plot gets plot questions;
+Bengaluru city gets the e-Khata; nothing the deed already says is asked) → the care plan, including
+the rental services. Rules: `packages/shared/src/pittu.ts`.
 
 Details of document reading: `docs/AI_DOCUMENT_INTELLIGENCE.md`. Legal pilot: `docs/PITTU_LEGAL_PILOT.md`.
