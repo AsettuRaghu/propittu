@@ -7,7 +7,7 @@ import { scrub } from '../src/pittu/core/privacy.js';
 import { encumbranceTask } from '../src/pittu/read/tasks/encumbrance.js';
 import { newsPrompt, newsTask } from '../src/pittu/watch/tasks/news.js';
 import { localNewsUrl, mentions, parseFeed, spellings } from '../src/watch/rss.js';
-import { sameStoryOnce } from '../src/routes/watch.js';
+import { sameStoryOnce } from '../src/watch/dedupe.js';
 import { ratesTask } from '../src/pittu/value/tasks/rates.js';
 import { SALE_DEED_FIELDS, saleDeedTask } from '../src/pittu/read/tasks/saleDeed.js';
 import { AiOutputError } from '../src/pittu/core/types.js';
