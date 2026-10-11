@@ -269,8 +269,10 @@ function PittuSection({ property, withSetup }: { property: PropertyDetail; withS
   const unread = !!property.deed_reading && property.deed_reading.status !== 'ready';
   const setup = withSetup && (!!pittu.data || unread);
   const worth = value?.government_value_inr ?? null;
-  if (!setup && !news.length && worth === null && !check) return null;
-  const open = (page: 'news' | 'value' | 'legal') =>
+  const est = value?.estimate?.status === 'ready' ? value.estimate : null;
+  const history = pittu.data?.story?.history ?? [];
+  if (!setup && !news.length && worth === null && !est && !check && history.length < 2) return null;
+  const open = (page: 'news' | 'value' | 'legal' | 'history') =>
     router.push(`/properties/${property.id}/${page}`);
   const newsAt = news.reduce<string | null>(
     (latest, n) => (n.reviewed_at && (!latest || n.reviewed_at > latest) ? n.reviewed_at : latest),
@@ -293,7 +295,16 @@ function PittuSection({ property, withSetup }: { property: PropertyDetail; withS
           onPress={() => open('news')}
         />
       ) : null}
-      {worth !== null ? (
+      {est?.value_low && est.value_high ? (
+        <ListRow
+          icon="rupee"
+          accent="indigo"
+          title={`Worth about ${rupeesShort(est.value_low)} – ${rupeesShort(est.value_high)}`}
+          subtitle={`From recent prices nearby${worth !== null ? ` · government value ${rupeesShort(worth)}` : ''}`}
+          subtitleLines={2}
+          onPress={() => open('value')}
+        />
+      ) : worth !== null ? (
         <ListRow
           icon="government"
           accent="indigo"
@@ -301,6 +312,16 @@ function PittuSection({ property, withSetup }: { property: PropertyDetail; withS
           subtitle="The government’s rate for your area — not a selling price"
           subtitleLines={2}
           onPress={() => open('value')}
+        />
+      ) : null}
+      {history.length >= 2 ? (
+        <ListRow
+          icon="deed"
+          accent="violet"
+          title={`Its story · ${history.length} steps`}
+          subtitle={`From ${history[0]!.from[0] ?? history[0]!.to[0] ?? 'the first owner'} to you, as your deed tells it`}
+          subtitleLines={2}
+          onPress={() => open('history')}
         />
       ) : null}
       {check ? (

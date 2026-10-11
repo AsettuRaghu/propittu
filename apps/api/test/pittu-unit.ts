@@ -53,6 +53,10 @@ test('owner by name → no relationship question; mismatch → asked first', () 
 test('questions fit the property and the state', () => {
   const plot = pittuQuestions(KA_PLOT, {}).map((q) => q.id);
   assert.deepEqual(plot, ['relation', 'plot_built', 'last_visit', 'khata_name', 'tax_paid']);
+  assert.ok(
+    pittuQuestions(KA_PLOT, { plot_built: 'vacant' }).some((q) => q.id === 'plot_fenced'),
+    'a vacant plot → is it fenced?',
+  );
   const tgFlat = pittuQuestions(
     { ...KA_PLOT, state: 'Telangana', property_type: 'apartment', account_name: 'Ananya Rao' },
     { occupancy: 'self' },
@@ -83,7 +87,7 @@ test('answers are validated against the question bank', () => {
   assert.ok(!isValidAnswer(KA_PLOT, {}, 'ptin', 'yes'), 'PTIN is not asked in Karnataka');
 });
 
-test('care plan: every answer leads to a service, most important first, max 3', () => {
+test('care plan: every answer leads to a service, most important first, max 4', () => {
   const plan = carePlan(KA_PLOT, {
     relation: 'manage',
     plot_built: 'vacant',
@@ -92,7 +96,12 @@ test('care plan: every answer leads to a service, most important first, max 3', 
   });
   assert.deepEqual(
     plan.map((p) => p.service_code),
-    ['khata_mutation_assistance', 'property_tax_assistance', 'site_inspection'],
+    [
+      'khata_mutation_assistance',
+      'property_tax_assistance',
+      'site_inspection',
+      'property_cleaning',
+    ],
   );
   assert.ok(plan[0]!.legal, 'Khata help is flagged for legal review');
   assert.match(plan[0]!.reason, /Ananya Rao’s name/);
@@ -178,5 +187,74 @@ test('Review list: changing what the deed says is flagged', () => {
     reviewReasons(owner, {}, [{ key: 'village', status: 'edited', confidence: 'high' }]),
     [],
     'not every fact is checked',
+  );
+});
+
+/* ---- Questions that follow the deed (11 Oct 2026) ---- */
+
+const BLR_FLAT: PittuContext = {
+  state: 'Karnataka',
+  property_type: 'apartment',
+  buyers: ['Ananya Rao'],
+  account_name: 'Ananya Rao',
+  khata_number: null,
+  documents: ['sale_deed'],
+  deed: {
+    unit_number: '1102',
+    project_name: 'Lakeview Heights',
+    developer: null,
+    sellers: ['Sunrise Developers Private Limited'],
+    city: 'Bengaluru',
+    district: 'Bengaluru Urban',
+    taluk: 'Bengaluru East',
+    ptin: null,
+  },
+};
+
+test('a Bengaluru flat bought from a builder: flat questions, OC and the e-Khata', () => {
+  const ids = (answers = {}) => pittuQuestions(BLR_FLAT, answers).map((q) => q.id);
+  assert.deepEqual(ids(), ['occupancy', 'oc_have', 'last_visit', 'ekhata', 'tax_paid']);
+  assert.deepEqual(ids({ occupancy: 'rented' }), [
+    'occupancy',
+    'tenancy_end',
+    'oc_have',
+    'ekhata',
+    'tax_paid',
+  ]);
+  assert.deepEqual(ids({ occupancy: 'empty' }), [
+    'occupancy',
+    'rent_out',
+    'oc_have',
+    'last_visit',
+    'ekhata',
+    'tax_paid',
+  ]);
+  assert.match(
+    pittuQuestions(BLR_FLAT, {})[0]!.title,
+    /flat 1102 in Lakeview Heights/,
+    'Pittu names the flat from the deed',
+  );
+});
+
+test('outer Bengaluru (Anekal) gets the ordinary Khata question; Telangana skips a known PTIN', () => {
+  const anekal = { ...BLR_FLAT, deed: { ...BLR_FLAT.deed!, taluk: 'Anekal' } };
+  assert.ok(pittuQuestions(anekal, {}).some((q) => q.id === 'khata_name'));
+  assert.ok(!pittuQuestions(anekal, {}).some((q) => q.id === 'ekhata'));
+  const tg = { ...BLR_FLAT, state: 'Telangana', deed: { ...BLR_FLAT.deed!, ptin: '1234567890' } };
+  assert.ok(!pittuQuestions(tg, {}).some((q) => q.id === 'ptin'));
+});
+
+test('care plan: renting it out and an e-Khata to do', () => {
+  assert.deepEqual(
+    carePlan(BLR_FLAT, { occupancy: 'empty', rent_out: 'yes', ekhata: 'no', oc_have: 'yes' }).map(
+      (p) => p.service_code,
+    ),
+    ['khata_mutation_assistance', 'tenant_search', 'rental_agreement', 'property_visit'],
+  );
+  assert.deepEqual(
+    carePlan(BLR_FLAT, { occupancy: 'rented', tenancy_end: 'soon', ekhata: 'yes' }).map(
+      (p) => p.service_code,
+    ),
+    ['rental_agreement', 'rental_management'],
   );
 });

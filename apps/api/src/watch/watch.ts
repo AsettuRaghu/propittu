@@ -74,6 +74,10 @@ export async function collectPlace(
 }
 
 /** Pittu reads the place's unread headlines (one AI call per 20). */
+/** Owners see it without a team check: relevant, high confidence, not about safety. */
+const autoPublish = (r: { relevant: boolean; confidence: string; category: string | null }) =>
+  r.relevant && r.confidence === 'high' && r.category !== 'safety';
+
 export async function readPlace(db: SupabaseClient, place: Place): Promise<number> {
   if (!aiConfigured()) return 0;
   const { data, error } = await db
@@ -115,6 +119,15 @@ export async function readPlace(db: SupabaseClient, place: Place): Promise<numbe
                   ai_confidence: r.confidence,
                   // Clearly irrelevant: filtered out, still visible to staff.
                   ...(!r.relevant && r.confidence !== 'low' ? { review: 'rejected' } : {}),
+                  // Clearly relevant: Pittu publishes it to owners itself (the team can
+                  // still hide it). Safety news always waits for a person.
+                  ...(autoPublish(r)
+                    ? {
+                        review: 'approved',
+                        auto_approved: true,
+                        reviewed_at: new Date().toISOString(),
+                      }
+                    : {}),
                 }
               : { ai_status: 'failed' },
           )

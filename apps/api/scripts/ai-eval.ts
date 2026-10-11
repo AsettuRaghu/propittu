@@ -87,6 +87,11 @@ for (const id of ids) {
     `\n== ${id} · ${saleDeedTask.version} · ${answer.model} · ${(answer.durationMs / 1000).toFixed(1)}s · ~$${usd.toFixed(3)} · ${fields.length - misses.length}/${fields.length}` +
       (result.privacy_removed ? ` · privacy filter removed ${result.privacy_removed}` : ''),
   );
+  for (const e of result.title_history) {
+    console.log(
+      `   · ${e.date ?? '?'} ${e.event}: ${e.from.join(', ') || '?'} → ${e.to.join(', ') || '?'}${e.note ? ` (${e.note})` : ''}`,
+    );
+  }
   for (const f of misses) {
     const got = result.fields[f as keyof SaleDeedResult['fields']];
     console.log(

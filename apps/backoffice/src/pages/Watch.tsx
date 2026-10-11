@@ -167,7 +167,11 @@ function NewsCard({ item, onChanged }: { item: WatchItem; onChanged: () => void 
           </button>
         ) : null}
       </div>
-      {item.reviewed_at ? <span className="sub">Reviewed {dateTime(item.reviewed_at)}</span> : null}
+      {item.reviewed_at ? (
+        <span className="sub">
+          {item.auto_approved ? 'Published by Pittu' : 'Reviewed'} {dateTime(item.reviewed_at)}
+        </span>
+      ) : null}
       <Feedback a={a} />
     </div>
   );

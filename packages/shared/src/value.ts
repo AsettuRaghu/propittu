@@ -103,6 +103,36 @@ export interface PropertyValue {
   government_value_inr: number | null;
   /** Why something is missing, in plain words. */
   missing: string[];
+  /** What similar properties sell for nearby (GET /properties/:id/value only). */
+  estimate?: MarketEstimate | null;
+}
+
+/** One price Pittu found on the web, with its page. */
+export interface MarketComparable {
+  url: string;
+  title: string;
+  kind: 'listing' | 'sale' | 'project_price';
+  same_project: boolean;
+  /** Rupees per sq ft. */
+  per_sqft: number;
+  /** YYYY-MM or YYYY-MM-DD. */
+  date: string | null;
+}
+
+/**
+ * Pittu's market range: shown to the owner only when `status` is 'ready'
+ * (enough real comparables that agree); otherwise only the government value.
+ */
+export interface MarketEstimate {
+  status: 'working' | 'ready' | 'not_enough' | 'failed';
+  per_sqft_low: number | null;
+  per_sqft_high: number | null;
+  value_low: number | null;
+  value_high: number | null;
+  confidence: 'high' | 'medium' | null;
+  comparables: MarketComparable[];
+  note: string | null;
+  updated_at: string;
 }
 
 const place = z.string().trim().min(1).max(120);

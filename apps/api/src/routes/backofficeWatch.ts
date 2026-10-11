@@ -18,7 +18,7 @@ const canReview: RequestHandler = (req, _res, next) => {
 
 const ITEM_COLUMNS =
   'id, place_id, url, title, snippet, domain, published_at, ai_status, relevant, category, impact, summary, ' +
-  'ai_confidence, review, reviewed_at, place:watch_places(name)';
+  'ai_confidence, review, reviewed_at, auto_approved, place:watch_places(name)';
 type ItemRow = Omit<WatchItem, 'place_name'> & { place: { name: string } | null };
 const toItem = ({ place, ...r }: ItemRow): WatchItem => ({ ...r, place_name: place?.name ?? null });
 

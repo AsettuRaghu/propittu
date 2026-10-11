@@ -539,4 +539,51 @@ export interface WatchItem {
   ai_confidence: 'high' | 'medium' | 'low' | null;
   review: 'pending' | 'approved' | 'rejected';
   reviewed_at: string | null;
+  /** Published by Pittu itself (relevant, high confidence); the team can still hide it. */
+  auto_approved: boolean;
+}
+
+/* ------------------------------------------------------------------ *
+ * The property's history as its sale deed recites it (sale-deed-v3).
+ * ------------------------------------------------------------------ */
+
+export type TitleEventKind =
+  | 'sale'
+  | 'gift'
+  | 'partition'
+  | 'inheritance'
+  | 'will'
+  | 'settlement'
+  | 'release'
+  | 'government_grant'
+  | 'conversion'
+  | 'development_agreement'
+  | 'allotment'
+  | 'court_decree'
+  | 'other';
+
+export const TITLE_EVENT_LABELS: Record<TitleEventKind, string> = {
+  sale: 'Sold',
+  gift: 'Gifted',
+  partition: 'Family partition',
+  inheritance: 'Inherited',
+  will: 'Passed on by will',
+  settlement: 'Settled on family',
+  release: 'Share released',
+  government_grant: 'Granted by the government',
+  conversion: 'Converted for building',
+  development_agreement: 'Development agreement',
+  allotment: 'Allotted',
+  court_decree: 'Court decree',
+  other: 'Other',
+};
+
+export interface TitleEvent {
+  /** YYYY-MM-DD, or just YYYY. */
+  date: string | null;
+  event: TitleEventKind;
+  from: string[];
+  to: string[];
+  document_number: string | null;
+  note: string | null;
 }

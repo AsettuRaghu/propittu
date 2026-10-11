@@ -42,7 +42,7 @@ watchCustomerRouter.get('/properties/:id/watch', async (req, res) => {
     await serviceClient
       .from('watch_items')
       .select(
-        'id, place_id, url, title, snippet, domain, published_at, ai_status, relevant, category, impact, summary, ai_confidence, review, reviewed_at',
+        'id, place_id, url, title, snippet, domain, published_at, ai_status, relevant, category, impact, summary, ai_confidence, review, reviewed_at, auto_approved',
       )
       .in(
         'place_id',

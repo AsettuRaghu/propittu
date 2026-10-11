@@ -36,6 +36,7 @@ import {
   Hammer,
   Hourglass,
   House,
+  KeyRound,
   Image as ImageIcon,
   Images,
   IndianRupee,
@@ -130,6 +131,7 @@ const ICONS = {
 
   // places & property
   home: House,
+  key: KeyRound,
   apartment: Building2,
   building: Building,
   land: LandPlot,

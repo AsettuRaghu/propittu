@@ -160,12 +160,16 @@ export const usePropertyNews = (propertyId: string) =>
     staleTime: 10 * 60_000,
   });
 
-/** What the owner paid and the government value today. */
+/**
+ * What the owner paid, the government value today and Pittu's market range
+ * (checks back every 5 s while Pittu is still looking up prices).
+ */
 export const usePropertyValue = (propertyId: string) =>
   useQuery({
     queryKey: ['properties', propertyId, 'value'] as const,
     queryFn: () => api<PropertyValue>(`/properties/${propertyId}/value`),
     staleTime: 10 * 60_000,
+    refetchInterval: (q) => (q.state.data?.estimate?.status === 'working' ? 5000 : false),
   });
 
 /** Records checks the team has shared with the owner, newest first. */

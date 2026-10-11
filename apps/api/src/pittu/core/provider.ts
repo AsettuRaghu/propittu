@@ -26,6 +26,7 @@ function fakeProvider(task: AiTask<unknown>): AiProvider {
         inputTokens: 1000,
         outputTokens: 100,
         durationMs: 5,
+        ...(req.webSearch ? { searches: 1, sources: task.fixtureSources ?? [] } : {}),
       };
     },
   };

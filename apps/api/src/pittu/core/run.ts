@@ -25,7 +25,7 @@ export async function runTask<R>(
   task: AiTask<R>,
   input: { documents: { kind: 'pdf'; bytes: Uint8Array }[]; text?: string },
   ctx: RunContext,
-): Promise<{ result: R; model: string }> {
+): Promise<{ result: R; model: string; sources: string[] }> {
   const spend = await monthSpendUsd(db);
   if (spend >= env.AI_MONTHLY_BUDGET_USD) {
     logger.error(
@@ -41,6 +41,7 @@ export async function runTask<R>(
     inputTokens: number;
     outputTokens: number;
     durationMs: number;
+    searches?: number;
     outcome: 'ok' | 'invalid_output' | 'provider_error';
     errorCode?: string;
   }) =>
@@ -54,7 +55,7 @@ export async function runTask<R>(
       model: o.model,
       input_tokens: o.inputTokens,
       output_tokens: o.outputTokens,
-      cost_usd: estimateCostUsd(o.model, o.inputTokens, o.outputTokens),
+      cost_usd: estimateCostUsd(o.model, o.inputTokens, o.outputTokens, o.searches ?? 0),
       duration_ms: o.durationMs,
       outcome: o.outcome,
       error_code: o.errorCode ?? null,
@@ -70,6 +71,7 @@ export async function runTask<R>(
       text: input.text ?? task.userText,
       schema: task.schema,
       maxOutputTokens: task.maxOutputTokens,
+      ...(task.webSearch ? { webSearch: task.webSearch } : {}),
     });
   } catch (err) {
     const e =
@@ -90,6 +92,7 @@ export async function runTask<R>(
     inputTokens: answer.inputTokens,
     outputTokens: answer.outputTokens,
     durationMs: answer.durationMs,
+    searches: answer.searches ?? 0,
   };
   let result: R;
   try {
@@ -100,5 +103,5 @@ export async function runTask<R>(
     throw err instanceof AiOutputError ? err : new AiOutputError(code, String(err));
   }
   await log({ ...usage, outcome: 'ok' });
-  return { result, model: answer.model };
+  return { result, model: answer.model, sources: answer.sources ?? [] };
 }

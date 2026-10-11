@@ -13,6 +13,7 @@ import { prepareDocument, uploadDocument } from '@/api/uploads';
 import { useQueryClient } from '@tanstack/react-query';
 import { Icon } from '@/components/Icon';
 import { PittuCarePlan } from '@/components/PittuCarePlan';
+import { PittuFound } from '@/components/PittuFound';
 import { QuestionCard } from '@/components/QuestionCard';
 import { ErrorState, LoadingState } from '@/components/States';
 import { Banner, Button } from '@/components/ui';
@@ -43,6 +44,10 @@ function Flow({ propertyId, state }: { propertyId: string; state: PittuState }) 
 
   const questions = pittuQuestions(state.context, state.answers);
   const pending = questions.filter((q) => !state.answers[q.id]);
+  // Straight after adding from a deed: "Here's what I found" before the first question.
+  const [found, setFound] = useState(
+    () => !!state.story && Object.keys(state.answers).length === 0,
+  );
   const current = pending[0];
   const needsReceipt =
     state.answers.tax_paid === 'paid' &&
@@ -84,6 +89,15 @@ function Flow({ propertyId, state }: { propertyId: string; state: PittuState }) 
       setUploading(false);
     }
   };
+
+  if (found && current) {
+    return (
+      <>
+        <Stack.Screen options={{ title: 'From your deed' }} />
+        <PittuFound propertyId={propertyId} state={state} onNext={() => setFound(false)} />
+      </>
+    );
+  }
 
   if (current || needsReceipt) {
     const total = questions.length;

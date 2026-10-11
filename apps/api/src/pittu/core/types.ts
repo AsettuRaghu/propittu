@@ -22,6 +22,8 @@ export interface ProviderRequest {
   /** JSON schema the answer must follow (structured output). */
   schema: Record<string, unknown>;
   maxOutputTokens: number;
+  /** Let the model search the web (server-side) before answering. */
+  webSearch?: { maxUses: number };
 }
 
 export interface ProviderResponse {
@@ -30,6 +32,9 @@ export interface ProviderResponse {
   inputTokens: number;
   outputTokens: number;
   durationMs: number;
+  /** Web searches made, and every page URL they returned (webSearch tasks only). */
+  searches?: number;
+  sources?: string[];
 }
 
 export interface AiProvider {
@@ -85,6 +90,10 @@ export interface AiTask<Result> {
   facts(result: Result): ExtractedFact[];
   /** Canned answer for the fake provider (tests). */
   readonly fixture: unknown;
+  /** Searches the web before answering (e.g. current prices). */
+  readonly webSearch?: { maxUses: number };
+  /** Page URLs the fake provider pretends its searches returned. */
+  readonly fixtureSources?: string[];
 }
 
 /**

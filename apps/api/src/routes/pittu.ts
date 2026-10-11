@@ -11,6 +11,7 @@ import {
 } from '@propittu/shared';
 import { auth, type AuthContext } from '../auth.js';
 import { audit } from '../audit.js';
+import { deedStory } from '../deeds/story.js';
 import { invalid, must, notFound, ok, uuidParam } from '../errors.js';
 import { logger } from '../logger.js';
 import { serviceClient } from '../supabase.js';
@@ -41,7 +42,7 @@ async function loadState(ctx: AuthContext, propertyId: string): Promise<PittuSta
   );
   if (!property) throw notFound('Property');
 
-  const [docs, profile, answers, buyers] = await Promise.all([
+  const [docs, profile, answers, buyers, told] = await Promise.all([
     ctx.db
       .from('property_documents')
       .select('document_type')
@@ -64,6 +65,7 @@ async function loadState(ctx: AuthContext, propertyId: string): Promise<PittuSta
       .neq('status', 'rejected')
       .order('created_at', { ascending: false })
       .limit(1),
+    deedStory(ctx.db, propertyId),
   ]);
 
   const fact = must<{ value: unknown; final_value: unknown }[]>(buyers)[0];
@@ -75,11 +77,12 @@ async function loadState(ctx: AuthContext, propertyId: string): Promise<PittuSta
     account_name: must<{ full_name: string | null } | null>(profile)?.full_name ?? null,
     khata_number: property.khata_number,
     documents: [...new Set(must<{ document_type: string }[]>(docs).map((d) => d.document_type))],
+    deed: told.deed,
   };
   const saved: PittuAnswers = Object.fromEntries(
     must<{ question_id: string; answer: string }[]>(answers).map((a) => [a.question_id, a.answer]),
   );
-  return { context, answers: saved };
+  return { context, answers: saved, story: told.story };
 }
 
 pittuRouter.get('/properties/:id/pittu', async (req, res) => {

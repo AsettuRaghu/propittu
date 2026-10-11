@@ -161,7 +161,7 @@ values ('acc0000a-0000-0000-0000-00000000000a', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaa
 select tst.rows('select * from public.properties', 1, 'A sees its account''s property');
 select tst.ok((select reference from public.service_requests limit 1) = 'PR-000123',
   'first service request reference is PR-000123');
-select tst.rows('select * from public.services', 13, 'A sees the 13 catalogue services');
+select tst.rows('select * from public.services', 17, 'A sees the 17 catalogue services');
 select tst.ok(
   (select document_count from public.property_summaries
    where id = 'a1a1a1a1-0000-0000-0000-000000000001') = 1,
@@ -1681,7 +1681,7 @@ reset role;
 -- =====================================================================
 set role authenticated;
 select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
-select tst.rows('select * from public.service_categories', 3, 'customers can read the categories');
+select tst.rows('select * from public.service_categories', 4, 'customers can read the categories');
 select tst.rejects($$insert into public.service_categories (code, name) values ('hack', 'Hack')$$,
   'a customer cannot add a category');
 select tst.as_user('55555555-5555-5555-5555-555555555555');
@@ -1770,6 +1770,24 @@ select tst.rejects($$insert into public.value_rates (state, district, locality, 
   'customers cannot add rates');
 select tst.rejects($$insert into public.value_sources (state, district, title) values ('Karnataka', 'Bangalore', 'x')$$,
   'customers cannot add rate documents');
+reset role;
+
+-- =====================================================================
+\echo
+\echo '== Pittu Value: market range =='
+-- =====================================================================
+reset role;
+insert into public.value_estimates (property_id, account_id, status, per_sqft_low, per_sqft_high)
+values ('a1a1a1a1-0000-0000-0000-0000000000e1', 'acc0000a-0000-0000-0000-00000000000a', 'ready', 8000, 9000);
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rows('select * from public.value_estimates', 1, 'the owner sees their property''s market range');
+select tst.rejects($$update public.value_estimates set per_sqft_high = 99999$$, 'owners cannot change it');
+select tst.rejects($$insert into public.value_estimates (property_id, account_id, status)
+                     values ('a1a1a1a1-0000-0000-0000-0000000000e1', 'acc0000a-0000-0000-0000-00000000000a', 'ready')$$,
+  'owners cannot write estimates');
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.rows('select * from public.value_estimates', 0, 'other customers never see it');
 reset role;
 
 \echo

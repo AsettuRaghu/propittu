@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { ValueRate } from '@propittu/shared';
 import { computeValue, kindFor, matchRate, type ValueInput } from '../src/value/match.js';
+import { marketRange } from '../src/value/range.js';
 
 const rate = (r: Partial<ValueRate>): ValueRate => ({
   id: 'r',
@@ -78,4 +79,70 @@ test('PIN codes match when the name does not; missing pieces are explained', () 
   const v = computeValue({ ...plot, area_unit: 'bigha', paid_inr: null }, []);
   assert.equal(v.government_value_inr, null);
   assert.equal(v.missing.length, 3);
+});
+
+/* ---- Market range (marketRange): when Pittu's comparables are enough ---- */
+
+const comp = (per_sqft: number, i: number, same_project = true) => ({
+  url: `https://example.com/${i}`,
+  title: `listing ${i}`,
+  kind: 'listing' as const,
+  same_project,
+  per_sqft,
+  date: '2026-08',
+});
+const pages = (n: number) => Array.from({ length: n }, (_, i) => `https://example.com/${i}/`);
+
+test('market range from agreeing comparables in the same project', () => {
+  const r = marketRange({
+    comparables: [comp(8000, 0), comp(8400, 1), comp(8800, 2)],
+    sources: pages(3),
+    area_sqft: 1240,
+    government_per_sqft: 5600,
+  });
+  assert.equal(r.status, 'ready');
+  assert.equal(r.per_sqft_low, 8000);
+  assert.equal(r.per_sqft_high, 8800);
+  assert.equal(r.value_low, 9_900_000); // 8000 × 1240 = 99.2 lakh → ₹99 lakh
+  assert.equal(r.value_high, 10_900_000);
+  assert.equal(r.confidence, 'high');
+});
+
+test('a price on a page the search never returned is ignored', () => {
+  const r = marketRange({
+    comparables: [comp(8000, 0), comp(8400, 1), comp(8800, 9)],
+    sources: pages(3),
+    area_sqft: 1240,
+    government_per_sqft: null,
+  });
+  assert.equal(r.status, 'not_enough');
+  assert.equal(r.comparables.length, 2);
+});
+
+test('outliers are dropped; too few nearby (not same project) is not enough', () => {
+  const r = marketRange({
+    comparables: [comp(8000, 0, false), comp(8300, 1, false), comp(30000, 2, false)],
+    sources: pages(3),
+    area_sqft: 1000,
+    government_per_sqft: null,
+  });
+  assert.equal(r.status, 'not_enough');
+  assert.equal(r.comparables.length, 2);
+});
+
+test('prices too far apart, or far below the government rate, are not shown', () => {
+  const wide = marketRange({
+    comparables: [comp(6000, 0), comp(7500, 1), comp(10000, 2)],
+    sources: pages(3),
+    area_sqft: 1000,
+    government_per_sqft: null,
+  });
+  assert.equal(wide.status, 'not_enough');
+  const cheap = marketRange({
+    comparables: [comp(3000, 0), comp(3100, 1), comp(3200, 2)],
+    sources: pages(3),
+    area_sqft: 1000,
+    government_per_sqft: 5000,
+  });
+  assert.equal(cheap.status, 'not_enough');
 });

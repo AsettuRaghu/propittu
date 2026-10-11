@@ -34,6 +34,7 @@ export const PROPERTY_TYPE_GRADIENTS: Record<PropertyType, readonly [string, str
 const SERVICE_CATEGORY_ICONS: Record<string, IconName> = {
   property_government: 'government',
   property_care: 'shield-check',
+  rentals: 'key',
   other: 'chat',
 };
 
@@ -51,6 +52,10 @@ const SERVICE_ICONS: Record<string, { icon: IconName; accent: Accent }> = {
   document_verification: { icon: 'document-check', accent: 'indigo' },
   khata_mutation_assistance: { icon: 'deed', accent: 'violet' },
   compliance_alert_assistance: { icon: 'bell', accent: 'coral' },
+  tenant_search: { icon: 'users', accent: 'sky' },
+  rental_agreement: { icon: 'document', accent: 'indigo' },
+  tenant_verification: { icon: 'verified', accent: 'teal' },
+  rental_management: { icon: 'key', accent: 'violet' },
   other: { icon: 'chat', accent: 'slate' },
 };
 

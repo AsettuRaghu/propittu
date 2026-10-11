@@ -20,29 +20,60 @@ export function anthropicProvider(apiKey: string): AiProvider {
     async run(req: ProviderRequest): Promise<ProviderResponse> {
       const t0 = Date.now();
       let msg;
+      let searches = 0;
+      let inputTokens = 0;
+      let outputTokens = 0;
+      const sources: string[] = [];
       try {
-        msg = await client.messages.create({
-          model: req.model,
-          max_tokens: req.maxOutputTokens,
-          system: req.system,
-          messages: [
-            {
-              role: 'user',
-              content: [
-                ...req.documents.map((d) => ({
-                  type: 'document' as const,
-                  source: {
-                    type: 'base64' as const,
-                    media_type: 'application/pdf' as const,
-                    data: Buffer.from(d.bytes).toString('base64'),
-                  },
-                })),
-                { type: 'text' as const, text: req.text },
-              ],
-            },
-          ],
-          output_config: { format: { type: 'json_schema', schema: req.schema } },
-        });
+        const messages: Anthropic.MessageParam[] = [
+          {
+            role: 'user',
+            content: [
+              ...req.documents.map((d) => ({
+                type: 'document' as const,
+                source: {
+                  type: 'base64' as const,
+                  media_type: 'application/pdf' as const,
+                  data: Buffer.from(d.bytes).toString('base64'),
+                },
+              })),
+              { type: 'text' as const, text: req.text },
+            ],
+          },
+        ];
+        // A long web search can pause the turn; send it back to carry on (a few times at most).
+        for (let round = 0; round < 3; round++) {
+          msg = await client.messages.create({
+            model: req.model,
+            max_tokens: req.maxOutputTokens,
+            system: req.system,
+            messages,
+            output_config: { format: { type: 'json_schema', schema: req.schema } },
+            ...(req.webSearch
+              ? {
+                  tools: [
+                    {
+                      type: 'web_search_20260318' as const,
+                      name: 'web_search' as const,
+                      max_uses: req.webSearch.maxUses,
+                      user_location: { type: 'approximate' as const, country: 'IN' },
+                    },
+                  ],
+                }
+              : {}),
+          });
+          searches += msg.usage.server_tool_use?.web_search_requests ?? 0;
+          inputTokens += msg.usage.input_tokens;
+          outputTokens += msg.usage.output_tokens;
+          for (const block of msg.content) {
+            if (block.type === 'web_search_tool_result' && Array.isArray(block.content)) {
+              for (const r of block.content)
+                if (r.type === 'web_search_result') sources.push(r.url);
+            }
+          }
+          if (msg.stop_reason !== 'pause_turn') break;
+          messages.push({ role: 'assistant', content: msg.content });
+        }
       } catch (err) {
         const durationMs = Date.now() - t0;
         if (err instanceof APIError) {
@@ -63,25 +94,33 @@ export function anthropicProvider(apiKey: string): AiProvider {
       }
 
       const durationMs = Date.now() - t0;
-      const usage = {
-        inputTokens: msg.usage.input_tokens,
-        outputTokens: msg.usage.output_tokens,
-        durationMs,
-      };
+      if (!msg) throw new AiProviderError('no_text', false, 'No answer');
+      const usage = { inputTokens, outputTokens, durationMs };
       if (msg.stop_reason === 'max_tokens') {
         throw new AiProviderError('truncated', false, 'Answer was cut off (max tokens)', usage);
       }
-      const text = msg.content.find((c) => c.type === 'text');
-      if (!text || text.type !== 'text') {
+      // The answer is the text after the last search (it may come in several blocks).
+      const blocks = msg.content;
+      const lastTool = blocks.findLastIndex((c) => c.type !== 'text');
+      const text = blocks
+        .slice(lastTool + 1)
+        .flatMap((c) => (c.type === 'text' ? [c.text] : []))
+        .join('');
+      if (!text.trim()) {
         throw new AiProviderError('no_text', false, 'No answer text', usage);
       }
       let json: unknown;
       try {
-        json = JSON.parse(text.text);
+        json = JSON.parse(text);
       } catch {
         throw new AiProviderError('bad_json', false, 'Answer was not JSON', usage);
       }
-      return { json, model: msg.model, ...usage };
+      return {
+        json,
+        model: msg.model,
+        ...usage,
+        ...(req.webSearch ? { searches, sources: [...new Set(sources)] } : {}),
+      };
     },
   };
 }

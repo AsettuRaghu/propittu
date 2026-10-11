@@ -26,6 +26,7 @@ import { assertOwnsProperty } from '../ownership.js';
 import { enforceLimit, planOf, requireFeature } from '../plan.js';
 import { removeProperty } from '../propertyRemoval.js';
 import { serviceClient } from '../supabase.js';
+import { estimateMarket } from '../value/estimate.js';
 import { refreshReview } from './pittu.js';
 import {
   countConfirmed,
@@ -387,6 +388,8 @@ propertySetupRouter.post('/properties/:id/setup', async (req, res) => {
     },
   );
   await refreshReview(ctx, id);
+  // Pittu starts on the market range straight away, so it's ready by the end of the questions.
+  waitUntil(estimateMarket(id));
   // Roughly where it is, from the deed's village — done after answering.
   if (row.latitude === null) waitUntil(placeNearDeed(id, facts, input));
   ok(res, toProperty(row));

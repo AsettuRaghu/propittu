@@ -10,7 +10,18 @@ const PRICES: Record<string, { input: number; output: number }> = {
 };
 const FALLBACK = { input: 15, output: 75 };
 
-export function estimateCostUsd(model: string, inputTokens: number, outputTokens: number): number {
+/** Web search is billed per search, on top of tokens. */
+const USD_PER_SEARCH = 0.01;
+
+export function estimateCostUsd(
+  model: string,
+  inputTokens: number,
+  outputTokens: number,
+  searches = 0,
+): number {
   const p = PRICES[model] ?? PRICES[model.replace(/-\d{8}$/, '')] ?? FALLBACK;
-  return +((inputTokens * p.input + outputTokens * p.output) / 1_000_000).toFixed(5);
+  return +(
+    (inputTokens * p.input + outputTokens * p.output) / 1_000_000 +
+    searches * USD_PER_SEARCH
+  ).toFixed(5);
 }
