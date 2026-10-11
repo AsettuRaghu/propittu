@@ -34,6 +34,10 @@ docs/DECISIONS.md; Pittu's design in docs/PITTU.md.
   adding from a deed, questions that follow the deed (flat / plot, renting, OC, Bengaluru e-Khata),
   the land's story from the deed (sale-deed-v3), Pittu's market range (web search, rules decide),
   Watch news published by Pittu when confident, and four rental services (on quote).
+- Owners report disputes; alerts for a whole project (11 Oct): "Heard about a dispute? Tell us" on
+  the Records check → the team (portal: Legal → Owner reports) replies, or confirms it for the
+  project; every owner whose deed names that project sees it (Legal → Project alerts, with reach).
+  Not yet: a push notification when an alert is posted (no push yet), photo of a notice.
 - Court cases and disputes (11 Oct, legal-disputes-v1): Pittu searches court sites, RERA and news
   for the project, developer and survey numbers (never people's names); nothing found → owner told
   at once; something found → team reviews (Pittu AI → Legal → Court cases & disputes) before the

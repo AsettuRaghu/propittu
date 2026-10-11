@@ -137,6 +137,89 @@ export interface PropertyDisputes {
   /** The team's note to the owner. */
   note: string | null;
   checked_at: string | null;
+  /** Disputes our team confirmed for the whole project (every owner there sees them). */
+  project?: ProjectDispute[];
+  /** What this owner told us they heard, and our reply. */
+  reports?: DisputeReport[];
+}
+
+/* ---- Owners hear first: reports, and alerts for a whole project ---- */
+
+export const DISPUTE_REPORT_SOURCES = ['builder', 'call', 'notice', 'neighbours', 'other'] as const;
+export type DisputeReportSource = (typeof DISPUTE_REPORT_SOURCES)[number];
+export const DISPUTE_REPORT_SOURCE_LABELS: Record<DisputeReportSource, string> = {
+  builder: 'The builder told us',
+  call: 'I got a call',
+  notice: 'A notice or letter',
+  neighbours: 'Other owners / the association',
+  other: 'Somewhere else',
+};
+
+export const disputeReportSchema = z.object({
+  source: z.enum(DISPUTE_REPORT_SOURCES),
+  details: z
+    .string()
+    .trim()
+    .min(5, 'Tell us a little about what you heard')
+    .max(2000, 'Please keep it under 2,000 characters'),
+});
+export type DisputeReportInput = z.infer<typeof disputeReportSchema>;
+
+export interface DisputeReport {
+  id: string;
+  property_id: string;
+  source: DisputeReportSource;
+  details: string;
+  status: 'open' | 'looking' | 'confirmed' | 'not_found';
+  staff_note: string | null;
+  project_dispute_id: string | null;
+  created_at: string;
+}
+
+export interface ProjectDispute {
+  id: string;
+  project_name: string;
+  district: string | null;
+  summary: string;
+  what_it_means: string | null;
+  what_to_do: string | null;
+  source_url: string | null;
+  status: 'active' | 'resolved';
+  created_at: string;
+  updated_at: string;
+}
+
+export const projectDisputeSchema = z.object({
+  project_name: z.string().trim().min(2).max(200),
+  district: z.string().trim().max(120).nullable().optional(),
+  summary: z.string().trim().min(5).max(1000),
+  what_it_means: z.string().trim().max(2000).nullable().optional(),
+  what_to_do: z.string().trim().max(2000).nullable().optional(),
+  source_url: z.url().nullable().optional(),
+  report_id: z.guid().nullable().optional(),
+});
+
+/** "NCC Urban Mayfair – Phase 2" → "nccurbanmayfair" (phase / block words dropped). */
+export function projectKey(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\b(phase|block|tower|wing|stage)\s*[\w-]*/g, ' ')
+    .replace(/\b(the|apartments?|residency|enclave|layout)\b/g, ' ')
+    .replace(/[^a-z0-9]/g, '')
+    .slice(0, 120);
+}
+
+/** GET /backoffice/dispute-reports */
+export interface DisputeReportRow extends DisputeReport {
+  account_id: string;
+  property_name: string;
+  project_name: string | null;
+}
+
+/** GET /backoffice/project-disputes */
+export interface ProjectDisputeRow extends ProjectDispute {
+  /** Propittu properties whose deed names this project. */
+  properties: number;
 }
 
 /** GET /backoffice/disputes — properties where Pittu found something. */

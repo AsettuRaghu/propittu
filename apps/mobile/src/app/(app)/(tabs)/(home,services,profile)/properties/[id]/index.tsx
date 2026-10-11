@@ -347,7 +347,17 @@ function PittuSection({ property, withSetup }: { property: PropertyDetail; withS
           onPress={() => open('history')}
         />
       ) : null}
-      {!check && disputes && disputes.status !== 'failed' ? (
+      {disputes?.project?.some((p) => p.status === 'active') ? (
+        <ListRow
+          icon="warning"
+          accent="coral"
+          title={`A dispute in ${disputes.project.find((p) => p.status === 'active')!.project_name}`}
+          subtitle={disputes.project.find((p) => p.status === 'active')!.summary}
+          subtitleLines={2}
+          onPress={() => open('legal')}
+        />
+      ) : null}
+      {!check && disputes ? (
         <ListRow
           icon="verified"
           accent={
@@ -360,7 +370,9 @@ function PittuSection({ property, withSetup }: { property: PropertyDetail; withS
                 ? 'Records check · no disputes found online'
                 : disputes.status === 'in_review'
                   ? 'Records check · our team is checking'
-                  : 'Records check · see what we found'
+                  : disputes.status === 'failed'
+                    ? 'Records check'
+                    : 'Records check · see what we found'
           }
           subtitle="Court cases, ownership claims and RERA complaints about this project and its land"
           subtitleLines={2}

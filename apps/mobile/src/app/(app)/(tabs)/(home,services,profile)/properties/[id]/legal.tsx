@@ -48,7 +48,7 @@ export default function PropertyLegalScreen() {
         }
       >
         <PropertyContext propertyId={id} />
-        <DisputesSection disputes={disputes.data ?? null} />
+        <DisputesSection disputes={disputes.data ?? null} propertyId={id} />
         {hasEc ? (
           <EmptyState
             icon="hourglass"
@@ -87,7 +87,7 @@ export default function PropertyLegalScreen() {
         ) : null}
       </View>
 
-      <DisputesSection disputes={disputes.data ?? null} />
+      <DisputesSection disputes={disputes.data ?? null} propertyId={id} />
 
       <ListGroup title="What we checked" plain>
         <Text style={[typography.small, styles.inner]}>

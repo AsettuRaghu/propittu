@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { PropertyDisputes } from '@propittu/shared';
@@ -15,14 +16,23 @@ const SOURCE: Record<string, string> = {
 };
 
 /**
- * Court cases and disputes about the property's project or land. Pittu
- * searches the web; anything it finds is checked by our team first, so the
- * owner sees "being checked" until then — never an unchecked claim.
+ * Court cases and disputes about the property's project or land: alerts
+ * our team confirmed for everyone in the project, Pittu's online search
+ * (anything it finds is checked by our team first — the owner never sees an
+ * unchecked claim), what this owner told us and our reply, and a way to tell
+ * us about one.
  */
-export function DisputesSection({ disputes: d }: { disputes: PropertyDisputes | null }) {
-  if (!d || d.status === 'failed') return null;
-  const body =
-    d.status === 'working' ? (
+export function DisputesSection({
+  disputes: d,
+  propertyId,
+}: {
+  disputes: PropertyDisputes | null;
+  propertyId: string;
+}) {
+  const project = d?.project ?? [];
+  const reports = d?.reports ?? [];
+  const online =
+    !d || d.status === 'failed' ? null : d.status === 'working' ? (
       <View style={styles.row}>
         <ActivityIndicator size="small" color={colors.primary} />
         <Text style={[typography.small, styles.flex]}>
@@ -74,9 +84,57 @@ export function DisputesSection({ disputes: d }: { disputes: PropertyDisputes | 
         ))}
       </View>
     );
+
   return (
     <ListGroup title="Court cases and disputes" plain>
-      <View style={styles.inner}>{body}</View>
+      <View style={[styles.inner, styles.list]}>
+        {project.map((p) => (
+          <View key={p.id} style={[styles.item, p.status === 'resolved' && styles.resolved]}>
+            <Text style={typography.caption}>
+              {`For everyone in ${p.project_name} · ${p.status === 'resolved' ? 'resolved' : 'confirmed by our team'} · ${formatDate(p.updated_at)}`}
+            </Text>
+            <Text style={typography.bodyStrong}>{p.summary}</Text>
+            {p.what_it_means ? (
+              <Text style={typography.small}>{`What it means for you: ${p.what_it_means}`}</Text>
+            ) : null}
+            {p.what_to_do ? (
+              <Text style={typography.small}>{`What to do: ${p.what_to_do}`}</Text>
+            ) : null}
+            {p.source_url ? (
+              <Text
+                style={styles.link}
+                onPress={() => void WebBrowser.openBrowserAsync(p.source_url!)}
+              >
+                See the record
+              </Text>
+            ) : null}
+          </View>
+        ))}
+        {online}
+        {reports.map((r) => (
+          <View key={r.id} style={styles.report}>
+            <Text style={typography.caption}>{`You told us on ${formatDate(r.created_at)}`}</Text>
+            <Text style={typography.small} numberOfLines={3}>
+              {r.details}
+            </Text>
+            <Text style={[typography.small, styles.reply]}>
+              {r.status === 'not_found'
+                ? `Our team: ${r.staff_note ?? 'We couldn’t find a record of this yet.'}`
+                : r.status === 'confirmed'
+                  ? `Our team confirmed it${r.staff_note ? ` — ${r.staff_note}` : ''}`
+                  : r.staff_note
+                    ? `Our team: ${r.staff_note}`
+                    : 'Our team is looking into it.'}
+            </Text>
+          </View>
+        ))}
+        <Text
+          style={styles.link}
+          onPress={() => router.push(`/properties/${propertyId}/report-dispute`)}
+        >
+          Heard about a dispute? Tell us
+        </Text>
+      </View>
     </ListGroup>
   );
 }
@@ -87,5 +145,9 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
   list: { gap: space.md },
   item: { gap: 3, borderLeftWidth: 3, borderLeftColor: accents.amber.fg, paddingLeft: 12 },
+  resolved: { borderLeftColor: colors.border },
+  report: { gap: 3, borderLeftWidth: 3, borderLeftColor: colors.border, paddingLeft: 12 },
+  reply: { color: colors.text },
+  link: { color: colors.primary, fontWeight: '700', fontSize: 14 },
   pressed: { opacity: 0.7 },
 });

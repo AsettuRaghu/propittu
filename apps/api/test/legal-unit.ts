@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import type { EcEntry, EcReading } from '@propittu/shared';
 import { overallLevel } from '@propittu/shared';
 import { checkEc, sameName, type DeedFacts } from '../src/legal/ecRules.js';
-import type { DisputeItem } from '@propittu/shared';
+import { projectKey, type DisputeItem } from '@propittu/shared';
 import { relevantDisputes } from '../src/legal/disputeRules.js';
 
 const today = new Date('2026-10-08T00:00:00Z');
@@ -215,4 +215,11 @@ test('disputes: only this project or land, only pages the search returned', () =
     kept.map((k) => k.url),
     ['https://a.example/case', 'https://b.example/land'],
   );
+});
+
+test('project names match across deeds (phases, blocks, spacing and case ignored)', () => {
+  assert.equal(projectKey('NCC Urban Mayfair'), 'nccurbanmayfair');
+  assert.equal(projectKey('NCC URBAN MAYFAIR – Phase 2'), 'nccurbanmayfair');
+  assert.equal(projectKey('N.C.C. Urban Mayfair Apartments, Block E'), 'nccurbanmayfair');
+  assert.notEqual(projectKey('Prestige Lakeside Habitat'), projectKey('Prestige Lake Ridge'));
 });

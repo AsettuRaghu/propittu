@@ -47,6 +47,7 @@ const SCREENS: { name: string; options: Record<string, unknown> }[] = [
   { name: 'properties/[id]/value', options: { title: 'What it’s worth' } },
   { name: 'properties/[id]/history', options: { title: 'Its story' } },
   { name: 'properties/[id]/legal', options: { title: 'Records check' } },
+  { name: 'properties/[id]/report-dispute', options: { title: 'Heard about a dispute?' } },
   { name: 'services/request', options: { title: 'Request a service' } },
   { name: 'requests/[id]', options: { title: 'Service request' } },
   { name: 'plan', options: { title: 'Plan & Usage' } },

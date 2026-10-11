@@ -1828,5 +1828,32 @@ select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
 select tst.rows('select * from public.property_disputes', 0, 'other customers never see them');
 reset role;
 
+-- =====================================================================
+\echo
+\echo '== Disputes owners report, and alerts for a whole project =='
+-- =====================================================================
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+insert into public.dispute_reports (account_id, property_id, source, details, created_by)
+values ('acc0000a-0000-0000-0000-00000000000a', 'a1a1a1a1-0000-0000-0000-0000000000e1', 'builder',
+        'The builder says a landowner has gone to court.', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rows('select * from public.dispute_reports', 1, 'the owner reports a dispute and sees it');
+select tst.rows($$update public.dispute_reports set status = 'confirmed'$$, 0, 'the owner cannot change its status');
+select tst.rejects($$insert into public.project_disputes (project_key, project_name, summary)
+                     values ('someproject', 'Some Project', 'A made-up dispute')$$,
+  'customers cannot create project alerts');
+select tst.rows('select * from public.project_disputes', 0, 'customers do not read project alerts directly');
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.rows('select * from public.dispute_reports', 0, 'other customers never see the report');
+select tst.rejects($$insert into public.dispute_reports (account_id, property_id, source, details, created_by)
+                     values ('acc0000b-0000-0000-0000-00000000000b', 'a1a1a1a1-0000-0000-0000-0000000000e1', 'call',
+                             'Reporting on someone else''s property', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb')$$,
+  'nobody reports on a property that isn''t theirs');
+select tst.as_user('55555555-5555-5555-5555-555555555555');
+insert into public.project_disputes (project_key, project_name, summary)
+values ('legalcheckplot', 'Legal check plot', 'Staff confirm a project alert');
+select tst.rows('select * from public.project_disputes', 1, 'staff create and read project alerts');
+reset role;
+
 \echo
 \echo 'ALL RLS CHECKS PASSED'

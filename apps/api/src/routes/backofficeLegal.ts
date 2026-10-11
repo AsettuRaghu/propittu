@@ -6,13 +6,18 @@ import {
   legalCheckUpdateSchema,
   legalFindingReviewSchema,
   staffCan,
+  projectDisputeSchema,
+  projectKey,
   type DisputeItem,
+  type DisputeReportRow,
   type DisputeReview,
+  type ProjectDisputeRow,
 } from '@propittu/shared';
 import { audit } from '../audit.js';
 import { auth } from '../auth.js';
 import { HttpError, must, ok, uuidParam } from '../errors.js';
 import { checkDisputes } from '../legal/disputes.js';
+import { PROJECT_COLUMNS, projectOf, propertiesByProject } from '../legal/projectDisputes.js';
 import {
   createEcCheck,
   listChecks,
@@ -161,4 +166,121 @@ legalChecksRouter.post('/properties/:id/disputes', canReview, async (req, res) =
   const propertyId = uuidParam(req.params.id, 'Property');
   waitUntil(checkDisputes(propertyId));
   ok(res, { status: 'working' }, 202);
+});
+
+/* ---- Disputes owners told us about, and alerts for a whole project ---- */
+
+const REPORT_COLUMNS =
+  'id, account_id, property_id, source, details, status, staff_note, project_dispute_id, created_at, property:properties(name)';
+
+/* GET /backoffice/dispute-reports?status=open|all */
+legalChecksRouter.get('/dispute-reports', async (req, res) => {
+  const { status = 'open' } = z
+    .object({ status: z.enum(['open', 'all']).optional() })
+    .parse(req.query);
+  const { db } = auth(req);
+  let q = db
+    .from('dispute_reports')
+    .select(REPORT_COLUMNS)
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (status === 'open') q = q.in('status', ['open', 'looking']);
+  const rows = must<
+    (Omit<DisputeReportRow, 'property_name' | 'project_name'> & {
+      property: { name: string } | null;
+    })[]
+  >(await q);
+  const projects = await Promise.all(rows.map((r) => projectOf(db, r.property_id)));
+  const data: DisputeReportRow[] = rows.map(({ property, ...r }, i) => ({
+    ...r,
+    property_name: property?.name ?? 'Property',
+    project_name: projects[i]?.name ?? null,
+  }));
+  ok(res, data);
+});
+
+/* PATCH /backoffice/dispute-reports/:id {status, staff_note} — reply to the owner */
+legalChecksRouter.patch('/dispute-reports/:id', canReview, async (req, res) => {
+  const ctx = auth(req);
+  const id = uuidParam(req.params.id, 'Report');
+  const input = z
+    .object({
+      status: z.enum(['looking', 'not_found', 'confirmed']).optional(),
+      staff_note: z.string().trim().max(2000).nullable().optional(),
+    })
+    .parse(req.body);
+  must(await ctx.db.from('dispute_reports').update(input).eq('id', id));
+  await audit(ctx, 'legal.dispute_report_updated', { type: 'dispute_report', id }, input, 'staff');
+  ok(res, { id, ...input });
+});
+
+/* GET /backoffice/project-disputes — with how many of our properties each one reaches */
+legalChecksRouter.get('/project-disputes', async (req, res) => {
+  const { db } = auth(req);
+  const [rows, counts] = await Promise.all([
+    db
+      .from('project_disputes')
+      .select(`${PROJECT_COLUMNS}, project_key`)
+      .order('created_at', { ascending: false }),
+    propertiesByProject(db),
+  ]);
+  const data: ProjectDisputeRow[] = must<(ProjectDisputeRow & { project_key: string })[]>(rows).map(
+    ({ project_key, ...r }) => ({ ...r, properties: counts.get(project_key) ?? 0 }),
+  );
+  ok(res, data);
+});
+
+/* POST /backoffice/project-disputes — confirm a dispute for every owner in a project */
+legalChecksRouter.post('/project-disputes', canReview, async (req, res) => {
+  const ctx = auth(req);
+  const { report_id, ...input } = projectDisputeSchema.parse(req.body);
+  const key = projectKey(input.project_name);
+  if (key.length < 3) throw new HttpError(400, 'VALIDATION_FAILED', 'Give the project’s name');
+  const row = must<{ id: string }>(
+    await ctx.db
+      .from('project_disputes')
+      .insert({ ...input, project_key: key, created_by: ctx.userId })
+      .select('id')
+      .single(),
+  );
+  if (report_id) {
+    must(
+      await ctx.db
+        .from('dispute_reports')
+        .update({ status: 'confirmed', project_dispute_id: row.id })
+        .eq('id', report_id),
+    );
+  }
+  const reach = (await propertiesByProject(ctx.db)).get(key) ?? 0;
+  await audit(
+    ctx,
+    'legal.project_dispute_created',
+    { type: 'project_dispute', id: row.id },
+    {
+      project: input.project_name,
+      properties: reach,
+    },
+    'staff',
+  );
+  ok(res, { id: row.id, properties: reach }, 201);
+});
+
+/* PATCH /backoffice/project-disputes/:id — update it, or mark it resolved */
+legalChecksRouter.patch('/project-disputes/:id', canReview, async (req, res) => {
+  const ctx = auth(req);
+  const id = uuidParam(req.params.id, 'Dispute');
+  const input = projectDisputeSchema
+    .omit({ report_id: true, project_name: true })
+    .partial()
+    .extend({ status: z.enum(['active', 'resolved']).optional() })
+    .parse(req.body);
+  must(await ctx.db.from('project_disputes').update(input).eq('id', id));
+  await audit(
+    ctx,
+    'legal.project_dispute_updated',
+    { type: 'project_dispute', id },
+    input,
+    'staff',
+  );
+  ok(res, { id });
 });

@@ -14,6 +14,7 @@ import { api, errorText } from '../lib/api';
 import { date, dateTime } from '../lib/format';
 import { useUrlState } from '../lib/params';
 import { DataTable, type Column } from '../ui/DataTable';
+import { DisputeReports, ProjectDisputes, useDisputeReports } from './DisputeReports';
 import { Disputes } from './Disputes';
 import { Tiles } from '../ui/Tiles';
 import { useEscape } from '../ui/useEscape';
@@ -38,6 +39,7 @@ export function Legal() {
   const view = params.get('status') ?? 'in_review';
   const selected = params.get('id');
   const { data, error, isPending } = useLegalChecks();
+  const reports = useDisputeReports('all');
   const disputes = useQuery({
     queryKey: ['bo-disputes', 'in_review'],
     queryFn: () => api<DisputeReview[]>('/backoffice/disputes?status=in_review'),
@@ -99,9 +101,9 @@ export function Legal() {
         <div>
           <h1>Pittu Legal</h1>
           <p>
-            EC checks: Pittu reads the EC, our rules compare it with the sale deed, and the team
-            reviews every amber or red finding before the customer sees anything. Start a check from
-            a property's EC.
+            EC checks (Pittu reads each uploaded EC and compares it with the sale deed), court cases
+            and disputes Pittu found online, disputes owners told us about, and alerts for a whole
+            project. Nothing that suggests a problem reaches a customer before the team reviews it.
           </p>
         </div>
       </div>
@@ -115,14 +117,27 @@ export function Legal() {
           { value: 'all', label: 'Everything', count: count('all') },
           {
             value: 'disputes',
-            label: 'Court cases & disputes',
+            label: 'Found online',
             count: disputes.data?.length ?? '–',
             tone: 'warn',
           },
+          {
+            value: 'reports',
+            label: 'Owner reports',
+            count:
+              reports.data?.filter((r) => r.status === 'open' || r.status === 'looking').length ??
+              '–',
+            tone: 'warn',
+          },
+          { value: 'projects', label: 'Project alerts', count: '' },
         ]}
       />
       {view === 'disputes' ? (
         <Disputes status="in_review" />
+      ) : view === 'reports' ? (
+        <DisputeReports />
+      ) : view === 'projects' ? (
+        <ProjectDisputes />
       ) : (
         <DataTable
           rows={rows}

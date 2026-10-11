@@ -9,6 +9,8 @@ import type {
   LegalCheck,
   PittuState,
   PropertyDisputes,
+  DisputeReport,
+  DisputeReportInput,
   Property,
   PropertyValue,
   WatchItem,
@@ -189,3 +191,17 @@ export const useDisputes = (propertyId: string) =>
     staleTime: 10 * 60_000,
     refetchInterval: (q) => (q.state.data?.status === 'working' ? 5000 : false),
   });
+
+/** The owner tells us about a dispute they've heard of; the Records check shows our reply. */
+export function useReportDispute(propertyId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: DisputeReportInput) =>
+      api<DisputeReport>(`/properties/${propertyId}/disputes/report`, {
+        method: 'POST',
+        body: input,
+      }),
+    onSuccess: () =>
+      void qc.invalidateQueries({ queryKey: ['properties', propertyId, 'disputes'] }),
+  });
+}
