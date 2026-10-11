@@ -1,5 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { processAnalysis, type AnalysisRow, type ReadHooks } from '../pittu/index.js';
+import type { DocumentReading } from '@propittu/shared';
+import { actOnReading } from '../documents/pittu.js';
+import {
+  processAnalysis,
+  queueAutoReading,
+  type AnalysisRow,
+  type ReadHooks,
+} from '../pittu/index.js';
 import type { AiTask } from '../pittu/core/types.js';
 import { removeProperty } from '../propertyRemoval.js';
 import { findSameFile, findSameRegistration } from './duplicates.js';
@@ -7,7 +14,7 @@ import { findSameFile, findSameRegistration } from './duplicates.js';
 /**
  * Document readings — the application layer's side of Pittu Read. Pittu
  * reads and returns facts; here we decide what a SALE DEED reading means for
- * the locker (other documents, e.g. an EC, have no such rules here):
+ * the locker, and what a short document's reading means (documents/pittu.ts):
  *
  *   reuse      the same file is already in the account → copy that reading
  *              (no AI cost) and say which property it belongs to
@@ -15,13 +22,18 @@ import { findSameFile, findSameRegistration } from './duplicates.js';
  *              property → mark the reading as a duplicate of it
  */
 const SALE_DEED = 'sale_deed.extract';
+const DOCUMENT_READ = 'document.read';
 const deedHooks: ReadHooks = {
   async reuse(db, job, file, task, finish) {
     if (task.name !== SALE_DEED) return false;
     const twin = await findSameFile(db, job.account_id, job.document_id, file.size, file.hash);
     return twin ? reuseReading(db, job, twin, task, finish) : false;
   },
-  async afterRead(db, job, facts) {
+  async afterRead(db, job, facts, result) {
+    if (job.task === DOCUMENT_READ) {
+      await actOnReading(db, job, result as DocumentReading);
+      return {};
+    }
     if (job.task !== SALE_DEED) return {};
     const registration = facts.find((f) => f.key === 'registration_number')?.value;
     return {
@@ -32,6 +44,12 @@ const deedHooks: ReadHooks = {
 
 /** Run a queued reading (safe to call more than once); sale-deed rules apply to deeds only. */
 export const readDocument = (analysisId: string) => processAnalysis(analysisId, deedHooks);
+
+/** Pittu reads a just-uploaded Khata, tax receipt, land record… by itself (never throws). */
+export async function autoReadDocument(documentId: string): Promise<void> {
+  const id = await queueAutoReading(documentId).catch(() => null);
+  if (id) await readDocument(id);
+}
 
 /**
  * The same file was read before (or belongs to a property already in the

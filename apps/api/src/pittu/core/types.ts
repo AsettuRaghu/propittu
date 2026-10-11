@@ -14,10 +14,19 @@ interface PdfDocument {
   bytes: Uint8Array;
 }
 
+/** A photo or scan of one page (JPG / PNG). */
+interface ImageDocument {
+  kind: 'image';
+  bytes: Uint8Array;
+  mediaType: 'image/jpeg' | 'image/png';
+}
+
+export type InputDocument = PdfDocument | ImageDocument;
+
 export interface ProviderRequest {
   model: string;
   system: string;
-  documents: PdfDocument[];
+  documents: InputDocument[];
   text: string;
   /** JSON schema the answer must follow (structured output). */
   schema: Record<string, unknown>;

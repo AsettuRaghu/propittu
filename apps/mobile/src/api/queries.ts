@@ -10,6 +10,7 @@ import type {
   Property,
   PropertyDetail,
   PropertyDocument,
+  DocumentType,
   PropertySummary,
   PublicPlan,
   ServiceRequest,
@@ -74,6 +75,9 @@ export const useDocuments = (propertyId: string) =>
   useQuery({
     queryKey: keys.documents(propertyId),
     queryFn: () => api<PropertyDocument[]>(`/properties/${propertyId}/documents`),
+    // While Pittu reads a just-uploaded document, check back so its line appears.
+    refetchInterval: (q) =>
+      q.state.data?.some((d) => d.pittu?.status === 'reading') ? 4000 : false,
   });
 
 export const useServices = (enabled = true) =>
@@ -163,6 +167,19 @@ export function useDeleteDocument(propertyId: string) {
       void qc.invalidateQueries({ queryKey: keys.documents(propertyId) });
       void qc.invalidateQueries({ queryKey: keys.property(propertyId), exact: true });
       void qc.invalidateQueries({ queryKey: keys.properties, exact: true });
+    },
+  });
+}
+
+/** File a document under another type (e.g. Pittu says it's really the sale deed). */
+export function useMoveDocument(propertyId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, type }: { id: string; type: DocumentType }) =>
+      api<PropertyDocument>(`/documents/${id}`, { method: 'PATCH', body: { document_type: type } }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.documents(propertyId) });
+      void qc.invalidateQueries({ queryKey: keys.property(propertyId), exact: true });
     },
   });
 }

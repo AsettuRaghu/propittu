@@ -34,7 +34,7 @@ export async function loadInsights(
   const out = new Map<string, PropertyInsight>();
   if (ids.length === 0) return out;
 
-  const [answersRes, visitsRes, dueRes, factsRes] = await Promise.all([
+  const [answersRes, visitsRes, dueRes, factsRes, readingsRes] = await Promise.all([
     db
       .from('property_answers')
       .select('property_id, question_id, answer, answered_at')
@@ -57,6 +57,13 @@ export async function loadInsights(
       .in('property_id', ids)
       .neq('status', 'superseded')
       .order('created_at', { ascending: true }),
+    // Dates on documents Pittu read (a rental agreement's end).
+    db
+      .from('document_analyses')
+      .select('property_id, result')
+      .in('property_id', ids)
+      .eq('task', 'document.read')
+      .eq('status', 'ready'),
   ]);
   const answers =
     must<{ property_id: string; question_id: string; answer: string; answered_at: string }[]>(
@@ -74,6 +81,23 @@ export async function loadInsights(
     must<{ property_id: string; key: string; value: FactValue; confidence: string | null }[]>(
       factsRes,
     );
+
+  const readDates = (
+    (readingsRes.data ?? []) as {
+      property_id: string;
+      result: { document_kind?: string; period_to?: string | null } | null;
+    }[]
+  ).flatMap((r) =>
+    r.result?.document_kind === 'rental_agreement' && r.result.period_to
+      ? [
+          {
+            property_id: r.property_id,
+            service_name: 'Rental agreement renewal',
+            date: r.result.period_to,
+          },
+        ]
+      : [],
+  );
 
   for (const p of properties) {
     // Later readings win.
@@ -94,7 +118,12 @@ export async function loadInsights(
         .map((d) => ({
           service_name: d.request?.service?.name ?? 'Service',
           date: d.next_due_date,
-        })),
+        }))
+        .concat(
+          readDates
+            .filter((d) => d.property_id === p.id)
+            .map(({ service_name, date }) => ({ service_name, date })),
+        ),
       gaps,
       facts: mine,
       deed:

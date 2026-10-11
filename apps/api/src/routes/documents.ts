@@ -1,3 +1,4 @@
+import { waitUntil } from '@vercel/functions';
 import { Router } from 'express';
 import {
   documentIntentSchema,
@@ -8,6 +9,8 @@ import {
   type UploadIntent,
 } from '@propittu/shared';
 import { auth } from '../auth.js';
+import { autoReadDocument } from '../deeds/reading.js';
+import { documentLines } from '../documents/pittu.js';
 import { audit } from '../audit.js';
 import { env } from '../env.js';
 import { HttpError, must, notFound, ok, uuidParam } from '../errors.js';
@@ -77,7 +80,11 @@ documentsRouter.get('/properties/:id/documents', async (req, res) => {
       .order('created_at', { ascending: false }),
   );
 
-  ok(res, rows.map(toDocument));
+  const lines = await documentLines(db, propertyId, rows);
+  ok(
+    res,
+    rows.map((r) => ({ ...toDocument(r), pittu: lines.get(r.id) ?? null })),
+  );
 });
 
 /* POST /properties/:id/documents/intent */
@@ -165,6 +172,8 @@ documentsRouter.post('/properties/:id/documents/:documentId/confirm', async (req
         .eq('account_id', accountId),
     );
     await audit(auth(req), 'document.uploaded', { type: 'document', id: row.id });
+    // Pittu reads a Khata, tax receipt, land record… by itself, straight away.
+    waitUntil(autoReadDocument(row.id));
   }
 
   ok(res, toDocument(row));
@@ -214,6 +223,8 @@ documentsRouter.patch('/documents/:id', async (req, res) => {
   if (!row) throw notFound('Document');
 
   await audit(auth(req), 'document.updated', { type: 'document', id: row.id }, input);
+  // Moved to a type Pittu reads (e.g. "Other" → Khata): read it now.
+  if (input.document_type) waitUntil(autoReadDocument(row.id));
   ok(res, toDocument(row));
 });
 

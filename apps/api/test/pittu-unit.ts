@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   carePlan,
+  checkDocument,
+  taxCoversThisYear,
+  type DeedSide,
+  type DocumentReading,
   documentChecklist,
   documentPlan,
   isValidAnswer,
@@ -285,4 +289,110 @@ test('care plan: renting it out and an e-Khata to do', () => {
     ),
     ['rental_agreement', 'rental_management'],
   );
+});
+
+/* ---- Pittu reads other documents and checks them against the deed ---- */
+
+const reading = (r: Partial<DocumentReading>): DocumentReading => ({
+  document_kind: 'khata',
+  owner_names: [],
+  khata_number: null,
+  ptin: null,
+  property_id: null,
+  survey_numbers: [],
+  village: null,
+  area_value: null,
+  area_unit: null,
+  issued_on: null,
+  period_from: null,
+  period_to: null,
+  amount_inr: null,
+  amount_meaning: null,
+  paid_on: null,
+  authority: null,
+  khata_kind: null,
+  land_use: null,
+  note: null,
+  confidence: 'high',
+  ...r,
+});
+const DEED: DeedSide = {
+  buyers: ['Ananya Rao'],
+  sellers: ['Sunrise Developers Private Limited', 'Venkatappa'],
+  survey_numbers: ['207/1A'],
+  khata_number: '1452',
+  area_sqft: 1200,
+  property_type: 'land',
+};
+const NOW = new Date('2026-10-11T00:00:00Z');
+
+test('a Khata still in the seller’s name, with a different number, is flagged', () => {
+  const { summary, findings } = checkDocument(
+    'khata',
+    reading({ owner_names: ['Venkatappa'], khata_number: '1999', khata_kind: 'b_khata' }),
+    DEED,
+    NOW,
+  );
+  assert.equal(summary, 'B-Khata · 1999 · in Venkatappa');
+  assert.ok(findings.some((f) => f.level === 'differs' && /previous owner/.test(f.text)));
+  assert.ok(findings.some((f) => f.level === 'differs' && /Khata number 1999/.test(f.text)));
+  assert.ok(findings.some((f) => /B-Khata/.test(f.text)));
+});
+
+test('this year’s tax receipt in the owner’s name: paid, matches', () => {
+  const r = reading({
+    document_kind: 'property_tax',
+    owner_names: ['Smt. Ananya Rao'],
+    period_from: '2026-04-01',
+    period_to: '2027-03-31',
+    amount_inr: 2450,
+    amount_meaning: 'tax_paid',
+    paid_on: '2026-05-10',
+  });
+  assert.ok(taxCoversThisYear(r, NOW));
+  const { summary, findings } = checkDocument('property_tax', r, DEED, NOW);
+  assert.match(summary!, /Tax for 2026–27 · ₹2,450 paid on 10 May 2026/);
+  assert.deepEqual(
+    findings.map((f) => f.level),
+    ['ok', 'ok'],
+  );
+  assert.ok(!taxCoversThisYear({ ...r, period_from: '2025-04-01', period_to: '2026-03-31' }, NOW));
+});
+
+test('wrong type, farmland use and a rental agreement ending soon', () => {
+  const mislabelled = checkDocument('khata', reading({ document_kind: 'property_tax' }), DEED, NOW);
+  assert.ok(mislabelled.findings.some((f) => /looks like a tax receipt/.test(f.text)));
+  const rtc = checkDocument(
+    'land_record',
+    reading({
+      document_kind: 'land_record',
+      land_use: 'Dry agricultural',
+      survey_numbers: ['207/1A'],
+    }),
+    DEED,
+    NOW,
+  );
+  assert.ok(rtc.findings.some((f) => f.level === 'ok' && /Survey number matches/.test(f.text)));
+  assert.ok(rtc.findings.some((f) => /conversion order/.test(f.text)));
+  const rent = checkDocument(
+    'rental_agreement',
+    reading({ document_kind: 'rental_agreement', amount_inr: 32000, period_to: '2026-11-20' }),
+    DEED,
+    NOW,
+  );
+  assert.match(rent.summary!, /Rent ₹32,000 a month · ends 20 Nov 2026/);
+  assert.ok(rent.findings.some((f) => /time to renew/.test(f.text)));
+});
+
+test('something that isn’t a property document says so, and can be moved to Other', () => {
+  const { summary, findings } = checkDocument(
+    'property_tax',
+    reading({ document_kind: 'other', note: 'An ID card reprint payment receipt.' }),
+    DEED,
+    NOW,
+  );
+  assert.equal(summary, 'An ID card reprint payment receipt.');
+  assert.deepEqual(findings, [
+    { level: 'note', text: 'This doesn’t look like a tax receipt', move_to: 'other' },
+  ]);
 });

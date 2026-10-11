@@ -24,7 +24,16 @@ export function DocumentSlots({
   const docs = useDocumentPlan(propertyId);
   if (!docs) return null;
   const counts = new Map<DocumentType, number>();
-  for (const d of data ?? []) counts.set(d.document_type, (counts.get(d.document_type) ?? 0) + 1);
+  // Newest first from the API: the first one of a type carries Pittu's latest line.
+  const pittuLine = new Map<DocumentType, string>();
+  for (const d of data ?? []) {
+    counts.set(d.document_type, (counts.get(d.document_type) ?? 0) + 1);
+    if (!pittuLine.has(d.document_type) && d.pittu?.status === 'ready') {
+      const differs = d.pittu.findings.find((f) => f.level === 'differs');
+      const line = differs?.text ?? d.pittu.summary;
+      if (line) pittuLine.set(d.document_type, differs ? `To check: ${line}` : line);
+    }
+  }
 
   const upload = (type: DocumentType) =>
     router.push({ pathname: '/properties/[id]/add-document', params: { id: propertyId, type } });
@@ -38,7 +47,11 @@ export function DocumentSlots({
         icon={v.icon}
         accent={v.accent}
         title={docs.label(type)}
-        subtitle={count === 0 ? (why ?? 'Not added yet') : count === 1 ? 'Added' : `${count} added`}
+        subtitle={
+          count === 0
+            ? (why ?? 'Not added yet')
+            : (pittuLine.get(type) ?? (count === 1 ? 'Added' : `${count} added`))
+        }
         subtitleLines={2}
         right={
           count === 0 ? (

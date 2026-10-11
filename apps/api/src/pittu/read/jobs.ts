@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   AI_READABLE_DOCUMENT_TYPES,
+  AUTO_READ_TYPES,
   STORAGE_BUCKETS,
   type DocumentAnalysis,
   type DocumentType,
@@ -23,6 +24,7 @@ import {
 import { runTask } from '../core/run.js';
 import { AiOutputError, AiProviderError, type AiTask, type ExtractedFact } from '../core/types.js';
 import { encumbranceTask } from './tasks/encumbrance.js';
+import { propertyDocumentTask } from './tasks/propertyDocument.js';
 import { saleDeedTask } from './tasks/saleDeed.js';
 
 /**
@@ -44,6 +46,8 @@ import { saleDeedTask } from './tasks/saleDeed.js';
 const TASKS: Partial<Record<DocumentType, AiTask<unknown>>> = {
   sale_deed: saleDeedTask as AiTask<unknown>,
   encumbrance_certificate: encumbranceTask as AiTask<unknown>,
+  // Short documents Pittu reads by itself on upload (AUTO_READ_TYPES).
+  ...Object.fromEntries(AUTO_READ_TYPES.map((t) => [t, propertyDocumentTask as AiTask<unknown>])),
 };
 
 /** Bigger PDFs need page rendering first (planned); until then they go to staff. */
@@ -77,6 +81,7 @@ export interface ReadHooks {
     db: SupabaseClient,
     job: AnalysisRow,
     facts: ExtractedFact[],
+    result: unknown,
   ): Promise<Record<string, unknown>>;
 }
 
@@ -393,7 +398,7 @@ export async function processAnalysis(analysisId: string, hooks: ReadHooks = {})
   try {
     const { data: doc } = await db
       .from('property_documents')
-      .select('storage_path, document_type, file_size')
+      .select('storage_path, document_type, file_size, mime_type')
       .eq('id', job.document_id)
       .maybeSingle();
     if (!doc) {
@@ -421,7 +426,13 @@ export async function processAnalysis(analysisId: string, hooks: ReadHooks = {})
       ({ result, model } = await runTask(
         db,
         task,
-        { documents: [{ kind: 'pdf', bytes }] },
+        {
+          documents: [
+            doc.mime_type === 'image/jpeg' || doc.mime_type === 'image/png'
+              ? { kind: 'image', bytes, mediaType: doc.mime_type }
+              : { kind: 'pdf', bytes },
+          ],
+        },
         {
           capability: 'read',
           accountId: job.account_id,
@@ -461,7 +472,7 @@ export async function processAnalysis(analysisId: string, hooks: ReadHooks = {})
       );
       if (error) throw new AiProviderError('save_failed', true, error.message);
     }
-    const extra = hooks.afterRead ? await hooks.afterRead(db, job, facts) : {};
+    const extra = hooks.afterRead ? await hooks.afterRead(db, job, facts, result) : {};
     await finish({ status: 'ready', error_code: null, model, result, ...extra });
     log.info({ facts: facts.length }, 'document reading ready');
   } catch (err) {
@@ -479,6 +490,53 @@ export async function processAnalysis(analysisId: string, hooks: ReadHooks = {})
       .eq('id', job.id);
     log.error({ code: e.code, retryable: e.retryable, attempts }, 'document reading error');
   }
+}
+
+/**
+ * Queue Pittu's own reading of a just-uploaded short document (Khata, tax
+ * receipt, land record…; AUTO_READ_TYPES). No request from the owner: it
+ * happens for every pilot account while the daily cap and budget allow.
+ * Returns the job id to run, or null when it shouldn't be read now.
+ */
+export async function queueAutoReading(documentId: string): Promise<string | null> {
+  const db = serviceClient;
+  if (!db || !aiConfigured()) return null;
+  const doc = must<DocRow | null>(
+    await db
+      .from('property_documents')
+      .select(
+        'id, account_id, property_id, document_type, storage_path, mime_type, file_size, upload_status',
+      )
+      .eq('id', documentId)
+      .maybeSingle(),
+  );
+  if (!doc || doc.upload_status !== 'ready' || !AUTO_READ_TYPES.includes(doc.document_type))
+    return null;
+  if (!aiAvailableFor(doc.account_id) || !(await budgetLeft(db))) return null;
+  if (doc.file_size > MAX_DIRECT_PDF_BYTES) return null;
+  try {
+    await enforceDailyLimit(db, doc.account_id);
+  } catch {
+    return null;
+  }
+  const task = propertyDocumentTask;
+  const { data, error } = await db
+    .from('document_analyses')
+    .upsert(
+      {
+        account_id: doc.account_id,
+        property_id: doc.property_id,
+        document_id: doc.id,
+        task: task.name,
+        task_version: task.version,
+        status: 'queued',
+      },
+      { onConflict: 'document_id,task,task_version', ignoreDuplicates: true },
+    )
+    .select('id')
+    .maybeSingle();
+  if (error) return null;
+  return (data as { id: string } | null)?.id ?? null;
 }
 
 /** What the customer sees (through their own client: RLS applies). */

@@ -18,9 +18,10 @@ import {
   type PropertyDocument,
 } from '@propittu/shared';
 import { PullRefresh } from '@/components/PullRefresh';
-import { useDeleteDocument, useDocuments } from '@/api/queries';
+import { useDeleteDocument, useDocuments, useMoveDocument } from '@/api/queries';
 import { openDocument } from '@/api/uploads';
 import { dialog, toast } from '@/components/Dialog';
+import { DocumentPittuLine } from '@/components/DocumentPittuLine';
 import { Icon } from '@/components/Icon';
 import { PropertyContext } from '@/components/PropertyContext';
 import { EmptyState, ErrorState, LoadingState } from '@/components/States';
@@ -42,6 +43,7 @@ export default function DocumentsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, isPending, error, refetch } = useDocuments(id);
   const deleteDocument = useDeleteDocument(id);
+  const moveDocument = useMoveDocument(id);
   const [opening, setOpening] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
 
@@ -127,6 +129,25 @@ export default function DocumentsScreen() {
                   <Text style={typography.small} numberOfLines={2}>
                     {item.description}
                   </Text>
+                ) : null}
+                {item.pittu ? (
+                  <DocumentPittuLine
+                    pittu={item.pittu}
+                    onMove={(type) =>
+                      moveDocument.mutate(
+                        { id: item.id, type },
+                        {
+                          onSuccess: () => toast(`Moved to ${DOCUMENT_TYPE_LABELS[type]}`),
+                          onError: (err) =>
+                            void dialog.alert({
+                              title: 'Couldn’t move it',
+                              message: errorMessage(err),
+                              tone: 'danger',
+                            }),
+                        },
+                      )
+                    }
+                  />
                 ) : null}
                 <View style={styles.metaRow}>
                   <Text style={typography.caption}>

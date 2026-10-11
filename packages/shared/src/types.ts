@@ -1,4 +1,5 @@
 import type { AnalysisStatus, DeedGap } from './ai';
+import type { DocumentPittu } from './documents';
 import type { CompletionItem, PropertyCompletion } from './completion';
 import type { PropertyHealth } from './health';
 import type { PlanSummary } from './plans';
@@ -249,6 +250,8 @@ export interface PropertyDocument {
   mime_type: string;
   file_size: number;
   created_at: string;
+  /** What Pittu read on it and how it compares with the deed (GET only). */
+  pittu?: DocumentPittu | null;
 }
 
 /** Returned by the upload-intent endpoints. */

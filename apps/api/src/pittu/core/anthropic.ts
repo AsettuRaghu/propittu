@@ -29,14 +29,25 @@ export function anthropicProvider(apiKey: string): AiProvider {
           {
             role: 'user',
             content: [
-              ...req.documents.map((d) => ({
-                type: 'document' as const,
-                source: {
-                  type: 'base64' as const,
-                  media_type: 'application/pdf' as const,
-                  data: Buffer.from(d.bytes).toString('base64'),
-                },
-              })),
+              ...req.documents.map((d) =>
+                d.kind === 'image'
+                  ? {
+                      type: 'image' as const,
+                      source: {
+                        type: 'base64' as const,
+                        media_type: d.mediaType,
+                        data: Buffer.from(d.bytes).toString('base64'),
+                      },
+                    }
+                  : {
+                      type: 'document' as const,
+                      source: {
+                        type: 'base64' as const,
+                        media_type: 'application/pdf' as const,
+                        data: Buffer.from(d.bytes).toString('base64'),
+                      },
+                    },
+              ),
               { type: 'text' as const, text: req.text },
             ],
           },

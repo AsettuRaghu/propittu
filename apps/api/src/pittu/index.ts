@@ -15,6 +15,7 @@ export {
   loadStaffReading,
   needsRun,
   processAnalysis,
+  queueAutoReading,
   requestAnalysis,
   requestStaffReading,
   requeueFailedAnalysis,

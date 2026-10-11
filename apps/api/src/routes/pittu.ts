@@ -148,7 +148,7 @@ export async function refreshReview(
         .eq('account_id', ctx.accountId)
         .neq('status', 'superseded'),
     );
-    const reasons = reviewReasons(s.context, s.answers, facts);
+    const computed = reviewReasons(s.context, s.answers, facts);
     const existing = must<{ reasons: ReviewReason[]; status: 'open' | 'done' } | null>(
       await db
         .from('property_reviews')
@@ -156,6 +156,10 @@ export async function refreshReview(
         .eq('property_id', propertyId)
         .maybeSingle(),
     );
+    // Set after Pittu reads a document (src/documents/pittu.ts), not by these rules: kept.
+    const reasons: ReviewReason[] = existing?.reasons.includes('document_differs')
+      ? [...computed, 'document_differs']
+      : computed;
     const same = (a: string[], b: string[]) =>
       a.length === b.length && a.every((r) => b.includes(r));
 

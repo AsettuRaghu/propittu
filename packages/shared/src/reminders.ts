@@ -77,16 +77,19 @@ export function propertyReminders(input: ReminderInput): Reminder[] {
       due_date: null,
     });
   }
-  const khata = input.answers.khata_name?.answer;
-  if (khata === 'no' || khata === 'unsure') {
+  const ekhata = input.answers.ekhata?.answer;
+  const khata = ekhata ?? input.answers.khata_name?.answer;
+  if (khata === 'no' || khata === 'unsure' || khata === 'applied') {
     add({
       id: `khata:${p.id}`,
       kind: 'khata',
-      title: 'Khata in your name',
+      title: ekhata ? 'e-Khata in your name' : 'Khata in your name',
       detail:
         khata === 'no'
           ? 'Not transferred yet — we can help'
-          : 'Not sure — we can check the records',
+          : khata === 'applied'
+            ? 'Applied — we can follow it up'
+            : 'Not sure — we can check the records',
       due_date: null,
     });
   }

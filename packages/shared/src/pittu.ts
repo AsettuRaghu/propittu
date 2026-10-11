@@ -759,6 +759,7 @@ export const REVIEW_REASONS = [
   'type_changed',
   'low_confidence',
   'deed_changed',
+  'document_differs',
 ] as const;
 export type ReviewReason = (typeof REVIEW_REASONS)[number];
 
@@ -768,6 +769,7 @@ export const REVIEW_REASON_LABELS: Record<ReviewReason, string> = {
   type_changed: 'Property type changed',
   low_confidence: 'Unsure values accepted',
   deed_changed: 'Changed what the deed says',
+  document_differs: 'A document differs from the deed',
 };
 
 /** One deed fact as the review rule needs it. */

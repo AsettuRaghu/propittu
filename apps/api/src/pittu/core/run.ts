@@ -4,7 +4,13 @@ import { logger } from '../../logger.js';
 import { monthSpendUsd } from './limits.js';
 import { estimateCostUsd } from './pricing.js';
 import { provider } from './provider.js';
-import { AiOutputError, AiProviderError, type AiTask, type Capability } from './types.js';
+import {
+  AiOutputError,
+  AiProviderError,
+  type InputDocument,
+  type AiTask,
+  type Capability,
+} from './types.js';
 
 /** Who the call is for, so its cost lands on the right line of the log. */
 export interface RunContext {
@@ -23,7 +29,7 @@ export interface RunContext {
 export async function runTask<R>(
   db: SupabaseClient,
   task: AiTask<R>,
-  input: { documents: { kind: 'pdf'; bytes: Uint8Array }[]; text?: string },
+  input: { documents: InputDocument[]; text?: string },
   ctx: RunContext,
 ): Promise<{ result: R; model: string; sources: string[] }> {
   const spend = await monthSpendUsd(db);
