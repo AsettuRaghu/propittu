@@ -34,9 +34,9 @@ docs/DECISIONS.md; Pittu's design in docs/PITTU.md.
   adding from a deed, questions that follow the deed (flat / plot, renting, OC, Bengaluru e-Khata),
   the land's story from the deed (sale-deed-v3), Pittu's market range (web search, rules decide),
   Watch news published by Pittu when confident, and four rental services (on quote).
-- Existing test properties were read with sale-deed-v2 (no story): re-read them to see "Its story".
-- Pittu Watch finds almost nothing (1 item by 11 Oct): widen the sources (area searches, more feeds,
-  nearby place names) and check GDELT from the server.
+- Pittu Watch (11 Oct): each place now has its own news search (Google News RSS) besides the city
+  feeds; spellings (palli / pally) searched together; the same story from several papers shown once.
+  First run: 74 stories, 16 published by Pittu, 15 for the team.
 - Portal lists: move search and filters to the server when they pass a few hundred rows.
 
 ## Parked (owner's priorities)

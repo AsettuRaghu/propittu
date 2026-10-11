@@ -6,7 +6,8 @@ import { estimateCostUsd } from '../src/pittu/core/pricing.js';
 import { scrub } from '../src/pittu/core/privacy.js';
 import { encumbranceTask } from '../src/pittu/read/tasks/encumbrance.js';
 import { newsPrompt, newsTask } from '../src/pittu/watch/tasks/news.js';
-import { mentions, parseFeed } from '../src/watch/rss.js';
+import { localNewsUrl, mentions, parseFeed, spellings } from '../src/watch/rss.js';
+import { sameStoryOnce } from '../src/routes/watch.js';
 import { ratesTask } from '../src/pittu/value/tasks/rates.js';
 import { SALE_DEED_FIELDS, saleDeedTask } from '../src/pittu/read/tasks/saleDeed.js';
 import { AiOutputError } from '../src/pittu/core/types.js';
@@ -402,5 +403,42 @@ test('Value: rate rows parse; amounts become numbers; rows without a rate are dr
   assert.throws(
     () => ratesTask.parse({ ...raw, is_rate_table: false }),
     (e: unknown) => e instanceof AiOutputError && e.code === 'not_a_rate_table',
+  );
+});
+
+test('Watch: Google News items name the publisher; locality spellings are searched together', () => {
+  const xml = `<rss><channel><item><title>Yelahanka flyover takes another detour - Bangalore Mirror</title>
+    <link>https://news.google.com/rss/articles/abc</link><pubDate>Sat, 20 Sep 2026 06:00:00 GMT</pubDate>
+    <description>&lt;a href="x"&gt;Yelahanka flyover&lt;/a&gt;</description>
+    <source url="https://bangaloremirror.indiatimes.com">Bangalore Mirror</source></item></channel></rss>`;
+  const [item] = parseFeed(xml, 'https://news.google.com/rss/search?q=x');
+  assert.equal(item!.title, 'Yelahanka flyover takes another detour');
+  assert.equal(item!.domain, 'bangaloremirror.indiatimes.com');
+  assert.equal(item!.snippet, null);
+  assert.deepEqual(spellings('Lingampalli'), ['Lingampalli', 'Lingampally']);
+  assert.match(
+    new URL(localNewsUrl('Lingampalli', 3)).searchParams.get('q')!,
+    /"Lingampalli" OR "Lingampally" when:3d/,
+  );
+});
+
+test('Watch: the same story from several papers is shown once', () => {
+  const at = '2026-10-05T10:00:00Z';
+  const kept = sameStoryOnce([
+    {
+      title: 'a',
+      summary: 'Chandapura traffic jam is trapping commuters for hours.',
+      published_at: at,
+    },
+    {
+      title: 'b',
+      summary: 'Chandapura-Attibele road traffic jam traps commuters.',
+      published_at: at,
+    },
+    { title: 'c', summary: 'Chandapura council gets a new president.', published_at: at },
+  ]);
+  assert.deepEqual(
+    kept.map((k) => k.title),
+    ['a', 'c'],
   );
 });

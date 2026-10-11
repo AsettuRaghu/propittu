@@ -48,18 +48,26 @@ const tag = (item: string, name: string) => {
   return m ? decode(m[1] ?? '') : '';
 };
 
+const hostOf = (url: string) => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return null;
+  }
+};
+
 /** Parse an RSS document into items (no XML library needed for feeds this simple). */
 export function parseFeed(xml: string, url: string): FeedItem[] {
-  const domain = (() => {
-    try {
-      return new URL(url).hostname.replace(/^www\./, '');
-    } catch {
-      return null;
-    }
-  })();
+  const domain = hostOf(url);
   return [...xml.matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/gi)].flatMap((m) => {
     const item = m[1] ?? '';
-    const title = tag(item, 'title');
+    // Aggregated feeds (Google News) name the publisher: <source url="…">Name</source>.
+    const source = item.match(/<source[^>]*url="([^"]+)"[^>]*>([\s\S]*?)<\/source>/i);
+    const publisher = source ? decode(source[2] ?? '') : '';
+    let title = tag(item, 'title');
+    if (publisher && title.endsWith(` - ${publisher}`)) {
+      title = title.slice(0, -(publisher.length + 3)).trim();
+    }
     const link = tag(item, 'link') || tag(item, 'guid');
     if (!title || !/^https?:\/\//.test(link)) return [];
     const date = Date.parse(tag(item, 'pubDate'));
@@ -67,8 +75,9 @@ export function parseFeed(xml: string, url: string): FeedItem[] {
       {
         url: link.slice(0, 2000),
         title: title.slice(0, 500),
-        snippet: tag(item, 'description').slice(0, 600) || null,
-        domain,
+        // Google News descriptions only repeat the headline as links.
+        snippet: publisher ? null : tag(item, 'description').slice(0, 600) || null,
+        domain: source ? (hostOf(source[1] ?? '') ?? domain) : domain,
         published_at: Number.isFinite(date) ? new Date(date).toISOString() : null,
       },
     ];
@@ -90,4 +99,33 @@ export function mentions(item: FeedItem, place: string): boolean {
   if (name.length < 4) return false;
   const re = new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
   return re.test(item.title) || (!!item.snippet && re.test(item.snippet));
+}
+
+/** Spellings of a place name that local papers mix up (Lingampalli / Lingampally). */
+export function spellings(name: string): string[] {
+  const n = name.trim();
+  const out = new Set([n]);
+  if (/palli$/i.test(n)) out.add(n.replace(/palli$/i, 'pally'));
+  if (/pally$/i.test(n)) out.add(n.replace(/pally$/i, 'palli'));
+  if (/halli$/i.test(n)) out.add(n.replace(/halli$/i, 'hally'));
+  if (/pet$/i.test(n)) out.add(n.replace(/pet$/i, 'pete'));
+  if (/pete$/i.test(n)) out.add(n.replace(/pete$/i, 'pet'));
+  return [...out];
+}
+
+/**
+ * Google News' public RSS search for one locality (all Indian publishers,
+ * last `days` days). Unlike city feeds, the search itself matches the name,
+ * including in the article body; Pittu then decides what's relevant.
+ */
+export function localNewsUrl(name: string, days: number): string {
+  const q = `${spellings(name)
+    .map((s) => `"${s}"`)
+    .join(' OR ')} when:${Math.max(1, Math.min(days, 30))}d`;
+  return `https://news.google.com/rss/search?${new URLSearchParams({
+    q,
+    hl: 'en-IN',
+    gl: 'IN',
+    ceid: 'IN:en',
+  })}`;
 }

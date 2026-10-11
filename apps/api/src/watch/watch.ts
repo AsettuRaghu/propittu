@@ -4,7 +4,7 @@ import { aiConfigured } from '../pittu/core/limits.js';
 import { runTask } from '../pittu/core/run.js';
 import { newsPrompt, newsTask } from '../pittu/watch/tasks/news.js';
 import { searchNews, type Headline } from './gdelt.js';
-import { feedsFor, fetchFeed, mentions, type FeedItem } from './rss.js';
+import { feedsFor, fetchFeed, localNewsUrl, mentions, spellings, type FeedItem } from './rss.js';
 
 /**
  * Pittu Watch — the application layer (docs/PITTU.md): collect headlines per
@@ -29,8 +29,9 @@ const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export type FeedCache = Map<string, Promise<FeedItem[]>>;
 
 /**
- * New stories for one place: city feeds that name the locality, plus a GDELT
- * search when it answers (it rate-limits shared servers, so it is optional).
+ * New stories for one place: a news search for the locality's name (Google
+ * News RSS), city feeds that name it, and a GDELT search when it answers (it
+ * rate-limits shared servers, so it is optional).
  */
 export async function collectPlace(
   db: SupabaseClient,
@@ -48,8 +49,17 @@ export async function collectPlace(
         fetchFeed(url).catch(() => []),
       );
     for (const item of await feeds.get(url)!) {
-      if (mentions(item, place.name)) rows.push({ ...item, source: 'rss' });
+      if (spellings(place.name).some((n) => mentions(item, n)))
+        rows.push({ ...item, source: 'rss' });
     }
+  }
+  // The locality's own news search: the main source (city feeds rarely name a locality).
+  try {
+    for (const item of (await fetchFeed(localNewsUrl(place.name, days))).slice(0, 40)) {
+      rows.push({ ...item, source: 'rss' });
+    }
+  } catch (err) {
+    logger.info({ err: String(err), place: place.id }, 'watch: local news search unavailable');
   }
   try {
     for (const h of await searchNews(place.query, days))
