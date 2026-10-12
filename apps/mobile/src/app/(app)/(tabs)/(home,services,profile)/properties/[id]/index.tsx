@@ -599,6 +599,13 @@ function Services({ property }: { property: PropertyDetail }) {
         <RequestRow key={r.id} request={r} />
       ))}
       <ListRow
+        icon="warning"
+        accent="coral"
+        title="Something’s wrong at the property?"
+        subtitle="A leak, a break-in, dumping — we send someone urgently"
+        onPress={() => router.push(`/properties/${property.id}/urgent`)}
+      />
+      <ListRow
         icon="calendar"
         accent="teal"
         title={

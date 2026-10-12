@@ -576,3 +576,75 @@ export interface CareSchedule {
 /** "Every 3 months" */
 export const everyLabel = (months: number) =>
   months === 1 ? 'Every month' : months === 12 ? 'Every year' : `Every ${months} months`;
+
+/* ---- "Something's wrong at my property" ---- */
+
+export const URGENT_KINDS = ['leak', 'break_in', 'encroachment', 'damage', 'other'] as const;
+export type UrgentKind = (typeof URGENT_KINDS)[number];
+export const URGENT_KIND_LABELS: Record<UrgentKind, string> = {
+  leak: 'Water leak or flooding',
+  break_in: 'Break-in or someone living there',
+  encroachment: 'Encroachment, dumping or digging',
+  damage: 'Damage — a wall, roof, fire, a tree',
+  other: 'Something else',
+};
+/** Which service each kind books (an urgent visit or a security check). */
+export const URGENT_SERVICE: Record<UrgentKind, string> = {
+  leak: 'property_visit',
+  break_in: 'security_site_check',
+  encroachment: 'security_site_check',
+  damage: 'property_visit',
+  other: 'property_visit',
+};
+
+export const urgentSchema = z.object({
+  kind: z.enum(URGENT_KINDS),
+  details: z.string().trim().max(1000).default(''),
+});
+
+/** A nearby office, from OpenStreetMap. */
+export interface LocalPlace {
+  kind: 'police' | 'fire' | 'hospital' | 'local_body' | 'sub_registrar';
+  name: string;
+  distance_km: number;
+  lat: number;
+  lon: number;
+  phone: string | null;
+}
+
+/** GET /properties/:id/local-help */
+export interface LocalHelp {
+  helplines: { label: string; number: string }[];
+  places: LocalPlace[];
+}
+
+/** Official helplines: India-wide, and for the state / city where they differ. */
+export function helplinesFor(state: string | null, city: string | null): LocalHelp['helplines'] {
+  const out = [
+    { label: 'Emergency (police, fire, ambulance)', number: '112' },
+    { label: 'Police', number: '100' },
+    { label: 'Fire', number: '101' },
+    { label: 'Ambulance', number: '108' },
+  ];
+  const s = (state ?? '').toLowerCase();
+  const c = (city ?? '').toLowerCase();
+  if (s.includes('karnataka')) {
+    out.push({ label: 'Electricity (BESCOM)', number: '1912' });
+    if (/bengaluru|bangalore/.test(c)) {
+      out.push(
+        { label: 'City corporation (GBA, earlier BBMP)', number: '1533' },
+        { label: 'Water (BWSSB)', number: '1916' },
+      );
+    }
+  }
+  if (s.includes('telangana')) {
+    out.push({ label: 'Electricity', number: '1912' });
+    if (/hyderabad|secunderabad|ranga|medchal/.test(c)) {
+      out.push(
+        { label: 'City corporation (GHMC)', number: '040-21111111' },
+        { label: 'Water (HMWSSB)', number: '155313' },
+      );
+    }
+  }
+  return out;
+}

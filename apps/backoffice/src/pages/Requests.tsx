@@ -72,10 +72,11 @@ export function Requests() {
     {
       key: 'service',
       header: 'Request',
-      sort: (r) => r.service.name,
+      // Urgent ones ("Something's wrong at my property") sort first.
+      sort: (r) => `${r.urgent ? 0 : 1}${r.service.name}`,
       render: (r) => (
         <>
-          {r.service.name}
+          {r.urgent ? <span className="badge warn">Urgent</span> : null} {r.service.name}
           <span className="sub mono">{r.reference}</span>
         </>
       ),

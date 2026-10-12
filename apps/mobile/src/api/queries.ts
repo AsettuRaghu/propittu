@@ -11,6 +11,8 @@ import type {
   PropertyDetail,
   PropertyDocument,
   DocumentType,
+  LocalHelp,
+  UrgentKind,
   CareSchedule,
   DocumentShare,
   DocumentShareInput,
@@ -367,4 +369,22 @@ export function useCareMutations(propertyId: string) {
       onSuccess: done,
     }),
   };
+}
+
+/* ---- Something's wrong at my property ---- */
+
+export const useLocalHelp = (propertyId: string) =>
+  useQuery({
+    queryKey: ['properties', propertyId, 'local-help'] as const,
+    queryFn: () => api<LocalHelp>(`/properties/${propertyId}/local-help`),
+    staleTime: 24 * 3600_000,
+  });
+
+export function useSendUrgent(propertyId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { kind: UrgentKind; details: string }) =>
+      api<ServiceRequest>(`/properties/${propertyId}/urgent`, { method: 'POST', body: input }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.serviceRequests }),
+  });
 }

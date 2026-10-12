@@ -372,6 +372,8 @@ export interface ServiceRequest {
   /** Human-facing reference, e.g. "PR-000123" (§23). */
   reference: string;
   status: ServiceRequestStatus;
+  /** Sent as "Something's wrong at my property" — the team sees it first. */
+  urgent: boolean;
   /** Copied from the service when opened; decides the steps and the result. */
   fulfilment: ServiceFulfilment;
   description: string;

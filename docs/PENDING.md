@@ -34,6 +34,10 @@ docs/DECISIONS.md; Pittu's design in docs/PITTU.md.
   adding from a deed, questions that follow the deed (flat / plot, renting, OC, Bengaluru e-Khata),
   the land's story from the deed (sale-deed-v3), Pittu's market range (web search, rules decide),
   Watch news published by Pittu when confident, and four rental services (on quote).
+- 12 Oct, waiting for the app publish: Share documents safely (expiring links, /s/<token>), Get
+  sale-ready + Lost a document? (+ services Certified Copy, Lost Document Help, EC for You), Care
+  schedule (books itself when included, else reminds; keep-alive cron), Something's wrong (urgent
+  requests marked for the team; helplines; nearby offices from OpenStreetMap Nominatim, cached).
 - Project page (11 Oct): owners in the project on Propittu, project alerts, shared sales, invite
   neighbours. Counts properties whose deed Pittu read (manual ones without a read deed don't count).
 - Documents by email (11 Oct): per-account private address (Postmark inbound, MailboxHash);

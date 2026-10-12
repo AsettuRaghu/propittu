@@ -21,6 +21,7 @@ import { satelliteRouter } from './routes/satellite.js';
 import { inboundRouter, inboxRouter } from './routes/inbox.js';
 import { sharePagesRouter, sharesRouter } from './routes/shares.js';
 import { careRouter } from './routes/care.js';
+import { urgentRouter } from './routes/urgent.js';
 import { backofficeRouter } from './routes/backoffice.js';
 import { billingReturnRouter, billingRouter } from './routes/billing.js';
 import { webhooksRouter } from './routes/webhooks.js';
@@ -141,6 +142,7 @@ export function createApp(): express.Express {
   app.use(inboxRouter);
   app.use(sharesRouter);
   app.use(careRouter);
+  app.use(urgentRouter);
   app.use(servicesRouter);
   app.use(weatherRouter);
 

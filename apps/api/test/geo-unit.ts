@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { locationIssueText, type LocationIssue } from '@propittu/shared';
 import { checkRecord, deedKey, distanceKm, storedIssue } from '../src/locationRecord.js';
 import { changeBetween, cloudyShare, square } from '../src/satellite/rules.js';
+import { helplinesFor } from '@propittu/shared';
 
 const issue: LocationIssue = {
   kind: 'pincode',
@@ -98,4 +99,15 @@ test('satellite: cloudy pixels from the scene classification; a square around th
   const [w, s, e, n] = square(12.79, 77.7, 150);
   assert.ok(Math.abs((n - s) * 111_320 - 300) < 1);
   assert.ok(w < 77.7 && e > 77.7);
+});
+
+test('helplines: India-wide, plus the city’s own', () => {
+  const blr = helplinesFor('Karnataka', 'Bengaluru Urban').map((h) => h.number);
+  assert.ok(blr.includes('112') && blr.includes('1533') && blr.includes('1916'));
+  const hyd = helplinesFor('Telangana', 'Hyderabad').map((h) => h.number);
+  assert.ok(hyd.includes('040-21111111') && hyd.includes('155313'));
+  assert.deepEqual(
+    helplinesFor(null, null).map((h) => h.number),
+    ['112', '100', '101', '108'],
+  );
 });

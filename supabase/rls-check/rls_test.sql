@@ -1998,5 +1998,18 @@ select tst.rejects($$insert into public.care_schedules (account_id, property_id,
   'nobody schedules on a property that isn''t theirs');
 reset role;
 
+-- =====================================================================
+\echo
+\echo '== Urgent requests and local contacts =='
+-- =====================================================================
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rejects($$update public.service_requests set urgent = true$$,
+  'owners cannot mark requests urgent themselves (the server does)');
+select tst.rejects($$insert into public.property_local_contacts (property_id, account_id)
+                     values ('a1a1a1a1-0000-0000-0000-0000000000e1', 'acc0000a-0000-0000-0000-00000000000a')$$,
+  'only the server stores nearby offices');
+reset role;
+
 \echo
 \echo 'ALL RLS CHECKS PASSED'

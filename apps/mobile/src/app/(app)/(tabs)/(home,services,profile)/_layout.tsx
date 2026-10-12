@@ -65,6 +65,7 @@ const SCREENS: { name: string; options: Record<string, unknown> }[] = [
   { name: 'properties/[id]/sale-ready', options: { title: 'Get sale-ready' } },
   { name: 'properties/[id]/lost-document', options: { title: 'Lost a document?' } },
   { name: 'properties/[id]/care', options: { title: 'Care schedule' } },
+  { name: 'properties/[id]/urgent', options: { title: 'Something’s wrong?' } },
   { name: 'support/index', options: { title: 'Help & Support' } },
   { name: 'support/new', options: { title: 'Raise a ticket' } },
   { name: 'support/[id]', options: { title: 'Support ticket' } },

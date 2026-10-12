@@ -110,7 +110,7 @@ servicesRouter.get('/service-requests', async (req, res) => {
   ok(res, must<ServiceRequest[]>(await query));
 });
 
-async function loadRequest(
+export async function loadRequest(
   db: SupabaseClient,
   accountId: string,
   id: string,
