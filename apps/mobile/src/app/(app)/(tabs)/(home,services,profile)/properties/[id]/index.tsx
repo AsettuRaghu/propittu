@@ -25,7 +25,13 @@ import {
   useSatellite,
 } from '@/api/ai';
 import { useSaleReady, useSuccession } from '@/api/family';
-import { useMe, useProperty, useServiceRequests, useServices } from '@/api/queries';
+import {
+  useCareSchedules,
+  useMe,
+  useProperty,
+  useServiceRequests,
+  useServices,
+} from '@/api/queries';
 import { DocumentSlots } from '@/components/DocumentSlots';
 import type { IconName } from '@/components/Icon';
 import { PhotoSection, type PhotoSectionHandle } from '@/components/PhotoSection';
@@ -574,6 +580,7 @@ function Details({ property: p, onEdit }: { property: PropertyDetail; onEdit: ()
 /** Recent requests for this property, and booking one — the rest is in the Services tab. */
 function Services({ property }: { property: PropertyDetail }) {
   const { data } = useServiceRequests(property.id);
+  const care = useCareSchedules(property.id);
   const recent = (data ?? []).slice(0, 3);
   return (
     <ListGroup
@@ -591,6 +598,25 @@ function Services({ property }: { property: PropertyDetail }) {
       {recent.map((r) => (
         <RequestRow key={r.id} request={r} />
       ))}
+      <ListRow
+        icon="calendar"
+        accent="teal"
+        title={
+          care.data?.some((c) => c.active)
+            ? `Care schedule · ${care.data.filter((c) => c.active).length} regular service${care.data.filter((c) => c.active).length === 1 ? '' : 's'}`
+            : 'Set up regular care'
+        }
+        subtitle={
+          care.data?.some((c) => c.active)
+            ? `Next: ${
+                care.data
+                  .filter((c) => c.active)
+                  .map((c) => `${c.service_name} ${formatDate(c.next_on)}`)[0]
+              }`
+            : 'A visit every few months, booked for you'
+        }
+        onPress={() => router.push(`/properties/${property.id}/care`)}
+      />
       <ListRow
         icon="add"
         title="Book a service for this property"

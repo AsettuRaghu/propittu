@@ -545,3 +545,34 @@ export const categoryUpdateSchema = z.object({ name: z.string().trim().min(1).ma
 
 /** POST …/order — the new order, first to last. */
 export const reorderSchema = z.object({ ids: z.array(z.string().min(1).max(100)).min(1).max(500) });
+
+/* ---- Care schedule: services that repeat ---- */
+
+export const CARE_EVERY = [1, 2, 3, 4, 6, 12] as const;
+
+export const careScheduleSchema = z.object({
+  service_id: z.guid(),
+  every_months: z.union([
+    z.literal(1),
+    z.literal(2),
+    z.literal(3),
+    z.literal(4),
+    z.literal(6),
+    z.literal(12),
+  ]),
+  next_on: z.iso.date(),
+});
+
+export interface CareSchedule {
+  id: string;
+  service_id: string;
+  service_name: string;
+  every_months: number;
+  next_on: string;
+  active: boolean;
+  last_request_id: string | null;
+}
+
+/** "Every 3 months" */
+export const everyLabel = (months: number) =>
+  months === 1 ? 'Every month' : months === 12 ? 'Every year' : `Every ${months} months`;

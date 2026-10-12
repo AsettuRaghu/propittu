@@ -11,6 +11,7 @@ import type {
   PropertyDetail,
   PropertyDocument,
   DocumentType,
+  CareSchedule,
   DocumentShare,
   DocumentShareInput,
   Inbox,
@@ -332,4 +333,38 @@ export function useRevokeShare(propertyId: string) {
     mutationFn: (id: string) => api(`/shares/${id}`, { method: 'DELETE' }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: sharesKey(propertyId) }),
   });
+}
+
+/* ---- Care schedule ---- */
+
+const careKey = (propertyId: string) => ['properties', propertyId, 'care'] as const;
+
+export const useCareSchedules = (propertyId: string) =>
+  useQuery({
+    queryKey: careKey(propertyId),
+    queryFn: () => api<CareSchedule[]>(`/properties/${propertyId}/care-schedules`),
+  });
+
+export function useCareMutations(propertyId: string) {
+  const qc = useQueryClient();
+  const done = () => void qc.invalidateQueries({ queryKey: careKey(propertyId) });
+  return {
+    add: useMutation({
+      mutationFn: (input: { service_id: string; every_months: number; next_on: string }) =>
+        api<CareSchedule>(`/properties/${propertyId}/care-schedules`, {
+          method: 'POST',
+          body: input,
+        }),
+      onSuccess: done,
+    }),
+    update: useMutation({
+      mutationFn: ({ id, ...patch }: { id: string; active?: boolean }) =>
+        api<CareSchedule>(`/care-schedules/${id}`, { method: 'PATCH', body: patch }),
+      onSuccess: done,
+    }),
+    remove: useMutation({
+      mutationFn: (id: string) => api(`/care-schedules/${id}`, { method: 'DELETE' }),
+      onSuccess: done,
+    }),
+  };
 }

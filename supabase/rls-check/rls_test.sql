@@ -1976,5 +1976,27 @@ select tst.rejects($$insert into public.document_shares (account_id, property_id
   'nobody shares a property that isn''t theirs');
 reset role;
 
+-- =====================================================================
+\echo
+\echo '== Care schedule =='
+-- =====================================================================
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+insert into public.care_schedules (account_id, property_id, service_id, every_months, next_on, created_by)
+select 'acc0000a-0000-0000-0000-00000000000a', 'a1a1a1a1-0000-0000-0000-0000000000e1', id, 3, current_date + 30,
+       'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+from public.services where code = 'property_visit';
+select tst.rows('select * from public.care_schedules', 1, 'the owner schedules a regular visit');
+select tst.rejects($$select public.create_scheduled_request((select id from public.care_schedules limit 1))$$,
+  'only the server books from a schedule');
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.rows('select * from public.care_schedules', 0, 'other customers never see it');
+select tst.rejects($$insert into public.care_schedules (account_id, property_id, service_id, every_months, next_on, created_by)
+                     select 'acc0000b-0000-0000-0000-00000000000b', 'a1a1a1a1-0000-0000-0000-0000000000e1', id, 3,
+                            current_date + 30, 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
+                     from public.services where code = 'property_visit'$$,
+  'nobody schedules on a property that isn''t theirs');
+reset role;
+
 \echo
 \echo 'ALL RLS CHECKS PASSED'

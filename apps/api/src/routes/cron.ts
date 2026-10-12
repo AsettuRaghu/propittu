@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { env } from '../env.js';
 import { HttpError, ok, unauthenticated } from '../errors.js';
 import { authServerClient, serviceClient } from '../supabase.js';
+import { runCareSchedules } from '../care.js';
 import { cleanAbandonedUploads } from '../cleanup.js';
 import { runWatch } from '../watch/watch.js';
 import { runSatellite } from '../satellite/watch.js';
@@ -29,7 +30,15 @@ cronRouter.get('/cron/keepalive', async (req, res) => {
   }
 
   // Also: remove uploads that were started but never finished (older than a day).
-  if (serviceClient) waitUntil(cleanAbandonedUploads(serviceClient).then(() => undefined));
+  // And the care schedule: book what's due within a week (or remind the owner).
+  if (serviceClient) {
+    const db = serviceClient;
+    waitUntil(
+      cleanAbandonedUploads(db)
+        .then(() => runCareSchedules(db))
+        .then(() => undefined),
+    );
+  }
   ok(res, { status: 'ok', database_time: data as string });
 });
 

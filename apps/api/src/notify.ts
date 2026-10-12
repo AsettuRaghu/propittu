@@ -35,7 +35,9 @@ export type NotificationEvent =
   | { type: 'watch.news'; placeId: string; count: number }
   | { type: 'satellite.change'; propertyId: string; change: SatelliteChange }
   | { type: 'inbox.received'; accountId: string; count: number; filed: boolean }
-  | { type: 'share.opened'; shareId: string };
+  | { type: 'share.opened'; shareId: string }
+  | { type: 'care.booked'; requestId: string }
+  | { type: 'care.due'; scheduleId: string };
 
 interface Note {
   account_id: string;
@@ -240,6 +242,38 @@ async function compose(db: SupabaseClient, e: NotificationEvent): Promise<Note[]
           ['document', e.documentId],
         ),
       ];
+    }
+    case 'care.booked': {
+      const r = await request(db, e.requestId);
+      return r
+        ? [
+            note(
+              r.account_id,
+              `${r.service?.name ?? 'Your visit'} booked from your care schedule`,
+              'Included in your plan — we’ll confirm the date.',
+              `/requests/${r.id}`,
+              ['service_request', r.id],
+            ),
+          ]
+        : [];
+    }
+    case 'care.due': {
+      const { data } = await db
+        .from('care_schedules')
+        .select('account_id, property_id, service:services(name)')
+        .eq('id', e.scheduleId)
+        .maybeSingle();
+      return data
+        ? [
+            note(
+              data.account_id as string,
+              `${(data.service as unknown as { name: string } | null)?.name ?? 'Your service'} is due`,
+              'From your care schedule — tap to book it.',
+              `/properties/${data.property_id as string}/care`,
+              ['care_schedule', e.scheduleId],
+            ),
+          ]
+        : [];
     }
     case 'share.opened': {
       const { data } = await db
