@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useCallback } from 'react';
-import type { AccountPeople, SuccessionStep } from '@propittu/shared';
+import type { AccountPeople, SaleReadyStep, SuccessionStep } from '@propittu/shared';
 import { setCurrentAccount } from '@/lib/currentAccount';
 import { api } from './client';
 import { keys } from './queries';
@@ -89,5 +89,15 @@ export const useSuccession = (propertyId: string) =>
     queryFn: () =>
       api<{ steps: SuccessionStep[]; done: number; process: string }>(
         `/properties/${propertyId}/succession`,
+      ),
+  });
+
+/** Get sale-ready: what buyers and banks will ask for, and what's missing. */
+export const useSaleReady = (propertyId: string) =>
+  useQuery({
+    queryKey: ['properties', propertyId, 'sale-ready'] as const,
+    queryFn: () =>
+      api<{ steps: SaleReadyStep[]; done: number; note: string | null }>(
+        `/properties/${propertyId}/sale-ready`,
       ),
   });

@@ -2,7 +2,9 @@ import { Router } from 'express';
 import { z } from 'zod';
 import {
   isValidAnswer,
+  financialYearStart,
   reviewReasons,
+  saleReadiness,
   successionPlan,
   type PittuAnswers,
   type PittuContext,
@@ -13,6 +15,8 @@ import {
 import { auth, type AuthContext } from '../auth.js';
 import { audit } from '../audit.js';
 import { deedStory } from '../deeds/story.js';
+import { projectAlerts } from '../legal/projectDisputes.js';
+import { propertyValue } from '../value/value.js';
 import { invalid, must, notFound, ok, uuidParam } from '../errors.js';
 import { logger } from '../logger.js';
 import { serviceClient } from '../supabase.js';
@@ -224,6 +228,62 @@ pittuRouter.get('/properties/:id/succession', async (req, res) => {
       family_members: members.count ?? 0,
       nominees: nominees.count ?? 0,
       loan_on_property: (prop.data?.loan_on_property as boolean | null) ?? null,
+    }),
+  );
+});
+
+/**
+ * GET /properties/:id/sale-ready — what a buyer's lawyer and bank will ask
+ * for, and what's missing (shared rules: saleReadiness).
+ */
+pittuRouter.get('/properties/:id/sale-ready', async (req, res) => {
+  const ctx = auth(req);
+  const id = uuidParam(req.params.id, 'Property');
+  const state = await loadState(ctx, id);
+  const db = serviceClient;
+  const [ec, tax, prop, review, alerts, value] = await Promise.all([
+    ctx.db
+      .from('document_analyses')
+      .select('result')
+      .eq('property_id', id)
+      .eq('task', 'encumbrance.extract')
+      .eq('status', 'ready')
+      .order('finished_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    ctx.db
+      .from('property_answers')
+      .select('answer, answered_at')
+      .eq('property_id', id)
+      .eq('question_id', 'tax_paid')
+      .maybeSingle(),
+    ctx.db.from('properties').select('loan_on_property').eq('id', id).maybeSingle(),
+    db
+      ? db.from('property_reviews').select('reasons, status').eq('property_id', id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    db ? projectAlerts(db, id).catch(() => []) : Promise.resolve([]),
+    db ? propertyValue(db, id).catch(() => null) : Promise.resolve(null),
+  ]);
+  const r = ec.data?.result as { period_from?: string | null; period_to?: string | null } | null;
+  const years =
+    r?.period_from && r.period_to
+      ? Math.round((Date.parse(r.period_to) - Date.parse(r.period_from)) / (365.25 * 86_400_000))
+      : null;
+  const t = tax.data as { answer: string; answered_at: string } | null;
+  const reviewRow = review.data as { reasons: string[]; status: string } | null;
+  ok(
+    res,
+    saleReadiness({
+      ctx: state.context,
+      answers: state.answers,
+      ec_years: years,
+      project_dispute: alerts.some((a) => a.status === 'active'),
+      names_differ:
+        !!reviewRow?.reasons.includes('document_differs') && reviewRow.status === 'open',
+      loan_on_property: (prop.data?.loan_on_property as boolean | null) ?? null,
+      tax_paid_this_year:
+        t?.answer === 'paid' && Date.parse(t.answered_at) >= financialYearStart().getTime(),
+      government_value_inr: value?.government_value_inr ?? null,
     }),
   );
 });

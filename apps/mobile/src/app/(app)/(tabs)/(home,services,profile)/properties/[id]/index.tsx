@@ -24,7 +24,7 @@ import {
   usePropertyValue,
   useSatellite,
 } from '@/api/ai';
-import { useSuccession } from '@/api/family';
+import { useSaleReady, useSuccession } from '@/api/family';
 import { useMe, useProperty, useServiceRequests, useServices } from '@/api/queries';
 import { DocumentSlots } from '@/components/DocumentSlots';
 import type { IconName } from '@/components/Icon';
@@ -299,6 +299,7 @@ function PittuSection({ property, withSetup }: { property: PropertyDetail; withS
   const disputes = useDisputes(property.id).data;
   const me = useMe();
   const succession = useSuccession(property.id).data;
+  const saleReady = useSaleReady(property.id).data;
   const project = useProject(property.id).data;
   const sat = useSatellite(
     property.id,
@@ -324,7 +325,15 @@ function PittuSection({ property, withSetup }: { property: PropertyDetail; withS
   )
     return null;
   const open = (
-    page: 'news' | 'value' | 'legal' | 'history' | 'succession' | 'satellite' | 'project',
+    page:
+      | 'news'
+      | 'value'
+      | 'legal'
+      | 'history'
+      | 'succession'
+      | 'satellite'
+      | 'project'
+      | 'sale-ready',
   ) => router.push(`/properties/${property.id}/${page}`);
   const newsAt = news.reduce<string | null>(
     (latest, n) => (n.reviewed_at && (!latest || n.reviewed_at > latest) ? n.reviewed_at : latest),
@@ -373,6 +382,15 @@ function PittuSection({ property, withSetup }: { property: PropertyDetail; withS
           }
           subtitleLines={2}
           onPress={() => open('satellite')}
+        />
+      ) : null}
+      {saleReady ? (
+        <ListRow
+          icon="tag"
+          accent={saleReady.done === saleReady.steps.length ? 'teal' : 'indigo'}
+          title={`Get sale-ready · ${saleReady.done} of ${saleReady.steps.length}`}
+          subtitle="What a buyer’s lawyer and bank will ask for"
+          onPress={() => open('sale-ready')}
         />
       ) : null}
       {succession ? (

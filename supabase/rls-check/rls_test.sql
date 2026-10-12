@@ -161,7 +161,7 @@ values ('acc0000a-0000-0000-0000-00000000000a', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaa
 select tst.rows('select * from public.properties', 1, 'A sees its account''s property');
 select tst.ok((select reference from public.service_requests limit 1) = 'PR-000123',
   'first service request reference is PR-000123');
-select tst.rows('select * from public.services', 19, 'A sees the 19 catalogue services');
+select tst.rows('select * from public.services', 22, 'A sees the 22 catalogue services');
 select tst.ok(
   (select document_count from public.property_summaries
    where id = 'a1a1a1a1-0000-0000-0000-000000000001') = 1,

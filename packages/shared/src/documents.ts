@@ -748,3 +748,144 @@ export interface DocumentShare {
   downloaded: number;
   last_opened_at: string | null;
 }
+
+/* ------------------------------------------------------------------ *
+ * Get sale-ready: what a buyer's lawyer and bank will ask for, and what
+ * is missing. Fixed rules; nothing here says a title is "clear".
+ * ------------------------------------------------------------------ */
+
+export interface SaleReadyInput {
+  ctx: PittuContext;
+  answers: PittuAnswers;
+  /** Years the EC on record covers (null: no EC read). */
+  ec_years: number | null;
+  /** A dispute our team confirmed for the project is active. */
+  project_dispute: boolean;
+  /** Names differ between the deed and other records (team review open). */
+  names_differ: boolean;
+  loan_on_property: boolean | null;
+  tax_paid_this_year: boolean;
+  government_value_inr: number | null;
+}
+
+export interface SaleReadyStep {
+  key: string;
+  title: string;
+  why: string;
+  done: boolean;
+  /** Fix it: add this document, or book this service. */
+  document?: DocumentType;
+  service?: string;
+}
+
+export function saleReadiness(i: SaleReadyInput): {
+  steps: SaleReadyStep[];
+  done: number;
+  note: string | null;
+} {
+  const has = (t: DocumentType) => i.ctx.documents.includes(t);
+  const place = { state: i.ctx.state, bengaluru_city: inBengaluruCity(i.ctx) };
+  const flat = i.ctx.property_type === 'apartment';
+  const land = i.ctx.property_type === 'land';
+  const khataOk = place.bengaluru_city
+    ? i.answers.ekhata === 'yes'
+    : i.answers.khata_name === 'yes';
+  const steps: SaleReadyStep[] = [
+    {
+      key: 'deed',
+      title: 'Your sale deed',
+      why: 'The buyer’s bank takes the original. Lost it? We can get a certified copy and do the paperwork.',
+      done: has('sale_deed'),
+      document: 'sale_deed',
+      service: has('sale_deed') ? undefined : 'lost_document_recovery',
+    },
+    {
+      key: 'ec',
+      title: 'An EC for 30 years',
+      why:
+        i.ec_years === null
+          ? 'Buyers’ lawyers ask for an Encumbrance Certificate covering about 30 years.'
+          : `The EC on record covers about ${i.ec_years} years; buyers usually ask for 30.`,
+      done: i.ec_years !== null && i.ec_years >= 28,
+      service: 'ec_request',
+    },
+    {
+      key: 'khata',
+      title: ka(place)
+        ? `${documentLabel('khata', place)} in your name`
+        : 'Tax records in your name',
+      why: place.bengaluru_city
+        ? 'A sale can’t be registered in Bengaluru without the e-Khata.'
+        : 'Buyers need the city or panchayat record to be in the seller’s name.',
+      done: ka(place) ? khataOk && has('khata') : has('property_tax'),
+      service: 'khata_mutation_assistance',
+    },
+    {
+      key: 'tax',
+      title: 'This year’s property tax paid',
+      why: 'Unpaid tax holds up the transfer; buyers ask for the latest receipt.',
+      done: i.tax_paid_this_year,
+      service: 'property_tax_assistance',
+    },
+  ];
+  if (flat && fromBuilder(i.ctx)) {
+    steps.push({
+      key: 'oc',
+      title: 'The Occupancy Certificate',
+      why: 'Most banks won’t lend on a flat without an OC.',
+      done: has('occupancy_certificate'),
+      document: 'occupancy_certificate',
+      service: 'document_verification',
+    });
+  }
+  if (land) {
+    steps.push(
+      {
+        key: 'conversion',
+        title: 'The land conversion order',
+        why: 'Shows the land may be used for building — buyers’ banks ask for it.',
+        done: has('conversion_order'),
+        document: 'conversion_order',
+        service: 'document_verification',
+      },
+      {
+        key: 'land_record',
+        title: `${documentLabel('land_record', place)} in your name`,
+        why: 'The land record should match the deed’s owner and area.',
+        done: has('land_record'),
+        document: 'land_record',
+      },
+    );
+  }
+  if (i.loan_on_property) {
+    steps.push({
+      key: 'loan',
+      title: 'The loan closure letter',
+      why: 'If the loan is still running, the buyer’s bank pays it off at the sale; if it’s closed, buyers ask for the letter and the released deed.',
+      done: has('loan_closure'),
+      document: 'loan_closure',
+    });
+  }
+  steps.push(
+    {
+      key: 'names',
+      title: 'Your name the same on every record',
+      why: 'A different spelling or a married name on the Khata or tax holds up the sale.',
+      done: !i.names_differ,
+      service: 'name_correction',
+    },
+    {
+      key: 'disputes',
+      title: 'No dispute open on the project',
+      why: 'Buyers’ lawyers check court cases about the project and the land.',
+      done: !i.project_dispute,
+    },
+  );
+  return {
+    steps,
+    done: steps.filter((s) => s.done).length,
+    note: i.government_value_inr
+      ? `Stamp duty is paid on the higher of the price and the government value (about ₹${Math.round(i.government_value_inr).toLocaleString('en-IN')} today).`
+      : null,
+  };
+}

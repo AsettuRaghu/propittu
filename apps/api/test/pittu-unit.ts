@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import {
   carePlan,
   checkDocument,
+  saleReadiness,
   guessDocumentType,
   successionPlan,
   comparePeople,
@@ -519,4 +520,33 @@ test('emailed documents: a first guess at the type from the name and subject', (
   assert.equal(guessDocumentType('Rental agreement renewal - flat 1102'), 'rental_agreement');
   assert.equal(guessDocumentType('BESCOM bill Sept.jpg'), 'utility_bill');
   assert.equal(guessDocumentType('IMG_2041.jpg'), null);
+});
+
+test('get sale-ready: a Bengaluru builder flat with a short EC and a loan', () => {
+  const r = saleReadiness({
+    ctx: { ...BLR_FLAT, documents: ['sale_deed', 'khata', 'encumbrance_certificate'] },
+    answers: { ekhata: 'yes' },
+    ec_years: 2,
+    project_dispute: true,
+    names_differ: false,
+    loan_on_property: true,
+    tax_paid_this_year: true,
+    government_value_inr: 15_000_000,
+  });
+  assert.deepEqual(
+    r.steps.map((s) => [s.key, s.done]),
+    [
+      ['deed', true],
+      ['ec', false],
+      ['khata', true],
+      ['tax', true],
+      ['oc', false],
+      ['loan', false],
+      ['names', true],
+      ['disputes', false],
+    ],
+  );
+  assert.equal(r.steps.find((s) => s.key === 'ec')!.service, 'ec_request');
+  assert.match(r.steps.find((s) => s.key === 'ec')!.why, /about 2 years/);
+  assert.match(r.note!, /1,50,00,000/);
 });
