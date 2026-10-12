@@ -120,6 +120,7 @@ export function planSummary(state: PlanState): PlanSummary {
     plan_name: state.current?.plan_version.plan.name ?? null,
     ends_at: state.current?.ends_at ?? null,
     days_left: state.current ? daysLeft(state.current.ends_at) : null,
+    features: state.benefits.features,
   };
 }
 
@@ -151,6 +152,14 @@ export const requireActivePlan: RequestHandler = async (req, _res, next) => {
       402,
       'LIMITED_ACCESS',
       'Your free trial or plan has ended. Choose a plan to continue using Propittu — your data is safe.',
+    );
+  }
+  // Family see an owner's properties only while the owner's plan includes it.
+  if (ctx.accountRole === 'member' && !state.benefits.features.includes('family_access')) {
+    throw new HttpError(
+      403,
+      'FEATURE_NOT_INCLUDED',
+      'The owner’s plan no longer includes family access, so these properties aren’t shared with you right now.',
     );
   }
   req.planState = state;

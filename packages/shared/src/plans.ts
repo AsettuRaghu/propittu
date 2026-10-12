@@ -14,6 +14,7 @@ export const FEATURE_CODES = [
   'document_upload',
   'photo_upload',
   'video_upload',
+  'family_access',
 ] as const;
 export type FeatureCode = (typeof FEATURE_CODES)[number];
 
@@ -31,6 +32,7 @@ export const FEATURE_LABELS: Record<FeatureCode, string> = {
   document_upload: 'Upload documents',
   photo_upload: 'Upload photos',
   video_upload: 'Upload videos',
+  family_access: 'Family access (share properties with family)',
 };
 
 export const LIMIT_LABELS: Record<LimitCode, string> = {
@@ -160,6 +162,8 @@ export interface PlanSummary {
   ends_at: string | null;
   /** Whole days until ends_at, computed by the API. */
   days_left: number | null;
+  /** Features this plan includes (e.g. family_access). */
+  features: FeatureCode[];
 }
 
 /* ------------------------------------------------------------------ *

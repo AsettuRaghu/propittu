@@ -10,6 +10,7 @@ import {
 import { audit } from '../audit.js';
 import { auth, requireOwner } from '../auth.js';
 import { HttpError, fromDbError, must, ok, uuidParam } from '../errors.js';
+import { planOf, requireFeature } from '../plan.js';
 import { serviceClient } from '../supabase.js';
 
 /**
@@ -95,6 +96,8 @@ familyRouter.get('/account/people', async (req, res) => {
 familyRouter.post('/account/invites', async (req, res) => {
   const ctx = auth(req);
   requireOwner(ctx);
+  // Family access is a plan feature (Plus; set per plan in the portal).
+  requireFeature(planOf(req), 'family_access', 'Family access');
   const input = familyInviteSchema.parse(req.body);
   const phone = e164(input.phone);
   if (ctx.phone && phone === ctx.phone)

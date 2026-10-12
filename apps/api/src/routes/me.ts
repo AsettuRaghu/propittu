@@ -181,8 +181,19 @@ async function accessFor(
       owners.set(o.account_id, nameOf.get(o.user_id) ?? null);
   }
   const first = (n: string | null | undefined) => n?.trim().split(/\s+/)[0] ?? null;
+  // Family's accounts whose plan no longer includes family access.
+  const blocked = new Set<string>();
+  await Promise.all(
+    rows
+      .filter((r) => r.role !== 'owner')
+      .map(async (r) => {
+        const plan = await loadPlanState(db, r.account_id).catch(() => null);
+        if (!plan?.benefits.features.includes('family_access')) blocked.add(r.account_id);
+      }),
+  );
   return {
     accounts: rows.map((r) => ({
+      blocked: blocked.has(r.account_id),
       id: r.account_id,
       label:
         r.role === 'owner'

@@ -2,7 +2,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { openServicesTab } from '@/lib/nav';
 import { useQueryClient } from '@tanstack/react-query';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
+import { toast } from '@/components/Dialog';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { withoutCodes, type DraftProperty, type InviteForMe } from '@propittu/shared';
@@ -20,7 +21,7 @@ import { ErrorState, LimitedAccessState } from '@/components/States';
 import { Badge, Button, IconButton, ListGroup, ListRow } from '@/components/ui';
 import { greeting } from '@/lib/format';
 import { Bell } from '@/components/Bell';
-import { useAnswerInvite } from '@/api/family';
+import { useAnswerInvite, useSwitchAccount } from '@/api/family';
 import { accents, colors, font, gradients, radius, shadow, space, typography } from '@/theme';
 
 function greetingIcon(now = new Date()): IconName {
@@ -60,6 +61,14 @@ export default function HomeScreen() {
   const hasProperties = properties.length > 0;
   const firstName = me.data?.full_name?.split(' ')[0];
   const emailed = useEmailInbox();
+  // Family's account whose plan no longer includes family access: back to their own.
+  const switchTo = useSwitchAccount();
+  const blocked = me.data?.accounts.find((a) => a.current && a.blocked);
+  useEffect(() => {
+    if (!blocked) return;
+    toast('Those properties aren’t shared with you right now');
+    void switchTo(me.data?.accounts.find((a) => a.role === 'owner')?.id ?? '');
+  }, [blocked, me.data, switchTo]);
 
   const header = (
     <View style={styles.header}>

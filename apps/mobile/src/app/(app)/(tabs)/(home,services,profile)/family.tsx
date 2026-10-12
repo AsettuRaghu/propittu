@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { formatIndianMobile } from '@propittu/shared';
@@ -17,7 +18,7 @@ import { ErrorState, LoadingState } from '@/components/States';
 import { Banner, Button, ListGroup, ListRow } from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
-import { space, typography } from '@/theme';
+import { colors, radius, space, typography } from '@/theme';
 
 /**
  * Family & access. The owner invites family by phone (they sign in to
@@ -80,7 +81,17 @@ export default function FamilyScreen() {
           <InviteRow key={i.id} id={i.id} name={i.name} phone={i.phone} relation={i.relation} />
         ))}
       </ListGroup>
-      <InviteForm />
+      {me.data.plan.features.includes('family_access') ? (
+        <InviteForm />
+      ) : (
+        <View style={styles.upsell}>
+          <Text style={typography.bodyStrong}>Family access is part of Plus</Text>
+          <Text style={typography.small}>
+            Let family see your properties, add documents and book services for you.
+          </Text>
+          <Button title="See plans" size="sm" onPress={() => router.push('/plan')} />
+        </View>
+      )}
       <ListGroup title="Nominees" plain>
         <Text style={[typography.small, styles.inner]}>
           If something happens to you, our team gives your nominee access once they show us the
@@ -305,4 +316,11 @@ const styles = StyleSheet.create({
   content: { padding: space.lg, paddingTop: space.xs, gap: space.xl, paddingBottom: space.xxl },
   inner: { paddingHorizontal: 14, paddingVertical: space.xs },
   form: { gap: space.md },
+  upsell: {
+    gap: space.sm,
+    padding: space.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'flex-start',
+  },
 });

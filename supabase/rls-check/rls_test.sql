@@ -432,8 +432,13 @@ select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
 select tst.rows('select * from public.plans', 3, 'A can read the Plan catalogue (Trial, Basic, Plus)');
 select tst.rows($$select * from public.plan_version_benefits b
                    join public.plan_versions v on v.id = b.plan_version_id
-                   join public.plans p on p.id = v.plan_id where p.code = 'plus' and v.is_current$$, 10,
-  'Plus (current version) has 4 Feature Benefits + 5 Usage Limits + 1 Included Service');
+                   join public.plans p on p.id = v.plan_id where p.code = 'plus' and v.is_current$$, 11,
+  'Plus (current version) has 5 Feature Benefits (incl. family access) + 5 Usage Limits + 1 Included Service');
+select tst.rows($$select * from public.plan_version_benefits b
+                   join public.plan_versions v on v.id = b.plan_version_id
+                   join public.plans p on p.id = v.plan_id
+                   where p.code = 'basic' and v.is_current and b.code = 'family_access'$$, 0,
+  'Basic does not include family access');
 select tst.ok((select string_agg(p.code || '=' || v.price_paise, ',' order by p.code)
                from public.plan_versions v join public.plans p on p.id = v.plan_id
                where v.is_current and p.is_public) = 'basic=149900,plus=499900',

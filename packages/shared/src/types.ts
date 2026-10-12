@@ -87,6 +87,8 @@ export interface AccountChoice {
   label: string;
   role: AccountRole;
   current: boolean;
+  /** Family's account whose plan no longer includes family access. */
+  blocked: boolean;
 }
 
 export interface InviteForMe {
