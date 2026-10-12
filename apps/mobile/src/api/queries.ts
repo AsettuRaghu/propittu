@@ -11,6 +11,8 @@ import type {
   PropertyDetail,
   PropertyDocument,
   DocumentType,
+  DocumentShare,
+  DocumentShareInput,
   Inbox,
   NameLink,
   PropertySummary,
@@ -299,5 +301,35 @@ export function useDiscardInbox() {
   return useMutation({
     mutationFn: (id: string) => api(`/inbox/${id}`, { method: 'DELETE' }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['inbox'] }),
+  });
+}
+
+/* ---- Sharing documents safely ---- */
+
+const sharesKey = (propertyId: string) => ['properties', propertyId, 'shares'] as const;
+
+export const useShares = (propertyId: string) =>
+  useQuery({
+    queryKey: sharesKey(propertyId),
+    queryFn: () => api<DocumentShare[]>(`/properties/${propertyId}/shares`),
+  });
+
+export function useCreateShare(propertyId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: DocumentShareInput) =>
+      api<{ id: string; url: string }>(`/properties/${propertyId}/shares`, {
+        method: 'POST',
+        body: input,
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: sharesKey(propertyId) }),
+  });
+}
+
+export function useRevokeShare(propertyId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api(`/shares/${id}`, { method: 'DELETE' }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: sharesKey(propertyId) }),
   });
 }

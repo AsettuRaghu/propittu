@@ -34,7 +34,8 @@ export type NotificationEvent =
   | { type: 'document.read_by_pittu'; documentId: string; line: string; differs: boolean }
   | { type: 'watch.news'; placeId: string; count: number }
   | { type: 'satellite.change'; propertyId: string; change: SatelliteChange }
-  | { type: 'inbox.received'; accountId: string; count: number; filed: boolean };
+  | { type: 'inbox.received'; accountId: string; count: number; filed: boolean }
+  | { type: 'share.opened'; shareId: string };
 
 interface Note {
   account_id: string;
@@ -239,6 +240,24 @@ async function compose(db: SupabaseClient, e: NotificationEvent): Promise<Note[]
           ['document', e.documentId],
         ),
       ];
+    }
+    case 'share.opened': {
+      const { data } = await db
+        .from('document_shares')
+        .select('account_id, property_id, label')
+        .eq('id', e.shareId)
+        .maybeSingle();
+      return data
+        ? [
+            note(
+              data.account_id as string,
+              `Your shared documents were opened (${data.label as string})`,
+              'You can see each opening and stop sharing any time.',
+              `/properties/${data.property_id as string}/shares`,
+              ['document_share', e.shareId],
+            ),
+          ]
+        : [];
     }
     case 'inbox.received':
       return [

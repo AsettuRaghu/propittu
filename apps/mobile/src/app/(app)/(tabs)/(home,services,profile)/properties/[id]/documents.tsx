@@ -91,7 +91,15 @@ export default function DocumentsScreen() {
       <Stack.Screen
         options={{
           headerRight: () => (
-            <IconButton icon="add" label="Add document" onPress={addDocument} size={36} />
+            <View style={styles.headerButtons}>
+              <IconButton
+                icon="share"
+                label="Share documents"
+                onPress={() => router.push(`/properties/${id}/shares`)}
+                size={36}
+              />
+              <IconButton icon="add" label="Add document" onPress={addDocument} size={36} />
+            </View>
           ),
         }}
       />
@@ -208,6 +216,7 @@ export default function DocumentsScreen() {
 }
 
 const styles = StyleSheet.create({
+  headerButtons: { flexDirection: 'row', gap: 8 },
   context: { paddingBottom: space.md },
   list: { padding: space.lg },
   empty: { flexGrow: 1, padding: space.lg },

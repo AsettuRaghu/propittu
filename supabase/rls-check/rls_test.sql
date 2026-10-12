@@ -1956,5 +1956,25 @@ select tst.rows('select * from public.inbox_documents', 0, 'other customers neve
 select tst.rows('select * from public.account_inboxes', 0, 'or anyone''s inbox code');
 reset role;
 
+-- =====================================================================
+\echo
+\echo '== Sharing documents safely =='
+-- =====================================================================
+set role authenticated;
+select tst.as_user('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+insert into public.document_shares (account_id, property_id, token, label, document_ids, expires_at, created_by)
+values ('acc0000a-0000-0000-0000-00000000000a', 'a1a1a1a1-0000-0000-0000-0000000000e1',
+        'tokenAAAAAAAAAAAAAAAAAAAAAAAAAA', 'My lawyer', array['30000000-0000-0000-0000-000000000001']::uuid[],
+        now() + interval '7 days', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select tst.rows('select * from public.document_shares', 1, 'the owner creates and sees a share link');
+select tst.as_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+select tst.rows('select * from public.document_shares', 0, 'other customers never see it (or its token)');
+select tst.rejects($$insert into public.document_shares (account_id, property_id, token, label, document_ids, expires_at, created_by)
+                     values ('acc0000b-0000-0000-0000-00000000000b', 'a1a1a1a1-0000-0000-0000-0000000000e1',
+                             'tokenBBBBBBBBBBBBBBBBBBBBBBBBBB', 'Sneaky', array['30000000-0000-0000-0000-000000000001']::uuid[],
+                             now() + interval '1 day', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb')$$,
+  'nobody shares a property that isn''t theirs');
+reset role;
+
 \echo
 \echo 'ALL RLS CHECKS PASSED'

@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { DOCUMENT_TYPE_LABELS, type DocumentType } from './constants';
 import {
   comparePeople,
@@ -723,4 +724,27 @@ const GUESSES: [RegExp, DocumentType][] = [
 /** A first guess at the document type from its file name and the email subject. */
 export function guessDocumentType(text: string): DocumentType | null {
   return GUESSES.find(([re]) => re.test(text))?.[1] ?? null;
+}
+
+/* ---- Sharing documents safely ---- */
+
+export const documentShareSchema = z.object({
+  label: z.string().trim().min(1, 'Who is it for?').max(80),
+  document_ids: z.array(z.guid()).min(1, 'Choose at least one document').max(30),
+  days: z.union([z.literal(1), z.literal(7), z.literal(30)]),
+});
+export type DocumentShareInput = z.infer<typeof documentShareSchema>;
+
+/** GET /properties/:id/shares */
+export interface DocumentShare {
+  id: string;
+  label: string;
+  url: string;
+  document_count: number;
+  expires_at: string;
+  revoked_at: string | null;
+  created_at: string;
+  opened: number;
+  downloaded: number;
+  last_opened_at: string | null;
 }
