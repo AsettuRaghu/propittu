@@ -78,7 +78,10 @@ export async function localPlaces(
               [Number(f.lat), Number(f.lon)],
             ).toFixed(1),
           }))
+          // Not junctions, stops or circles named after the office.
+          .filter((f) => !/\b(junction|bus stop|stop|circle|cross|signal|road)\b/i.test(f.name))
           .sort((a, b) => a.distance_km - b.distance_km)
+          .filter((f, i, all) => all.findIndex((g) => g.name === f.name) === i)
           .slice(0, take),
       );
     } catch (err) {
